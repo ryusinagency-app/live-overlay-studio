@@ -1,0 +1,29 @@
+Live Overlay Studio 配布用アプリの作り方
+
+配信者はPythonをインストールせずに使えます。GitHub Releasesの「Live_Overlay_Studio_Windows_x64.exe」をダウンロードしてください。
+
+開発者がEXEを手元でビルドする場合のみ：
+1. Windows PCにPython 3を用意し、「build_windows_app.bat」を実行します。
+2. 完了すると「dist\Live_Overlay_Studio_Windows_x64.exe」が作成されます。
+
+受け取った人の使い方
+・Live Overlay Studio.exeをダブルクリックします。
+・操作画面が自動でブラウザーに開きます。
+・TikTok LIVE Studioには、操作画面に表示されるオーバーレイURLを登録します。
+・アプリ本体の小さな画面を閉じるとオーバーレイも終了します。
+
+保存について
+・設定、履歴、アップロードした演出素材は、各Windowsユーザーの専用領域に保存されます。
+・EXEを新しい版に交換してもデータは残ります。アプリ内の「更新して再起動」から更新した場合も引き継ぎます。
+・初回起動時、EXEと同じフォルダーに旧版のstate.jsonがある場合は自動で引き継ぎます。
+・配布用EXEには、作成者の設定や履歴は含まれません。
+
+注意
+・Windowsのセキュリティ画面が出た場合は、ファイルの配布元を確認してから実行してください。
+・コード署名を付けていない個人作成EXEでは、Windowsが警告を表示する場合があります。
+
+
+GitHubでの更新配布
+・新しいバージョンをGitHub Releasesに公開すると、GitHub ActionsがWindows用EXEを自動ビルドして添付します。
+・アプリ起動時に更新を確認し、「更新して再起動」を押すと自動でダウンロード・適用します。
+・自動更新にはGitHub Releaseに「Live_Overlay_Studio_Windows_x64.exe」が添付されている必要があります。
