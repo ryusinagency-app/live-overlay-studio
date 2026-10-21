@@ -8,22 +8,27 @@ echo   Live Overlay Studio Windows App Builder
 echo ==============================================
 echo.
 
-where py >nul 2>nul
+set "PYTHON_CMD=python"
+python --version >nul 2>nul
 if errorlevel 1 (
-  echo Python 3 was not found.
-  echo Install Python 3, enable "Add Python to PATH", then run this file again.
-  pause
-  exit /b 1
+  where py >nul 2>nul
+  if errorlevel 1 (
+    echo Python 3 was not found.
+    echo Install Python 3, enable "Add Python to PATH", then run this file again.
+    if not defined CI pause
+    exit /b 1
+  )
+  set "PYTHON_CMD=py -3"
 )
 
-py -3 -m pip install --upgrade pyinstaller "TikTokLive==7.0.1"
+%PYTHON_CMD% -m pip install --upgrade pyinstaller "TikTokLive==7.0.1"
 if errorlevel 1 (
   echo Required packages could not be installed.
-  pause
+  if not defined CI pause
   exit /b 1
 )
 
-py -3 -m PyInstaller --noconfirm --clean --onefile --windowed ^
+%PYTHON_CMD% -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --name "Live_Overlay_Studio_Windows_x64" ^
   --collect-all TikTokLive ^
   --add-data "control.html;." ^
@@ -45,7 +50,7 @@ py -3 -m PyInstaller --noconfirm --clean --onefile --windowed ^
 if errorlevel 1 (
   echo.
   echo EXE build failed. Check the messages above.
-  pause
+  if not defined CI pause
   exit /b 1
 )
 
@@ -55,5 +60,7 @@ echo   dist\Live_Overlay_Studio_Windows_x64.exe
 echo.
 echo Distribute that EXE file. Users do not need to install Python.
 echo Each user's settings are saved in %%LOCALAPPDATA%%\LiveOverlayStudio.
-explorer "%~dp0dist"
-pause
+if not defined CI (
+  explorer "%~dp0dist"
+  pause
+)
