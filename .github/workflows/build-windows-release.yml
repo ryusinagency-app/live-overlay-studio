@@ -20,7 +20,7 @@ jobs:
       - name: Check out release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Set up Python for the build only
         uses: actions/setup-python@v5
