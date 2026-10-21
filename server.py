@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.15'
+APP_VERSION = '0.65.19'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -62,8 +62,25 @@ if FROZEN_APP and os.name == 'nt':
     managed_exe = ROOT / 'Live Overlay Studio.exe'
     current_exe = Path(sys.executable).resolve()
     if current_exe != managed_exe.resolve():
-        if not managed_exe.exists():
+        try:
+            # The app may already have an older managed EXE in LocalAppData.
+            # Always replace it with the explicitly launched build so a new
+            # release does not silently reopen the old version forever.
             shutil.copy2(current_exe, managed_exe)
+        except OSError as error:
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    'Live Overlay Studioを更新できませんでした。\n'
+                    '起動中の古いアプリをすべて終了してから、もう一度起動してください。\n\n'
+                    f'{error}',
+                    'アプリを更新できません',
+                    0x10,
+                )
+            except Exception:
+                pass
+            raise SystemExit(1)
         subprocess.Popen([str(managed_exe)], cwd=str(ROOT), close_fds=True)
         raise SystemExit(0)
 STATE = ROOT / 'state.json'
@@ -119,6 +136,7 @@ DEFAULT = {
     'tiktokUsername': '',
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
     'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True},
+    'minecraftBridge': {'enabled': False, 'logPath': '', 'marker': 'bedrock_win'},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
     'smokingTimer': {'endAt': 0, 'remainingSeconds': 0, 'runId': 0, 'audioUrl': '', 'audioName': '', 'volume': 80, 'fontSize': 130, 'titleSize': 56, 'cardBg': '', 'cardBorder': '', 'shortcutAdd5':'', 'shortcutSub5':'', 'shortcutAdd10':'', 'shortcutSub10':'', 'shortcutAdd15':'', 'shortcutSub15':'', 'shortcutAdd30':'', 'shortcutSub30':''},
     'smokingGacha': {'fontFamily':'global', 'patterns': [], 'event': {'id':0,'type':'','active':False,'patternName':'','minutes':0,'senderName':'','choice':'','choiceReady':False,'createdAt':0}, 'queue': [], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'fullscreen-slot', 'spinSeconds':7, 'endSeconds':6, 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'shortcutPlus':'CTRL+ALT+5', 'shortcutMinus':'CTRL+ALT+SHIFT+5'},
@@ -134,6 +152,9 @@ TIKTOK_GIFT_CATALOG_LOCK = threading.Lock()
 SERVER_STARTED_AT = time.time()
 HOTKEY_STATUS = {'active': False, 'message': 'ショートカット監視を起動しています', 'bindings': 0}
 HOTKEY_STATUS_LOCK = threading.Lock()
+MINECRAFT_WATCH_STATUS = {'status': 'stopped', 'message': 'Minecraftログ連携はオフです', 'lastEventAt': 0, 'winsReceived': 0}
+MINECRAFT_WATCH_LOCK = threading.Lock()
+MINECRAFT_WATCH_THREAD = None
 
 def _gift_value(value, *names):
     for name in names:
@@ -213,6 +234,13 @@ def safe_float(value, default=0.0):
         return float(value)
     except (TypeError, ValueError, OverflowError):
         return default
+
+def clean_local_path(value):
+    """Accept paths copied from Windows Explorer, which may include quotes."""
+    value = str(value or '').strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1].strip()
+    return value
 
 def normalize_state(data):
     data = data if isinstance(data, dict) else {}
@@ -421,6 +449,15 @@ def normalize_state(data):
         if isinstance(item,dict):
             win_gift_rules.append({'id':str(item.get('id') or f'win-gift-{index+1}'),'giftName':str(item.get('giftName') or '').strip(),'delta':max(-9999,min(9999,safe_int(item.get('delta') or 0)))})
     merged['winCounter']={'fontFamily':raw_win.get('fontFamily') if raw_win.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global','title':str(raw_win.get('title','現在'))[:60],'currentWin':max(-999999,min(999999,safe_int(raw_win.get('currentWin') or 0))),'goalWin':max(1,min(999999,safe_int(raw_win.get('goalWin') or 10))),'shortcutAdd':str(raw_win.get('shortcutAdd') or '').upper(),'shortcutSub':str(raw_win.get('shortcutSub') or '').upper(),'giftRules':win_gift_rules,'cardBg':valid_hex(raw_win.get('cardBg')),'cardBorder':valid_hex(raw_win.get('cardBorder')),'cardTextColor':valid_hex(raw_win.get('cardTextColor')),'cardOpacity':max(-1,min(100,safe_int(raw_win.get('cardOpacity',-1)))),'positiveTextColor':valid_hex(raw_win.get('positiveTextColor')),'negativeTextColor':valid_hex(raw_win.get('negativeTextColor')) or '#ff4055','goalTextColor':valid_hex(raw_win.get('goalTextColor')),'titleSize':max(12,min(120,safe_int(raw_win.get('titleSize',30),30))),'valueSize':max(20,min(180,safe_int(raw_win.get('valueSize',76),76))),'imageUrl':str(raw_win.get('imageUrl') or '')[:240],'imageName':str(raw_win.get('imageName') or '')[:120],'imageSize':max(20,min(240,safe_int(raw_win.get('imageSize') or 64))),'imageEnabled':raw_win.get('imageEnabled',True) is not False}
+    raw_bridge = merged.get('minecraftBridge') if isinstance(merged.get('minecraftBridge'), dict) else {}
+    marker = str(raw_bridge.get('marker') or 'bedrock_win').strip()[:80]
+    if not marker:
+        marker = 'bedrock_win'
+    merged['minecraftBridge'] = {
+        'enabled': bool(raw_bridge.get('enabled', False)),
+        'logPath': clean_local_path(raw_bridge.get('logPath'))[:1000],
+        'marker': marker,
+    }
     raw_gacha = merged.get('gacha') if isinstance(merged.get('gacha'), dict) else {}
     patterns = []
     for index, item in enumerate(raw_gacha.get('patterns') or []):
@@ -596,6 +633,8 @@ def normalize_state(data):
     if merged.get('giftWall') != data.get('giftWall', DEFAULT['giftWall']):
         changed = True
     if merged.get('winCounter') != data.get('winCounter', DEFAULT['winCounter']):
+        changed = True
+    if merged.get('minecraftBridge') != data.get('minecraftBridge', DEFAULT['minecraftBridge']):
         changed = True
     if merged.get('tiktokUsername') != data.get('tiktokUsername', ''):
         changed = True
@@ -1174,6 +1213,98 @@ def get_hotkey_status():
     with HOTKEY_STATUS_LOCK:
         return dict(HOTKEY_STATUS)
 
+def get_minecraft_watch_status():
+    with MINECRAFT_WATCH_LOCK:
+        status = dict(MINECRAFT_WATCH_STATUS)
+    config = read_state().get('minecraftBridge', {})
+    clean_path = clean_local_path(config.get('logPath'))
+    path = Path(clean_path).expanduser() if clean_path else None
+    exists = bool(path and path.is_file())
+    status.update({'enabled': bool(config.get('enabled')), 'logPath': str(path or ''), 'fileExists': exists})
+    if not config.get('enabled'):
+        status.update({'status': 'stopped', 'message': 'ログ連携はオフです'})
+    elif not path:
+        status.update({'status': 'waiting', 'message': 'ログファイルの場所を入力してください'})
+    elif not exists and status.get('status') != 'error':
+        status.update({'status': 'waiting', 'message': 'ログファイルが見つかりません。logs/latest.log の場所を確認してください'})
+    return status
+
+def minecraft_log_watcher():
+    """Tail the configured local server log and add one WIN per marker line.
+
+    The first observation of a file starts at EOF, so old log entries never
+    change the score. On rotation/truncation, the new file is read from its
+    beginning so fresh events are not missed.
+    """
+    watched_path = None
+    watched_marker = None
+    file_id = None
+    offset = 0
+    carry = b''
+    while True:
+        try:
+            config = read_state().get('minecraftBridge', {})
+            enabled = bool(config.get('enabled'))
+            path_text = clean_local_path(config.get('logPath'))
+            marker = str(config.get('marker') or 'bedrock_win').strip()
+            if not enabled or not path_text:
+                watched_path = None; watched_marker = None; file_id = None; offset = 0; carry = b''
+                with MINECRAFT_WATCH_LOCK:
+                    MINECRAFT_WATCH_STATUS.update(status='stopped' if not enabled else 'waiting', message='ログ連携はオフです' if not enabled else 'ログファイルの場所を入力してください')
+                time.sleep(1)
+                continue
+            path = Path(path_text).expanduser()
+            if not path.is_file():
+                with MINECRAFT_WATCH_LOCK:
+                    MINECRAFT_WATCH_STATUS.update(status='waiting', message='ログファイルが見つかりません。logs/latest.log の場所を確認してください')
+                time.sleep(1)
+                continue
+            stat = path.stat()
+            current_id = (stat.st_dev, stat.st_ino)
+            if path_text != watched_path or marker.casefold() != str(watched_marker or '').casefold():
+                watched_path, watched_marker, file_id = path_text, marker, current_id
+                offset, carry = stat.st_size, b''  # skip historical entries on activation/config changes
+            elif current_id != file_id or stat.st_size < offset:
+                file_id, offset, carry = current_id, 0, b''
+            with path.open('rb') as logfile:
+                logfile.seek(offset)
+                chunk = logfile.read(1024 * 1024)
+                offset = logfile.tell()
+            with MINECRAFT_WATCH_LOCK:
+                received = int(MINECRAFT_WATCH_STATUS.get('winsReceived', 0))
+                suffix = f'（成功検知 {received} 回）' if received else ''
+                MINECRAFT_WATCH_STATUS.update(status='watching', message='Minecraftログを監視中' + suffix, logPath=path_text)
+            if chunk:
+                parts = (carry + chunk).split(b'\n')
+                carry = parts.pop() if parts else b''
+                marker_folded = marker.casefold()
+                matches = 0
+                for line in parts:
+                    try:
+                        if marker_folded and marker_folded in line.decode('utf-8', errors='ignore').casefold():
+                            matches += 1
+                    except Exception:
+                        continue
+                for _ in range(matches):
+                    with STATE_LOCK:
+                        try:
+                            raw = json.loads(STATE.read_text(encoding='utf-8'))
+                        except Exception:
+                            raw = copy.deepcopy(DEFAULT)
+                        data, _ = normalize_state(raw)
+                        win = data['winCounter']
+                        win['currentWin'] = max(-999999, min(999999, win['currentWin'] + 1))
+                        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+                    with MINECRAFT_WATCH_LOCK:
+                        MINECRAFT_WATCH_STATUS['lastEventAt'] = time.time()
+                        MINECRAFT_WATCH_STATUS['winsReceived'] = int(MINECRAFT_WATCH_STATUS.get('winsReceived', 0)) + 1
+                        MINECRAFT_WATCH_STATUS['message'] = f'成功検知 {MINECRAFT_WATCH_STATUS["winsReceived"]} 回'
+            time.sleep(0.5)
+        except Exception as error:
+            with MINECRAFT_WATCH_LOCK:
+                MINECRAFT_WATCH_STATUS.update(status='error', message='ログ監視エラー: ' + str(error)[:160])
+            time.sleep(2)
+
 def version_numbers(value):
     parts = re.findall(r'\d+', str(value or ''))
     return tuple(int(part) for part in (parts[:4] or ['0']))
@@ -1235,6 +1366,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/hotkeys/status':
             body = json.dumps(get_hotkey_status(), ensure_ascii=False).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if self.path == '/api/minecraft/status':
+            body = json.dumps(get_minecraft_watch_status(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/gifts':
             with TIKTOK_GIFT_CATALOG_LOCK:
@@ -1692,6 +1826,10 @@ def run_desktop_app(server):
 
 def main():
     start_global_hotkeys()
+    global MINECRAFT_WATCH_THREAD
+    if MINECRAFT_WATCH_THREAD is None or not MINECRAFT_WATCH_THREAD.is_alive():
+        MINECRAFT_WATCH_THREAD = threading.Thread(target=minecraft_log_watcher, daemon=True)
+        MINECRAFT_WATCH_THREAD.start()
     try:
         # Every page is used only by this PC, so listening on localhost avoids
         # firewall prompts and accidental access from other devices.
