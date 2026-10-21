@@ -1,0 +1,1696 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Overlay Studio 操作画面</title>
+<style>
+:root{--red:#e52b3c;
+--bg:#111217;
+--panel:#1c1d25;
+--line:#343640;
+--text:#f5f5f7;
+--muted:#a6a7b0}*{box-sizing:border-box}body{margin:0;
+background:var(--bg);
+color:var(--text);
+font:15px/1.5 system-ui,"Yu Gothic",sans-serif}.wrap{max-width:900px;
+margin:0 auto;
+padding:24px 16px 50px}h1{font-size:24px;
+margin:0 0 5px}.sub{color:var(--muted);
+margin:0 0 14px}.card{background:var(--panel);
+border:1px solid var(--line);
+border-radius:16px;
+padding:18px;
+margin:14px 0}.row{display:grid;
+grid-template-columns:minmax(130px,1fr) 90px 90px auto;
+gap:10px;
+align-items:end}.field{display:flex;
+flex-direction:column;
+gap:6px}.field label{font-size:12px;
+color:var(--muted)}input,textarea{width:100%;
+background:#101116;
+color:var(--text);
+border:1px solid #42434d;
+border-radius:9px;
+padding:10px;
+font:inherit}textarea{min-height:94px;
+resize:vertical}button{border:0;
+border-radius:9px;
+padding:10px 13px;
+background:var(--red);
+color:white;
+font-weight:700;
+cursor:pointer}button.secondary{background:#393a44}button.danger{background:#5a252c}button:disabled{opacity:.45;
+cursor:not-allowed}.sectionHead{display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px}.counter{border-bottom:1px solid var(--line);
+padding:12px 0}.counter-controls{display:flex;
+gap:8px}.counter-controls button{min-width:42px}.toggle{display:flex;
+gap:8px;
+align-items:center;
+color:var(--muted);
+margin-top:8px}.toggle input{width:auto}.status{color:#91e6aa;
+font-size:13px;
+min-height:20px}.note{font-size:12px;
+color:var(--muted)}.memoEditor{border:1px solid var(--line);border-radius:13px;padding:14px;margin:12px 0;background:#15161c}.memoEditorHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.memoEditorHead strong{font-size:16px}.memoEditorGrid{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.memoEditor textarea{margin-top:10px}.rangeRow{display:grid;
+grid-template-columns:1fr 56px;
+gap:12px;
+align-items:center}.rangeRow input{padding:0}.rangeVal{text-align:right;
+font-variant-numeric:tabular-nums}.missionCard{border:1px solid var(--line);
+border-radius:13px;
+padding:14px;
+margin:12px 0;
+background:#15161c}.missionGrid{display:grid;
+grid-template-columns:1.5fr .8fr .7fr .9fr;
+gap:10px}.missionProgress{display:grid;
+grid-template-columns:1fr auto;
+gap:10px;
+align-items:center;
+background:#101116;
+border-radius:9px;
+padding:11px;
+margin:12px 0}.missionProgress strong{font-size:19px}.missionActions{display:flex;
+gap:7px;
+flex-wrap:wrap}.missionHeader{display:flex;
+justify-content:space-between;
+align-items:center;
+gap:10px;
+margin-bottom:10px}.missionHeader strong{font-size:16px}.missionBanner{color:#ffdf80;
+font-size:20px;
+font-weight:900;
+text-align:center;
+min-height:30px}.missionTop{display:flex;
+gap:8px;
+align-items:center}.missionTop button{white-space:nowrap}.shortcutRows{display:grid;
+gap:8px;
+margin-top:9px}.shortcutField{display:grid;
+grid-template-columns:90px 1fr auto auto;
+gap:7px;
+align-items:center}.shortcutField label{font-size:12px;
+color:var(--muted)}.shortcutField input{max-width:260px}.overlayLinks{display:grid;
+gap:8px}.overlayLinkRow{display:grid;
+grid-template-columns:110px minmax(0,1fr) auto;
+gap:8px;
+align-items:center}.gachaHistoryPanel{margin:12px 0 18px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#15161c}.gachaHistoryPanel h3{margin:0 0 8px}.gachaHistoryList{display:grid;gap:7px}.gachaHistoryItem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:9px 11px;border-radius:9px;background:#101116}.gachaHistoryName{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gachaHistoryMeta{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gachaHistoryResult{grid-column:2;grid-row:1/3;font-size:18px;font-weight:900;color:#ffe59c;white-space:nowrap}.gachaHistoryResult.negative{color:#ff6678}.overlayUrl{display:block;
+min-width:0;
+padding:10px;
+background:#101116;
+border:1px solid #42434d;
+border-radius:9px;
+color:#f5f5f7;
+font:12px/1.4 ui-monospace,monospace;
+overflow-wrap:anywhere;
+user-select:all}.giftRule{display:grid;
+grid-template-columns:1fr 120px auto auto;
+gap:8px;
+align-items:end;
+border-bottom:1px solid var(--line);
+padding:10px 0}.giftRule details{grid-column:1/-1;
+width:100%}.captureWait{color:#ffdf80}.cardSizeGrid{display:grid;
+grid-template-columns:1fr 1fr;
+gap:10px;
+margin:10px 0}.cardStyleGrid{display:grid;
+grid-template-columns:1fr 1fr auto;
+gap:10px;
+align-items:end;
+margin:10px 0}.cardAppearanceGrid{display:grid;
+grid-template-columns:1fr 1.4fr;
+gap:10px;
+align-items:end;
+margin:10px 0}.cardAppearanceGrid input[type=range]{padding:0}.smokeQuick{flex-wrap:wrap}.smokeVolumeRow{display:grid;
+grid-template-columns:auto minmax(100px,1fr) 52px;
+gap:12px;
+align-items:center}.smokeVolumeRow input{padding:0}.smokeTimeInput{display:grid;
+grid-template-columns:minmax(45px,1fr) auto minmax(45px,1fr) auto minmax(45px,1fr);
+gap:8px;
+align-items:center}.smokeTimeInput button{grid-column:1/-1}@media(max-width:680px){.row{grid-template-columns:1fr 1fr}.counter-controls{grid-column:1/-1}.missionGrid{grid-template-columns:1fr 1fr}.missionGrid .titleField{grid-column:1/-1}.sectionHead{align-items:flex-start}.wrap{padding-top:16px}.overlayLinkRow{grid-template-columns:1fr auto}.overlayLinkRow input{grid-column:1/-1}.giftRule{grid-template-columns:1fr 90px}.giftRule .ruleActions{grid-column:1/-1}}
+.hidden{display:none!important}.weightedOutcomeRows{display:grid;gap:6px;margin:8px 0}.weightedOutcomeRow{display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(90px,1fr) auto auto;gap:7px;align-items:center}.weightedOutcomeSection{margin:8px 0 12px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#14151b}.gachaPreviewBackdrop.gachaPreviewDock{inset:auto 14px 14px auto;width:min(52vw,760px);height:min(48vh,480px);padding:0;background:transparent;display:block;pointer-events:none}.gachaPreviewWindow{pointer-events:auto;width:100%;height:100%;display:flex;flex-direction:column;background:#181920;border:1px solid #484b58;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px #000b}.gachaPreviewWindow .giftPickerHead{padding:7px 10px}.gachaPreviewWindow .giftPickerHead strong{font-size:13px}.gachaPreviewWindow .giftPickerHead{justify-content:space-between}.gachaPreviewWindow iframe{width:100%;height:100%;border:0;background:transparent;flex:1}.giftWallHistoryList{display:grid;gap:7px;max-height:360px;overflow:auto;margin:10px 0}.giftWallHistoryItem{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:center;gap:10px;padding:8px 10px;border:1px solid #ffffff20;border-radius:9px;background:#ffffff08}.giftWallHistoryVisuals{display:flex;align-items:center;justify-content:center;gap:6px}.giftWallHistoryItem img{width:40px;height:40px;object-fit:contain}.giftWallHistoryItem img.giftWallAvatar{border-radius:50%;object-fit:cover}.giftWallHistoryItem img.empty{visibility:hidden}.giftWallHistoryItem div{display:grid;gap:2px;min-width:0}.giftWallHistoryItem strong,.giftWallHistoryItem div div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.giftWallHistoryItem small{color:var(--muted,#aaa);font-size:11px}
+</style>
+<style>#gachaPatterns{display:grid;gap:18px;margin-top:14px}.gachaPattern{position:relative;padding:18px;border:1px solid #555968;border-left:6px solid #e52b3c;border-radius:14px;background:linear-gradient(145deg,#22232d,#181920);box-shadow:0 6px 18px #0006}.gachaPattern:nth-child(even){border-left-color:#8b79ff;background:linear-gradient(145deg,#242330,#181920)}.gachaPatternHead{display:flex;align-items:center;gap:10px;margin:-2px 0 15px;padding-bottom:12px;border-bottom:1px solid #484a56}.gachaPatternIndex{display:inline-flex;align-items:center;justify-content:center;min-width:82px;padding:5px 10px;border-radius:999px;background:#e52b3c;color:white;font-size:12px;font-weight:900;letter-spacing:.04em}.gachaPattern:nth-child(even) .gachaPatternIndex{background:#7160dc}.gachaPatternHead strong{font-size:16px}.gachaPattern .weightedOutcomeSection{background:#111218;border-color:#41434e}.gachaPattern details{background:#14151c;border-color:#4a4c58}.gachaPattern .patternSettingsGroup{margin:10px 0;padding:10px 12px}.gachaPattern .patternSettingsGroup>summary{font-weight:800;color:#e7e5ef;padding:3px}.gachaPattern .patternSettingsGroup[open]>summary{margin-bottom:10px}.gachaPattern .upperAtSettings{grid-column:1/-1;padding:12px;border:1px solid #7160dc;border-radius:12px;background:#171620}.gachaPattern .upperAtSettings h4{margin:4px 0 12px;color:#c8bcff}.textStyleGrid input[type=number]{max-width:90px}.upperAtSettings{grid-column:1/-1;padding:12px;border:1px solid #7160dc;border-radius:12px;background:#171620}.upperAtSettings h4{margin:4px 0 12px;color:#c8bcff}.textStyleGrid input[type=number]{max-width:90px}.gachaPattern .missionTop{margin-top:14px;padding-top:12px;border-top:1px solid #41434e}@media(max-width:680px){.gachaPattern{padding:13px}.gachaPatternHead{margin-bottom:12px}}</style>
+<style>.settingsNav{position:sticky;
+top:0;
+z-index:20;
+display:flex;
+gap:7px;
+overflow-x:auto;
+padding:10px 0 12px;
+margin:8px 0 12px;
+background:linear-gradient(180deg,var(--bg) 78%,transparent)}.settingsNav button{flex:0 0 auto;
+background:#2c2e38;
+color:#d9dae2;
+padding:9px 12px}.settingsNav button.active{background:var(--red);
+color:#fff}.sectionHidden{display:none!important}.card h2{margin-top:0}.card h3{margin:22px 0 8px;
+padding-top:14px;
+border-top:1px solid var(--line)}.designHint{padding:9px 11px;
+border-radius:9px;
+background:#12131a;
+color:#cacbd4;
+font-size:12px;
+margin:10px 0}.colorChanged{outline:2px solid #7de29a!important;
+outline-offset:2px}@media(max-width:680px){.settingsNav{margin-left:-4px;
+margin-right:-4px}}</style>
+<style>select{width:100%;background:#101116;color:var(--text);border:1px solid #42434d;border-radius:9px;padding:10px;font:inherit}details{margin:10px 0;border:1px solid #343640;border-radius:10px;padding:9px 11px;background:#15161c}summary{cursor:pointer;font-weight:700;color:#d7d8df}.cardStyleGrid,.cardAppearanceGrid{padding:10px;border-radius:11px;background:#12131a}.cardStyleGrid input[type="color"],.cardAppearanceGrid input[type="color"]{min-height:44px;padding:4px}.status{position:sticky;bottom:8px;z-index:30;padding:8px 12px;border-radius:9px;background:#102018e8;pointer-events:none}.status:empty{padding:0;background:transparent}.tiktokDock{position:fixed;right:14px;top:14px;z-index:100;width:min(360px,calc(100vw - 28px));padding:12px;background:#17181ff2;border:1px solid #3e414b;border-radius:13px;box-shadow:0 5px 20px #0008}.tiktokDockTop{display:flex;align-items:center;gap:8px;margin-bottom:8px}.tiktokDot{width:11px;height:11px;border-radius:50%;background:#777;box-shadow:0 0 8px #777}.tiktokDot.on{background:#4cdf79;box-shadow:0 0 10px #4cdf79}.tiktokDot.wait{background:#ffd25c;box-shadow:0 0 10px #ffd25c}.tiktokDockControls{display:grid;grid-template-columns:1fr auto;gap:7px}.tiktokDock input{min-width:0;padding:8px}.tiktokDock button{padding:8px 12px}.tiktokDock .note{display:block;margin-top:7px}.giftInputRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.giftPickButton{padding:9px 11px;white-space:nowrap}.giftPickerBackdrop{position:fixed;inset:0;z-index:1000;background:#000b;display:grid;place-items:center;padding:20px}.giftPicker{width:min(920px,100%);max-height:min(760px,92vh);display:flex;flex-direction:column;background:#181920;border:1px solid #484b58;border-radius:18px;box-shadow:0 24px 80px #000;overflow:hidden}.giftPickerHead{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid #353741}.giftPickerHead h2{margin:0;flex:1}.giftPickerClose{font-size:22px;padding:6px 12px}.giftPickerTools{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:12px;align-items:center;padding:14px 18px}.giftPickerTools input[type="search"]{width:100%}.giftGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:4px 18px 20px;overflow:auto}.giftChoice{position:relative;min-height:150px;padding:11px 8px;background:#23252d;border:2px solid transparent;border-radius:12px;color:#fff;text-align:center}.giftChoice:hover{border-color:#777d90}.giftChoice.selected{border-color:#42d787;background:#183129}.giftChoice.used:not(.selected){opacity:.55}.giftChoice img{display:block;width:70px;height:70px;object-fit:contain;margin:0 auto 6px}.giftChoiceName{display:block;font-weight:700;overflow-wrap:anywhere}.giftChoicePrice{display:inline-block;margin-top:6px;padding:3px 7px;border-radius:999px;background:#101116;color:#ffd965;font-size:12px}.giftUsedBadge{position:absolute;right:5px;top:5px;padding:2px 5px;border-radius:5px;background:#555b6a;font-size:10px}.giftPickerMessage{padding:20px;text-align:center;color:#bbb;grid-column:1/-1}@media(max-width:900px){.tiktokDock{position:relative;right:auto;top:auto;margin:12px auto 0}.wrap{padding-top:10px}}@media(max-width:680px){.giftGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.giftPickerTools{grid-template-columns:1fr}.giftChoice{min-height:135px}}</style>
+<body>
+<aside class="tiktokDock"><div class="tiktokDockTop"><span id="tiktokStatusDot" class="tiktokDot"></span><strong>TikTokギフト接続</strong></div><div class="tiktokDockControls"><input id="tiktokUsername" placeholder="ユーザー名（@省略可）"><button id="connectTikTok" type="button">受信ON</button></div><span class="note" id="giftConnectionStatus">ギフト受信OFF</span></aside>
+<div id="giftPickerBackdrop" class="giftPickerBackdrop hidden" role="dialog" aria-modal="true" aria-labelledby="giftPickerTitle"><div class="giftPicker"><div class="giftPickerHead"><h2 id="giftPickerTitle">ギフトを選択</h2><button id="giftPickerReload" class="secondary" type="button">再読込</button><button id="giftPickerClose" class="giftPickerClose secondary" type="button" aria-label="閉じる">×</button></div><div class="giftPickerTools"><input id="giftPickerSearch" type="search" placeholder="ギフト名または価格で検索"><label class="toggle"><input id="giftPickerHideUsed" type="checkbox">使用済みギフトを非表示</label></div><div id="giftPickerGrid" class="giftGrid"></div></div></div>
+<div id="gachaPreviewBackdrop" class="giftPickerBackdrop gachaPreviewDock hidden" role="dialog" aria-modal="true"><div class="gachaPreviewWindow"><div class="giftPickerHead"><strong>WINガチャ演出プレビュー</strong><button id="gachaPreviewClose" class="giftPickerClose secondary" type="button">閉じる</button></div><iframe id="gachaPreviewFrame" title="WINガチャ演出プレビュー"></iframe></div></div>
+<main class="wrap">
+<h1>配信オーバーレイ操作</h1>
+<p class="sub">変更は自動保存されます。必要なときは「設定を保存」を押してください。</p>
+<p class="note" id="shortcutStatus">グローバルショートカットを確認しています…</p>
+<button id="saveNow" type="button">設定を保存</button>
+<nav class="settingsNav" id="settingsNav" aria-label="設定カテゴリー"><button type="button" data-category="all" class="active">すべて</button><button type="button" data-category="missions">ミッション</button><button type="button" data-category="counters">カウンター</button><button type="button" data-category="giftTimer">ギフトでテキスト変更</button><button type="button" data-category="smokingTimer">禁煙タイマー</button><button type="button" data-category="smokingGacha">禁煙ガチャ</button><button type="button" data-category="comp">メモ</button><button type="button" data-category="gacha">WIN・ガチャ</button><button type="button" data-category="minecraft">Minecraft連携</button><button type="button" data-category="gifts">ギフト履歴</button><button type="button" data-category="appearance">見た目</button><button type="button" data-category="links">リンク</button></nav>
+<section class="card">
+<h2>オーバーレイリンク</h2>
+<p class="note">表示したい項目のリンクをTikTok LIVE Studioに別々のソースとして追加すると、個別に移動・サイズ調整できます。</p>
+<div class="overlayLinks">
+<div class="overlayLinkRow">
+<strong>全部表示</strong>
+<code class="overlayUrl" data-view="all">http://127.0.0.1:8765/overlay.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>ミッション</strong>
+<code class="overlayUrl" data-view="missions">http://127.0.0.1:8765/overlay_missions.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>カウンター</strong>
+<code class="overlayUrl" data-view="counters">http://127.0.0.1:8765/overlay_counters.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>メモ</strong>
+<code class="overlayUrl" data-view="comp">http://127.0.0.1:8765/overlay_comp.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>ギフトでテキスト変更</strong>
+<code class="overlayUrl" data-view="timer">http://127.0.0.1:8765/overlay_timer.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow"><strong>ガチャ演出（カード内固定）</strong><code class="overlayUrl" data-view="gachaCard">http://127.0.0.1:8765/overlay_gacha.html?layout=card</code><button class="copyOverlay" type="button">コピー</button></div>
+<div class="overlayLinkRow"><strong>ガチャ演出（画面いっぱい固定）</strong><code class="overlayUrl" data-view="gachaFullscreen">http://127.0.0.1:8765/overlay_gacha.html?layout=fullscreen</code><button class="copyOverlay" type="button">コピー</button></div>
+<div class="overlayLinkRow">
+<strong>ガチャ履歴</strong>
+<code class="overlayUrl" data-view="gachaHistory">http://127.0.0.1:8765/overlay_gacha_history.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>現在WIN</strong>
+<code class="overlayUrl" data-view="win">http://127.0.0.1:8765/overlay_win.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow">
+<strong>禁煙タイマー</strong>
+<code class="overlayUrl" data-view="smoking">http://127.0.0.1:8765/overlay_smoking.html?build=666</code>
+<button class="copyOverlay" type="button">コピー</button>
+</div>
+<div class="overlayLinkRow"><strong>禁煙ガチャ</strong><code class="overlayUrl" data-view="smokingGacha">http://127.0.0.1:8765/overlay_smoking_gacha.html?build=666</code><button class="copyOverlay" type="button">コピー</button></div>
+<div class="overlayLinkRow"><strong>ギフト履歴</strong><code class="overlayUrl" data-view="giftWall">http://127.0.0.1:8765/overlay_gift_history.html?build=666</code><button class="copyOverlay" type="button">コピー</button></div>
+</div>
+</section>
+<section class="card" id="minecraftBridgeSettings">
+<h2>Minecraft連携</h2>
+<p class="note">Minecraftサーバーのログに成功マーカーが出たとき、現在WINを1加算します。サーバー側の設定やプラグインは変更しません。</p>
+<label class="toggle"><input id="minecraftBridgeEnabled" type="checkbox">ログ連携を有効にする</label>
+<div class="field"><label>サーバーのログファイル（logs/latest.log）</label><input id="minecraftLogPath" type="text" maxlength="1000" placeholder="例：C:\\Minecraft\\server\\logs\\latest.log"><span class="note">Minecraftサーバーフォルダー内の logs\latest.log を指定してください。WindowsではファイルをShift＋右クリックして「パスのコピー」を選び、ここに貼り付けられます。引用符付きのパスも使えます。</span></div>
+<div class="field"><label>成功マーカー（ログに含まれる文字）</label><input id="minecraftMarker" type="text" maxlength="80" placeholder="例：bedrock_win"><span class="note">プラグインが成功時にログへ出す文字を入力します。ログ連携を始めた後に届いた成功だけを数えます。</span></div>
+<div class="missionTop"><button id="minecraftCheck" class="secondary" type="button">ログ接続を確認</button><span id="minecraftStatus" class="note">未設定</span></div>
+</section>
+<section class="card">
+<h2>禁煙タイマー</h2>
+<p class="note">時間を追加するとカウントダウン開始。減算しても0秒より小さくなりません。</p>
+<div class="field">
+<label>時間を追加</label>
+<div class="missionTop smokeQuick">
+<button type="button" data-smoke-add="300">＋5分</button>
+<button type="button" data-smoke-add="600">＋10分</button>
+<button type="button" data-smoke-add="900">＋15分</button>
+<button type="button" data-smoke-add="1800">＋30分</button>
+</div>
+</div>
+<div class="field" style="margin-top:12px">
+<label>時間を減らす</label>
+<div class="missionTop smokeQuick">
+<button type="button" class="secondary" data-smoke-add="-300">−5分</button>
+<button type="button" class="secondary" data-smoke-add="-600">−10分</button>
+<button type="button" class="secondary" data-smoke-add="-900">−15分</button>
+<button type="button" class="secondary" data-smoke-add="-1800">−30分</button>
+</div>
+</div>
+<div class="field" style="margin-top:12px">
+<label>任意の分数を追加・減算</label>
+<div class="missionTop">
+<input id="smokeCustomMinutes" type="number" min="1" placeholder="分数">
+<button id="smokeAddCustom" type="button">追加</button>
+<button id="smokeSubCustom" class="secondary" type="button">減らす</button>
+</div>
+</div>
+<div class="field" style="margin-top:12px">
+<label>時間を直接指定（時：分：秒）</label>
+<div class="smokeTimeInput">
+<input id="smokeHours" type="number" min="0" placeholder="時">
+<span>:</span>
+<input id="smokeMinutes" type="number" min="0" max="59" placeholder="分">
+<span>:</span>
+<input id="smokeSeconds" type="number" min="0" max="59" placeholder="秒">
+<button id="smokeSetTime" class="secondary" type="button">設定して開始</button>
+</div>
+</div>
+<p class="note" id="smokeCurrent">残り時間：00:00:00</p>
+<h3>ショートカットキー</h3>
+<p class="note">5・10・15・30分の追加と減算に個別のキーを設定できます。</p>
+<div id="smokeShortcuts" class="shortcutGrid"></div>
+<div class="field">
+<label>0になったときの音源（15MB以下）</label>
+<input id="smokeAudio" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm">
+<button id="smokeAudioTest" class="secondary" type="button">音源をテスト再生</button>
+<span id="smokeAudioName" class="note">音源未設定</span>
+<div class="smokeVolumeRow">
+<label for="smokeVolume">再生音量</label>
+<input id="smokeVolume" type="range" min="0" max="100" value="80">
+<span class="rangeVal" id="smokeVolumeLabel">80%</span>
+</div>
+<div class="smokeVolumeRow">
+<label for="smokeFontSize">残り時間の文字サイズ</label>
+<input id="smokeFontSize" type="range" min="80" max="180" value="130">
+<span class="rangeVal" id="smokeFontSizeLabel">130px</span>
+</div>
+<div class="smokeVolumeRow">
+<label for="smokeTitleSize">「禁煙タイマー」の文字サイズ</label>
+<input id="smokeTitleSize" type="range" min="32" max="80" value="56">
+<span class="rangeVal" id="smokeTitleSizeLabel">56px</span>
+</div>
+<div class="cardStyleGrid">
+<div class="field">
+<label>カード背景色</label>
+<input id="smokeCardBg" class="cardBg" type="color">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input id="smokeCardBorder" class="cardBorder" type="color">
+</div>
+<button id="resetSmokeColors" class="secondary" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>禁煙タイマー文字色</label>
+<input id="smokeTextColor" type="color">
+</div>
+<div class="field">
+<label>背景の透過度</label>
+<input id="smokeCardOpacity" type="range" min="0" max="100">
+<span class="note" id="smokeCardOpacityVal">
+</span></div><div class="field"><label>禁煙タイマーカードフォント</label><select id="smokeFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select>
+</div>
+</div>
+</div>
+</section>
+<section class="card" id="smokingGachaSettings">
+<h2>禁煙ガチャ</h2>
+<div class="field"><label>禁煙ガチャカードフォント</label><select id="smokingGachaFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div>
+<p class="note">対象ギフトで抽選し、時間が止まったら＋か－を選びます。選ぶまでは画面を保持し、追加の抽選は待機列に入ります。</p>
+<p id="smokingGachaQueueStatus" class="note">待機なし</p>
+<p id="smokingGachaChoiceStatus" class="note">抽選待ちです。</p>
+<div class="missionTop"><button id="smokingGachaPlus" type="button" disabled>＋時間を追加</button><button id="smokingGachaMinus" class="danger" type="button" disabled>－時間を減らす</button></div>
+<div class="shortcutGrid"><div class="shortcutField"><label>＋で確定</label><input id="smokingGachaShortcutPlus" class="shortcutValue" readonly><button type="button" class="captureShortcut">キー設定</button><button type="button" class="clearShortcut secondary">解除</button></div><div class="shortcutField"><label>－で確定</label><input id="smokingGachaShortcutMinus" class="shortcutValue" readonly><button type="button" class="captureShortcut">キー設定</button><button type="button" class="clearShortcut secondary">解除</button></div></div>
+<div class="cardSizeGrid"><div class="field"><label>演出レイアウト</label><select id="smokingGachaEffectStyle"><option value="fullscreen-slot">画面いっぱい</option><option value="card">カード内</option></select></div><div class="field"><label>数字が回る時間</label><input id="smokingGachaSpinSeconds" type="range" min="3" max="30"><span id="smokingGachaSpinSecondsLabel" class="note"></span></div><div class="field"><label>数字サイズ</label><input id="smokingGachaSlotNumberSize" type="range" min="40" max="220"><span id="smokingGachaSlotNumberSizeLabel" class="note"></span></div><div class="field"><label>数字色</label><input id="smokingGachaSlotNumberColor" type="color"></div><div class="field"><label>数字の横位置</label><input id="smokingGachaSlotX" type="range" min="5" max="95"><span id="smokingGachaSlotXLabel" class="note"></span></div><div class="field"><label>数字の縦位置</label><input id="smokingGachaSlotY" type="range" min="10" max="90"><span id="smokingGachaSlotYLabel" class="note"></span></div><div class="field"><label>止まり方</label><select id="smokingGachaSpinStyle"><option value="dramatic">後半ゆっくり（ドキドキ）</option><option value="ease-out">なめらかに減速</option><option value="steady">一定に近い</option></select></div></div>
+<div class="field"><label>共通演出動画（30MB以下）</label><input id="smokingGachaAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span id="smokingGachaAnimationName" class="note"></span></div>
+<div class="field"><label>抽選中の音源（15MB以下）</label><input id="smokingGachaAudioFile" type="file" accept="audio/*"><span id="smokingGachaAudioName" class="note"></span><label>音量</label><input id="smokingGachaAudioVolume" type="range" min="0" max="100"><span id="smokingGachaAudioVolumeLabel" class="note"></span><div class="missionTop"><button id="testSmokingGachaAudio" class="secondary" type="button">試聴</button><button id="clearSmokingGachaAudio" class="secondary" type="button">解除</button></div></div>
+<div class="field"><label>結果音源（15MB以下）</label><input id="smokingGachaResultAudioFile" type="file" accept="audio/*"><span id="smokingGachaResultAudioName" class="note"></span><label>音量</label><input id="smokingGachaResultAudioVolume" type="range" min="0" max="100"><span id="smokingGachaResultAudioVolumeLabel" class="note"></span><div class="missionTop"><button id="testSmokingGachaResultAudio" class="secondary" type="button">試聴</button><button id="clearSmokingGachaResultAudio" class="secondary" type="button">解除</button></div></div>
+<div class="field"><label>結果画面表示（秒）</label><input id="smokingGachaEndSeconds" type="number" min="1" max="600"></div>
+<h3>抽選パターン</h3><div id="smokingGachaPatterns"></div><button id="addSmokingGachaPattern" class="secondary" type="button">＋ 禁煙ガチャ追加</button>
+<p class="note">数字ごとの確率は比率で抽選されます。合計100%でなくても自動調整します。テスト抽選では実際のタイマーは変わりません。</p>
+</section>
+<section class="card" id="winCounterSettings">
+<h2>現在のWIN数</h2>
+<p class="note">WINガチャとは別の設定です。ガチャの獲得WINや登録ギフトはこの数に反映されます。</p>
+<div class="field">
+<label>WIN数の上に表示する文字</label>
+<input id="winCounterTitle" maxlength="60" placeholder="例：現在／次回の耐久数">
+</div>
+<div class="cardSizeGrid">
+<div class="field">
+<label>現在のWIN数（マイナス可）</label>
+<input id="gachaCurrent" type="number" min="-999999">
+</div>
+<div class="field">
+<label>表示目標WIN数</label>
+<input id="gachaGoal" type="number" min="1">
+</div>
+</div>
+<details>
+<summary>ショートカット設定</summary>
+<div class="shortcutRows">
+<div class="shortcutField">
+<label>WIN＋1</label>
+<input id="gachaShortcutAdd" class="shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+<div class="shortcutField">
+<label>WIN−1</label>
+<input id="gachaShortcutSub" class="shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+</div>
+</details>
+<h3>現在WINカードのデザイン</h3>
+<div class="cardStyleGrid">
+<div class="field">
+<label>背景色</label>
+<input id="winCardBg" type="color">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input id="winCardBorder" type="color">
+</div>
+<button id="resetWinCardStyle" class="secondary" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>文字色</label>
+<input id="winCardTextColor" type="color">
+</div>
+<div class="field">
+<label>背景の透過度</label>
+<input id="winCardOpacity" type="range" min="0" max="100">
+<span class="note" id="winCardOpacityVal">
+</span></div><div class="field"><label>現在WINカードフォント</label><select id="winFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select>
+</div>
+</div>
+<div class="cardSizeGrid"><div class="field"><label>タイトル文字サイズ</label><input id="winTitleSize" type="range" min="12" max="120"><span id="winTitleSizeVal" class="note"></span></div><div class="field"><label>WIN数文字サイズ</label><input id="winValueSize" type="range" min="20" max="180"><span id="winValueSizeVal" class="note"></span></div></div>
+<h3>WIN数の文字色</h3>
+<div class="cardAppearanceGrid">
+<div class="field"><label>0以上のWIN数</label><input id="winPositiveTextColor" type="color"></div>
+<div class="field"><label>マイナスのWIN数</label><input id="winNegativeTextColor" type="color"></div>
+<div class="field"><label>「/ 目標 WIN」部分</label><input id="winGoalTextColor" type="color"></div>
+</div>
+<p class="note">例：マイナス時は「-5」を赤、「/10 WIN」を白のように別々の色で表示できます。</p>
+<h3>WIN数の横に表示する画像</h3>
+<div class="field"><label>画像（PNG・JPG・WebP・GIF、10MB以下）</label><input id="winImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><span id="winImageName" class="note">画像未設定</span></div>
+<div class="field" style="margin-top:10px"><label>画像サイズ</label><input id="winImageSize" type="range" min="20" max="240" step="2"><span id="winImageSizeVal" class="note"></span></div>
+<div class="missionTop"><label class="toggle"><input id="winImageEnabled" type="checkbox">画像を表示</label><button id="clearWinImage" class="secondary" type="button">画像を解除</button></div>
+<h3>ギフトでWINを増減</h3>
+<div id="winGiftRules">
+</div>
+<button id="addWinGift" class="secondary" type="button">＋ ギフト設定追加</button>
+<p class="note">例：バラで＋5、爆弾で−3。WINショートカットはこのカウンターだけを変更します。</p>
+</section>
+<section class="card" id="giftWallSettings">
+<h2>ギフト履歴オーバーレイ</h2>
+<p class="note">設定コイン以上のギフトを受け取ると、贈り主・ギフト名・ギフト画像を保存して専用オーバーレイに表示します。連続ギフトは個数分の合計コインで判定し、表示にも個数を出します。</p>
+<div class="cardSizeGrid">
+<div class="field"><label>保存する最低コイン数</label><input id="giftWallMinCoins" type="number" min="0" max="100000000" step="1"><span class="note">ギフト単価 × 個数の合計で判定</span></div>
+<div class="field"><label>列数（1〜8）</label><input id="giftWallColumns" type="number" min="1" max="8" step="1"></div>
+<div class="field"><label>行数（1〜5）</label><input id="giftWallRows" type="number" min="1" max="5" step="1"></div>
+<div class="field"><label>次のページへ切り替える秒数（履歴は消えません）</label><input id="giftWallPageSeconds" type="number" min="2" max="60" step="1"></div><div class="field"><label>スクロール方向</label><select id="giftWallScrollDirection"><option value="vertical">縦（上下）</option><option value="horizontal">横（左右）</option></select></div>
+<div class="field"><label>ギフト履歴カードのフォント</label><select id="giftWallFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div>
+<div class="field"><label>ギフト履歴の文字サイズ</label><input id="giftWallTextScale" type="range" min="50" max="250" step="5"><span id="giftWallTextScaleVal" class="note"></span></div>
+<div class="field"><label>アイコンサイズ（px）</label><input id="giftWallAvatarSize" type="number" min="20" max="160" step="1"></div>
+<div class="field"><label>名前の文字サイズ（px）</label><input id="giftWallNameSize" type="number" min="8" max="80" step="1"></div>
+<div class="field"><label>個数の文字サイズ（px）</label><input id="giftWallCountSize" type="number" min="8" max="80" step="1"></div>
+<div class="field"><label>ギフト名の文字サイズ（px）</label><input id="giftWallGiftNameSize" type="number" min="8" max="80" step="1"></div>
+<div class="field"><label>ギフト画像サイズ（px）</label><input id="giftWallImageSize" type="number" min="20" max="160" step="1"></div>
+</div>
+<div class="cardAppearanceGrid"><div class="field"><label>カード背景色</label><input id="giftWallCardBg" type="color"></div><div class="field"><label>ライン色</label><input id="giftWallCardBorder" type="color"></div><div class="field"><label>文字色</label><input id="giftWallTextColor" type="color"></div><div class="field"><label>背景の透過度</label><input id="giftWallCardOpacity" type="range" min="0" max="100"><span id="giftWallCardOpacityVal" class="note"></span></div></div>
+<div class="missionTop"><p class="note" id="giftWallHistoryStatus">履歴を読み込み中…</p><button id="refreshGiftWallHistory" class="secondary" type="button">履歴を更新</button><button id="resetGiftWallDisplay" class="secondary" type="button">オーバーレイ表示をリセット</button><button id="restoreGiftWallDisplay" type="button">条件を満たす履歴を再表示</button></div><div id="giftWallHistoryList" class="giftWallHistoryList"></div>
+<p class="note">設定した最低コイン数以上のギフトだけを受信時に履歴へ追加します。条件未満のギフトは最大200件の保存枠を消費しません。保存済みの履歴は時間で消えず、「オーバーレイ表示をリセット」を押した場合だけ表示から消えます。複数ページは設定した秒数ごとに切り替わり、繰り返し表示されます。</p>
+</section>
+<section class="card" id="gachaSettings">
+<h2>WINガチャ</h2>
+<p class="note">対象ギフトで抽選開始。抽選方式・演出・音・見た目をパターンごとに設定できます。複製ボタンで設定一式をコピーできます。</p>
+<p class="note" id="gachaQueueStatus">ガチャ待機なし</p>
+<div class="gachaHistoryPanel"><h3>最近のガチャ履歴</h3><div class="cardSizeGrid"><div class="field"><label>ガチャ履歴カードのフォント</label><select id="gachaHistoryFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div><div class="field"><label>文字サイズ</label><input id="gachaHistoryTextScale" type="range" min="50" max="250" step="5"><span id="gachaHistoryTextScaleVal" class="note"></span></div></div><div class="cardAppearanceGrid"><div class="field"><label>背景色</label><input id="gachaHistoryCardBg" type="color"></div><div class="field"><label>ライン色</label><input id="gachaHistoryCardBorder" type="color"></div><div class="field"><label>文字色</label><input id="gachaHistoryTextColor" type="color"></div><div class="field"><label>背景の透過度</label><input id="gachaHistoryCardOpacity" type="range" min="0" max="100"><span id="gachaHistoryCardOpacityVal" class="note"></span></div></div><div id="gachaHistoryList" class="gachaHistoryList"><span class="note">履歴を読み込み中…</span></div><p class="note">抽選が最後まで終わると、名前・パターン名・今回のWINが保存されます。</p></div>
+<p class="note">抽選方式・継続率・WINの＋／－は、ガチャパターンごとに個別設定できます。</p>
+<h3>±両方の結果を確定</h3>
+<p class="note" id="gachaChoiceStatus">±両方の抽選結果が出ると、ここから＋か－を選べます。</p>
+<div class="missionTop">
+<button id="gachaChoosePlus" type="button">＋で確定</button>
+<button id="gachaChooseMinus" class="danger" type="button">－で確定</button>
+</div>
+<div class="shortcutGrid">
+<div class="shortcutBox"><label>＋で確定するショートカット</label><input id="gachaChoicePlusShortcut" class="shortcutValue" readonly placeholder="未設定"><button type="button" class="captureShortcut">キー設定</button><button type="button" class="clearShortcut secondary">解除</button></div>
+<div class="shortcutBox"><label>－で確定するショートカット</label><input id="gachaChoiceMinusShortcut" class="shortcutValue" readonly placeholder="未設定"><button type="button" class="captureShortcut">キー設定</button><button type="button" class="clearShortcut secondary">解除</button></div>
+</div>
+<h3>ガチャパターン</h3>
+<div id="gachaPatterns">
+</div>
+<button id="addGachaPattern" class="secondary" type="button">＋ パターン追加</button>
+<p class="note">WINの最小・最大にはマイナス値も設定できます。継続抽選を選ぶと、各抽選後に設定した継続率で続行します。</p>
+</section>
+<section class="card">
+<h2>カード色を一括設定</h2>
+<p class="note">背景色・ライン色・文字色・透過度を全カードに一括適用します。あとからカードごとに個別設定もできます。</p>
+<div class="cardSizeGrid">
+<div class="field">
+<label>カード背景色</label>
+<input id="bulkCardBg" type="color" value="#17181e" style="height:44px;
+padding:4px">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input id="bulkCardBorder" type="color" value="#e52b3c" style="height:44px;
+padding:4px">
+</div>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>全カードの文字色</label>
+<input id="bulkCardTextColor" type="color" value="#ffffff">
+</div>
+<div class="field">
+<label>全カード背景の透過度</label>
+<input id="bulkCardOpacity" type="range" min="0" max="100" value="88">
+<span class="note" id="bulkCardOpacityVal">88%</span>
+</div>
+</div>
+<div class="missionTop">
+<button id="applyCardColors" type="button">全カードに適用</button>
+<button id="resetCardColors" class="secondary" type="button">テーマ色に戻す</button>
+</div>
+</section>
+<section class="card">
+<h2>ギフトでテキスト変更</h2>
+<p class="note">既定テキストを常時表示し、登録したギフトが届くと指定テキストへ切り替わります。切り替え後の内容は次のギフトまで保持されます。</p>
+<p class="note">TikTokの接続状態と受信ON/OFFは、画面右上の固定パネルからいつでも操作できます。</p>
+<div class="field"><label>デフォルトテキスト（ギフト待機中・起動時に表示）</label><textarea id="timerDefaultText" rows="2" maxlength="500" placeholder="例：カウント：0秒"></textarea></div>
+<div id="giftRules">
+</div>
+<div class="missionTop" style="margin-top:12px">
+<button id="addGiftRule" class="secondary" type="button">＋ テキスト切替を追加</button>
+<span class="note">テストで表示切替を確認できます。ギフトを受け取ると切替後のテキストを保持します。</span>
+</div>
+<p class="note">ギフト受信は非公式の接続方式を使います。TikTok側の変更により受信できなくなる場合があります。接続先ユーザー名を変更した場合はサーバーを再起動してください。</p>
+</section>
+<section class="card">
+<div class="sectionHead">
+<h2>ギフトミッション</h2>
+<button id="addMission">＋ ミッション追加</button>
+</div>
+<div id="missions">
+</div>
+<p class="note">各ミッションカードの幅・高さも個別に設定できます。幅0は自動、高さは入力値を最小高さとして適用します。ギフト数が目標に達すると達成回数が自動で増え、次のミッションに進みます。ミッションやカウンターごとに、ショートカット欄の「キー設定」を押して好きなキーの組み合わせを割り当てられます。Ctrl、Alt、Shiftのいずれかを含めてください。</p>
+</section>
+<section class="card">
+<div class="sectionHead">
+<h2>カウンター</h2>
+<button id="addCounter">＋ カウンター追加</button>
+</div>
+<div id="counters">
+</div>
+<p class="note">各カウンターカードの幅・高さと、カウンター／ミッションのショートカットを個別に設定できます。幅0は自動、高さは入力値を最小高さとして適用します。</p>
+</section>
+<section class="card">
+<div class="sectionHead">
+<h2>メモ</h2>
+<button id="addMemo" type="button">＋ メモ追加</button>
+</div>
+<div id="memos"></div>
+<p class="note">メモは複数追加でき、それぞれ見出し・本文・表示／非表示を設定できます。以前の補填内容は最初のメモにそのまま引き継がれます。</p>
+<div class="cardSizeGrid">
+<div class="field">
+<label>メモカード幅（px・0で自動）</label>
+<input id="compCardWidth" type="number" min="0" max="2000" placeholder="自動">
+</div>
+<div class="field">
+<label>メモカード高さ（px・最小）</label>
+<input id="compCardHeight" type="number" min="0" max="1200" placeholder="自動">
+</div>
+</div>
+<div class="cardStyleGrid">
+<div class="field">
+<label>メモカード背景色</label>
+<input id="compCardBg" type="color" value="#17181e" style="height:44px;
+padding:4px">
+</div>
+<div class="field">
+<label>メモカードライン色</label>
+<input id="compCardBorder" type="color" value="#e52b3c" style="height:44px;
+padding:4px">
+</div>
+<button id="resetCompCardColors" class="secondary" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>メモカード文字色</label>
+<input id="compCardTextColor" type="color">
+</div>
+<div class="field">
+<label>背景の透過度</label>
+<input id="compCardOpacity" type="range" min="0" max="100">
+<span class="note" id="compCardOpacityVal">
+</span></div><div class="field"><label>メモカードフォント</label><select id="compFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select>
+</div>
+<div class="field"><label>メモ文字サイズ</label><input id="compTextScale" type="range" min="50" max="250" step="5"><span id="compTextScaleVal" class="note"></span></div>
+</div>
+</section>
+<section class="card">
+<h2>色と文字サイズ</h2>
+<div class="field">
+<label>アクセントカラー</label>
+<input id="accent" type="color" value="#e52b3c" style="height:44px;
+padding:4px">
+</div>
+<div class="field" style="margin-top:14px">
+<label>ゲージ色</label>
+<input id="gaugeColor" type="color" value="#e52b3c" style="height:44px;
+padding:4px">
+</div>
+<div class="field" style="margin-top:14px">
+<label>パネル背景色</label>
+<input id="panelColor" type="color" value="#17181e" style="height:44px;
+padding:4px">
+</div>
+<div class="field" style="margin-top:14px">
+<label>パネルの透過率</label>
+<div class="rangeRow">
+<input id="panelOpacity" type="range" min="0" max="100" value="88">
+<span class="rangeVal" id="opacityLabel">88%</span>
+</div>
+</div>
+<div class="field" style="margin-top:14px">
+<label>全カードのフォント</label>
+<select id="fontFamily"><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select>
+</div>
+<div class="field" style="margin-top:18px">
+<label>文字色</label>
+<input id="textColor" type="color" value="#ffffff" style="height:44px;
+padding:4px">
+</div>
+<div class="field" style="margin-top:14px">
+<label>文字サイズ</label>
+<div class="rangeRow">
+<input id="textScale" type="range" min="60" max="160" value="100">
+<span class="rangeVal" id="scaleLabel">100%</span>
+</div>
+</div>
+<h3>文字のネオン発光</h3>
+<label class="toggle"><input id="textGlowEnabled" type="checkbox">文字を発光させる</label>
+<div class="cardSizeGrid">
+<div class="field"><label>発光色</label><input id="textGlowColor" type="color" value="#e52b3c"></div>
+<div class="field"><label>発光の強さ</label><input id="textGlowStrength" type="range" min="0" max="40" value="12"><span class="note" id="textGlowStrengthLabel">12px</span></div>
+</div>
+<h3>全カード文字の袋文字・背景</h3>
+<p class="note">すべてのオーバーレイカード内の文字へ共通で反映します。</p>
+<div class="cardSizeGrid">
+<div class="field"><label class="toggle"><input id="textOutlineEnabled" type="checkbox">袋文字（文字の縁取り）</label><label>縁取り色</label><input id="textOutlineColor" type="color" value="#000000"></div>
+<div class="field"><label>縁取りの太さ</label><input id="textOutlineWidth" type="range" min="0" max="10" value="2"><span class="note" id="textOutlineWidthLabel">2px</span></div>
+<div class="field"><label class="toggle"><input id="textBackgroundEnabled" type="checkbox">文字の背景を表示</label><label>文字背景色</label><input id="textBackgroundColor" type="color" value="#000000"></div>
+<div class="field"><label>文字背景の透過度</label><input id="textBackgroundOpacity" type="range" min="0" max="100" value="55"><span class="note" id="textBackgroundOpacityLabel">55%</span></div>
+</div>
+<h3>カードごとの袋文字・文字背景</h3>
+<p class="note">対象カードを選び、「個別設定」にすると、そのカードだけ別の縁取り・文字背景にできます。新しいカードは共通設定のまま追加されます。</p>
+<div class="field"><label>設定するカード</label><select id="textFxTarget"></select></div>
+<div class="field" style="margin-top:12px"><label>設定方法</label><select id="textFxMode"><option value="global">共通設定を使う</option><option value="custom">このカードだけ個別設定</option></select></div>
+<div id="textFxCustomFields" class="cardSizeGrid" style="margin-top:12px">
+<div class="field"><label class="toggle"><input id="textFxOutlineEnabled" type="checkbox">袋文字（文字の縁取り）</label><label>縁取り色</label><input id="textFxOutlineColor" type="color" value="#000000"></div>
+<div class="field"><label>縁取りの太さ</label><input id="textFxOutlineWidth" type="range" min="0" max="10" value="2"><span class="note" id="textFxOutlineWidthLabel">2px</span></div>
+<div class="field"><label class="toggle"><input id="textFxBackgroundEnabled" type="checkbox">文字の背景を表示</label><label>文字背景色</label><input id="textFxBackgroundColor" type="color" value="#000000"></div>
+<div class="field"><label>文字背景の透過度</label><input id="textFxBackgroundOpacity" type="range" min="0" max="100" value="55"><span class="note" id="textFxBackgroundOpacityLabel">55%</span></div>
+</div>
+</section>
+<p class="status" id="status">
+</p>
+<p class="note">操作ページは配信画面に映さず、LIVE Studioには overlay.html のURLだけを追加してください。</p>
+</main>
+<script>
+let state={};
+let timer=null;
+let dirty=false;
+let saving=false;
+let editVersion=0;
+let tiktokEnabled=false;
+let giftPickerTarget=null;
+let giftCatalog=[];
+let activeGachaPreview=null;
+let currentWinEdited=false;
+const $=id=>document.getElementById(id);
+async function get(){try{const r=await fetch('/api/state',{cache:'no-store'});
+return await r.json()}catch(e){return null}}
+function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift')].map(input=>input.value.trim().toLocaleLowerCase()).filter(Boolean))}
+function renderGiftPicker(){const grid=$('giftPickerGrid'),query=$('giftPickerSearch').value.trim().toLocaleLowerCase(),used=usedGiftNames(),current=(giftPickerTarget?.value||'').trim().toLocaleLowerCase(),hide=$('giftPickerHideUsed').checked;
+grid.innerHTML='';
+const gifts=giftCatalog.filter(gift=>{const key=gift.name.toLocaleLowerCase(),matches=!query||key.includes(query)||String(gift.price||0).includes(query);return matches&&(!hide||!used.has(key)||key===current)});
+if(!gifts.length){const message=document.createElement('div');message.className='giftPickerMessage';message.textContent=giftCatalog.length?'条件に一致するギフトがありません':'ギフト一覧を取得できていません。TikTokギフト受信をONにしてLIVEへ接続するか、ギフト名を手入力してください。';grid.appendChild(message);return}
+for(const gift of gifts){const key=gift.name.toLocaleLowerCase(),button=document.createElement('button');button.type='button';button.className='giftChoice'+(key===current?' selected':'')+(used.has(key)&&key!==current?' used':'');
+if(gift.imageUrl){const img=document.createElement('img');img.src=gift.imageUrl;img.alt='';img.loading='lazy';button.appendChild(img)}
+const name=document.createElement('span');name.className='giftChoiceName';name.textContent=gift.name;button.appendChild(name);
+const price=document.createElement('span');price.className='giftChoicePrice';price.textContent=(gift.price||0)+' コイン';button.appendChild(price);
+if(used.has(key)&&key!==current){const badge=document.createElement('span');badge.className='giftUsedBadge';badge.textContent='使用中';button.appendChild(badge)}
+button.onclick=()=>{if(!giftPickerTarget)return;giftPickerTarget.value=gift.name;giftPickerTarget.dispatchEvent(new Event('input',{bubbles:true}));closeGiftPicker()};grid.appendChild(button)}}
+async function loadGiftCatalog(){const grid=$('giftPickerGrid');grid.innerHTML='<div class="giftPickerMessage">TikTokからギフト一覧を読み込んでいます…</div>';try{const response=await fetch('/api/tiktok/gifts',{cache:'no-store'});if(!response.ok)throw Error();const result=await response.json();giftCatalog=Array.isArray(result.gifts)?result.gifts:[];renderGiftPicker()}catch(e){giftCatalog=[];renderGiftPicker()}}
+function openGiftPicker(input){giftPickerTarget=input;$('giftPickerSearch').value='';$('giftPickerBackdrop').classList.remove('hidden');document.body.style.overflow='hidden';loadGiftCatalog();setTimeout(()=>$('giftPickerSearch').focus(),0)}
+function closeGiftPicker(){$('giftPickerBackdrop').classList.add('hidden');document.body.style.overflow='';giftPickerTarget=null}
+function bindCardAppearance(el,obj,resetSelector='.resetCardColors'){const tc=el.querySelector('.cardTextColor'),op=el.querySelector('.cardOpacity'),val=el.querySelector('.cardOpacityVal'),scale=el.querySelector('.cardTextScale'),scaleVal=el.querySelector('.cardTextScaleVal');
+if(!tc||!op)return;
+tc.value=obj.cardTextColor||state.textColor||'#ffffff';
+tc.oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+op.value=obj.cardOpacity>=0?obj.cardOpacity:(state.panelOpacity??88);
+val.textContent=op.value+'%';
+op.oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+val.textContent=e.target.value+'%';
+save()};
+if(scale){scale.value=obj.textScale??100;if(scaleVal)scaleVal.textContent=scale.value+'%';scale.oninput=()=>{if(scaleVal)scaleVal.textContent=scale.value+'%';save()}}
+const reset=el.querySelector(resetSelector);
+if(reset)reset.onclick=()=>{for(const x of [el.querySelector('.cardBg'),el.querySelector('.cardBorder'),tc,op]){if(!x)continue;
+x.dataset.clear='1';
+x.dataset.changed=''}if(el.querySelector('.cardBg'))el.querySelector('.cardBg').value=state.panelColor||'#17181e';
+if(el.querySelector('.cardBorder'))el.querySelector('.cardBorder').value=state.accent||'#e52b3c';
+tc.value=state.textColor||'#ffffff';
+op.value=state.panelOpacity??88;
+val.textContent=op.value+'%';
+save()}}
+function appearanceFont(el,old='global'){const x=el.querySelector('.cardFontFamily');return x?x.value:(old||'global')}
+function appearanceText(el,old=''){const x=el.querySelector('.cardTextColor');
+return x?x.value:(old||'')}function appearanceOpacity(el,old=-1){const x=el.querySelector('.cardOpacity');
+return x?Math.max(0,Math.min(100,+x.value)):old}
+function appearanceScale(el,old=100){const x=el.querySelector('.cardTextScale');return x?Math.max(50,Math.min(250,+x.value||100)):(old||100)}
+function textFxTargets(){const items=[['win','現在WIN'],['smoking','禁煙タイマー'],['timer','ギフトでテキスト変更（デフォルト）'],['giftWall','ギフト履歴'],['gachaHistory','ガチャ履歴'],['smokingGacha','禁煙ガチャ']];
+(state.counters||[]).forEach((item,i)=>items.push(['counter:'+item.id,'カウンター '+(i+1)+'：'+(item.label||'名称なし')]));
+(state.missions||[]).forEach((item,i)=>items.push(['mission:'+item.id,'ミッション '+(i+1)+'：'+(item.title||'名称なし')]));
+(state.memos||[]).forEach((item,i)=>items.push(['memo:'+item.id,'メモ '+(i+1)+'：'+(item.title||'メモ')]));
+(state.giftRules||[]).forEach((item,i)=>items.push(['giftRule:'+item.id,'ギフトテキスト '+(i+1)+'：'+(item.giftName||'未設定')]));
+(state.gacha?.patterns||[]).forEach((item,i)=>items.push(['gacha:'+item.id,'WINガチャ '+(i+1)+'：'+(item.name||'名称なし')]));
+(state.smokingGacha?.patterns||[]).forEach((item,i)=>items.push(['smokingGacha:'+item.id,'禁煙ガチャ '+(i+1)+'：'+(item.name||'名称なし')]));return items}
+function defaultTextFx(){return {mode:'global',outlineEnabled:false,outlineColor:'#000000',outlineWidth:2,backgroundEnabled:false,backgroundColor:'#000000',backgroundOpacity:55}}
+function renderTextFxTargets(preferred){const select=$('textFxTarget');if(!select)return;const old=preferred||select.value;select.replaceChildren();for(const [key,label] of textFxTargets()){const option=document.createElement('option');option.value=key;option.textContent=label;select.appendChild(option)}if([...select.options].some(option=>option.value===old))select.value=old;renderTextFxEditor()}
+function renderTextFxEditor(){const key=$('textFxTarget')?.value;if(!key)return;state.textEffects=state.textEffects||{};const fx={...defaultTextFx(),...(state.textEffects[key]||{})};$('textFxMode').value=fx.mode==='custom'?'custom':'global';$('textFxOutlineEnabled').checked=fx.outlineEnabled===true;$('textFxOutlineColor').value=fx.outlineColor||'#000000';$('textFxOutlineWidth').value=fx.outlineWidth??2;$('textFxOutlineWidthLabel').textContent=$('textFxOutlineWidth').value+'px';$('textFxBackgroundEnabled').checked=fx.backgroundEnabled===true;$('textFxBackgroundColor').value=fx.backgroundColor||'#000000';$('textFxBackgroundOpacity').value=fx.backgroundOpacity??55;$('textFxBackgroundOpacityLabel').textContent=$('textFxBackgroundOpacity').value+'%';$('textFxCustomFields').classList.toggle('hidden',fx.mode!=='custom')}
+function updateTextFxFromEditor(){const key=$('textFxTarget')?.value;if(!key)return;state.textEffects=state.textEffects||{};state.textEffects[key]={mode:$('textFxMode').value,outlineEnabled:$('textFxOutlineEnabled').checked,outlineColor:$('textFxOutlineColor').value,outlineWidth:Math.max(0,Math.min(10,+$('textFxOutlineWidth').value||0)),backgroundEnabled:$('textFxBackgroundEnabled').checked,backgroundColor:$('textFxBackgroundColor').value,backgroundOpacity:Math.max(0,Math.min(100,+$('textFxBackgroundOpacity').value||0))};$('textFxCustomFields').classList.toggle('hidden',$('textFxMode').value!=='custom');$('textFxOutlineWidthLabel').textContent=$('textFxOutlineWidth').value+'px';$('textFxBackgroundOpacityLabel').textContent=$('textFxBackgroundOpacity').value+'%';save()}
+function todayJst(){const p=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).reduce((a,x)=>(a[x.type]=x.value,a),{});
+return p.year+'-'+p.month+'-'+p.day}function freshMission(i){return {id:'mission-'+Date.now()+'-'+i,title:'ミッション'+(i+1),cardBg:state.cardDefaults?.background||'',cardBorder:state.cardDefaults?.border||'',giftValue:0,giftGoal:10,unit:'個',achievements:0,dailyLimit:10,lastDate:todayJst(),showAchievements:true,noticeUntil:0,shortcutAdd:'CTRL+ALT+F'+Math.min(12,i+1),shortcutSub:'CTRL+ALT+SHIFT+F'+Math.min(12,i+1)}}
+function collect(){state.counters=[...document.querySelectorAll('.counter')].map((el,i)=>({id:el.dataset.id,cardWidth:Math.max(0,parseInt(el.querySelector('.cardWidth').value||0,10)),cardHeight:Math.max(0,parseInt(el.querySelector('.cardHeight').value||0,10)),cardBg:el.querySelector('.cardBg').value,cardBorder:el.querySelector('.cardBorder').value,cardTextColor:appearanceText(el,state.counters[i]?.cardTextColor),fontFamily:appearanceFont(el,state.counters[i]?.fontFamily),textScale:appearanceScale(el,state.counters[i]?.textScale),cardOpacity:appearanceOpacity(el,state.counters[i]?.cardOpacity??-1),label:el.querySelector('.label').value,value:Math.max(0,parseInt(el.querySelector('.value').value||0,10)),goal:Math.max(0,parseInt(el.querySelector('.goal').value||0,10)),showGoal:el.querySelector('.showGoal').checked,shortcutAdd:el.querySelector('.shortcutAdd').value,shortcutSub:el.querySelector('.shortcutSub').value}));
+state.missions=[...document.querySelectorAll('.missionCard')].map((el,i)=>({...state.missions[i],title:el.querySelector('.missionTitle').value||'ミッション',cardWidth:Math.max(0,parseInt(el.querySelector('.cardWidth').value||0,10)),cardHeight:Math.max(0,parseInt(el.querySelector('.cardHeight').value||0,10)),cardBg:el.querySelector('.cardBg').value,cardBorder:el.querySelector('.cardBorder').value,cardTextColor:appearanceText(el,state.missions[i]?.cardTextColor),fontFamily:appearanceFont(el,state.missions[i]?.fontFamily),textScale:appearanceScale(el,state.missions[i]?.textScale),cardOpacity:appearanceOpacity(el,state.missions[i]?.cardOpacity??-1),giftGoal:Math.max(1,parseInt(el.querySelector('.missionGoal').value||1,10)),unit:el.querySelector('.missionUnit').value||'個',dailyLimit:Math.max(1,parseInt(el.querySelector('.missionDailyLimit').value||10,10)),achievements:Math.min(+state.missions[i].achievements||0,Math.max(1,parseInt(el.querySelector('.missionDailyLimit').value||10,10))),showAchievements:el.querySelector('.showAchievements').checked,shortcutAdd:el.querySelector('.shortcutAdd').value,shortcutSub:el.querySelector('.shortcutSub').value})) ;
+state.memos=[...document.querySelectorAll('.memoEditor')].map((el,i)=>({id:el.dataset.id||'memo-'+(i+1),title:el.querySelector('.memoTitle').value||'メモ',text:el.querySelector('.memoText').value,show:el.querySelector('.memoShow').checked}));
+const firstMemo=state.memos[0]||{title:'メモ',text:'',show:false};
+state.compTitle=firstMemo.title;
+state.compText=firstMemo.text;
+state.showComp=firstMemo.show;
+state.compCardWidth=Math.max(0,parseInt($('compCardWidth').value||0,10));
+state.compCardHeight=Math.max(0,parseInt($('compCardHeight').value||0,10));
+state.compCardBg=$('compCardBg').value;
+state.compCardBorder=$('compCardBorder').value;
+state.compCardTextColor=$('compCardTextColor').value;
+state.compFontFamily=$('compFontFamily').value;
+state.compTextScale=Math.max(50,Math.min(250,+$('compTextScale').value||100));
+state.compCardOpacity=Math.max(0,Math.min(100,+$('compCardOpacity').value));
+state.accent=$('accent').value;
+state.gaugeColor=$('gaugeColor').value;
+state.panelColor=$('panelColor').value;
+state.panelOpacity=+$('panelOpacity').value;
+state.textColor=$('textColor').value;
+state.fontFamily=$('fontFamily').value;
+state.textScale=+$('textScale').value;
+state.textGlowEnabled=$('textGlowEnabled').checked;
+state.textGlowColor=$('textGlowColor').value;
+state.textGlowStrength=Math.max(0,Math.min(40,+$('textGlowStrength').value));
+state.textOutlineEnabled=$('textOutlineEnabled').checked;
+state.textOutlineColor=$('textOutlineColor').value;
+state.textOutlineWidth=Math.max(0,Math.min(10,+$('textOutlineWidth').value));
+state.textBackgroundEnabled=$('textBackgroundEnabled').checked;
+state.textBackgroundColor=$('textBackgroundColor').value;
+state.textBackgroundOpacity=Math.max(0,Math.min(100,+$('textBackgroundOpacity').value));
+state.tiktokUsername=$('tiktokUsername').value.trim().replace(/^@/,'');
+state.timer={...(state.timer||{}),defaultText:$('timerDefaultText').value||'カウント：0秒'};state.giftRules=[...document.querySelectorAll('.giftRule')].map((el,i)=>({id:el.dataset.id||'gift-rule-'+(i+1),giftName:el.querySelector('.giftName').value.trim(),text:el.querySelector('.giftText').value.slice(0,500),cardBg:el.querySelector('.cardBg').value,cardBorder:el.querySelector('.cardBorder').value,cardTextColor:appearanceText(el,state.giftRules[i]?.cardTextColor),fontFamily:appearanceFont(el,state.giftRules[i]?.fontFamily),textScale:appearanceScale(el,state.giftRules[i]?.textScale),cardOpacity:appearanceOpacity(el,state.giftRules[i]?.cardOpacity??-1)}));
+state.giftWall={...(state.giftWall||{}),fontFamily:$('giftWallFontFamily').value,textScale:Math.max(50,Math.min(250,+$('giftWallTextScale').value||100)),cardBg:$('giftWallCardBg').value,cardBorder:$('giftWallCardBorder').value,cardTextColor:$('giftWallTextColor').value,cardOpacity:Math.max(0,Math.min(100,+$('giftWallCardOpacity').value)),scrollDirection:$('giftWallScrollDirection').value,minCoins:Math.max(0,Math.min(100000000,parseInt($('giftWallMinCoins').value||0,10))),columns:Math.max(1,Math.min(8,parseInt($('giftWallColumns').value||4,10))),rows:Math.max(1,Math.min(5,parseInt($('giftWallRows').value||2,10))),pageSeconds:Math.max(2,Math.min(60,parseInt($('giftWallPageSeconds').value||8,10))),avatarSize:Math.max(20,Math.min(160,parseInt($('giftWallAvatarSize').value||44,10))),nameSize:Math.max(8,Math.min(80,parseInt($('giftWallNameSize').value||18,10))),giftNameSize:Math.max(8,Math.min(80,parseInt($('giftWallGiftNameSize').value||16,10))),countSize:Math.max(8,Math.min(80,parseInt($('giftWallCountSize').value||15,10))),giftImageSize:Math.max(20,Math.min(160,parseInt($('giftWallImageSize').value||44,10)))};
+state.smokingTimer={...(state.smokingTimer||{}),cardBg:$('smokeCardBg').value,cardBorder:$('smokeCardBorder').value,cardTextColor:$('smokeTextColor').value,fontFamily:$('smokeFontFamily').value,cardOpacity:Math.max(0,Math.min(100,+$('smokeCardOpacity').value))};
+collectWinCounter();collectMinecraftBridge();
+collectGacha();collectSmokingGacha()}
+function collectGacha(){const g=state.gacha||{};Object.assign(g,{historyFontFamily:$('gachaHistoryFontFamily').value,historyTextScale:Math.max(50,Math.min(250,+$('gachaHistoryTextScale').value||100)),historyCardBg:$('gachaHistoryCardBg').value,historyCardBorder:$('gachaHistoryCardBorder').value,historyTextColor:$('gachaHistoryTextColor').value,historyCardOpacity:Math.max(0,Math.min(100,+$('gachaHistoryCardOpacity').value)),effectStyle:'card',spinSeconds:5,soundVolume:65,slotNumberSize:130,slotNumberColor:'#ffffff',slotX:50,slotY:50,spinStyle:'dramatic',audioUrl:'',audioName:'',audioVolume:75,resultAudioUrl:'',resultAudioName:'',resultAudioVolume:80,videoAudioEnabled:true,videoVolume:75,cardBg:'',cardBorder:'',cardTextColor:'',cardOpacity:-1,endSeconds:6,endAudioVolume:75,endAnimationUrl:'',endAnimationName:'',endAudioUrl:'',endAudioName:'',animationUrl:'',animationName:''});g.shortcutChoicePlus=$('gachaChoicePlusShortcut').value;g.shortcutChoiceMinus=$('gachaChoiceMinusShortcut').value;g.patterns=[...document.querySelectorAll('#gachaPatterns > .gachaPattern')].map((el,i)=>({...g.patterns?.[i],id:el.dataset.id||'gacha-pattern-'+(i+1),name:el.querySelector('.patternName').value||'パターン'+(i+1),giftName:el.querySelector('.patternGift').value.trim(),minWin:parseInt(el.querySelector('.patternMin').value||0,10),maxWin:parseInt(el.querySelector('.patternMax').value||0,10),winSign:el.querySelector('.patternSign').value,mode:el.querySelector('.patternMode').value,continuationRate:Math.max(0,Math.min(100,parseInt(el.querySelector('.patternRate').value||70,10))),upperAtEnabled:el.querySelector('.patternUpperEnabled').checked,upperAtEntryRate:Math.max(0,Math.min(100,+el.querySelector('.patternUpperEntryRate').value||0)),upperAtContinuationRate:Math.max(0,Math.min(100,+el.querySelector('.patternUpperContinueRate').value||0)),upperAtAudioVolume:+el.querySelector('.patternUpperAudioVolume').value,upperAtVideoVolume:+el.querySelector('.patternUpperVideoVolume').value,upperAtVideoAudioEnabled:el.querySelector('.patternUpperVideoAudioEnabled').checked,outcomeMode:el.querySelector('.outcomeMode').value,outcomes:[...el.querySelectorAll('.weightedOutcomeRow')].map(row=>({value:parseInt(row.querySelector('.outcomeValue').value||0,10),probability:Math.max(0,parseInt(row.querySelector('.outcomeProbability').value||0,10))})),effectStyle:el.querySelector('.patternEffectStyle').value,spinSeconds:Math.max(3,Math.min(30,+el.querySelector('.patternSpinSeconds').value||5)),slotNumberSize:+el.querySelector('.patternSlotNumberSize').value,slotNumberColor:el.querySelector('.patternSlotNumberColor').value,slotX:+el.querySelector('.patternSlotX').value,slotY:+el.querySelector('.patternSlotY').value,spinStyle:el.querySelector('.patternSpinStyle').value,soundVolume:+el.querySelector('.patternSoundVolume').value,audioVolume:+el.querySelector('.patternAudioVolume').value,videoAudioEnabled:el.querySelector('.patternVideoAudioEnabled').checked,videoVolume:+el.querySelector('.patternVideoVolume').value,resultAudioVolume:+el.querySelector('.patternResultAudioVolume').value,cardBg:el.querySelector('.patternCardBg').value,cardBorder:el.querySelector('.patternCardBorder').value,cardTextColor:el.querySelector('.patternCardTextColor').value,cardOpacity:+el.querySelector('.patternCardOpacity').value,stateTextColor:el.querySelector('.patternStateTextColor').value,stateTextSize:+el.querySelector('.patternStateTextSize').value,startTextColor:el.querySelector('.patternStartColor').value,startTextSize:+el.querySelector('.patternStartSize').value,resultTextColor:el.querySelector('.patternResultColor').value,resultTextSize:+el.querySelector('.patternResultSize').value,roundTotalTextColor:el.querySelector('.patternRoundTotalColor').value,roundTotalTextSize:+el.querySelector('.patternRoundTotalSize').value,finalTotalTextColor:el.querySelector('.patternFinalTotalColor').value,finalTotalTextSize:+el.querySelector('.patternFinalTotalSize').value,patternTextColor:el.querySelector('.patternNameColor').value,patternTextSize:+el.querySelector('.patternNameSize').value,senderTextColor:el.querySelector('.patternSenderColor').value,senderTextSize:+el.querySelector('.patternSenderSize').value,fontFamily:el.querySelector('.patternFontFamily').value,textGlowEnabled:el.querySelector('.patternGlowEnabled').checked,textGlowColor:el.querySelector('.patternGlowColor').value,textGlowStrength:+el.querySelector('.patternGlowStrength').value,endSeconds:Math.max(1,Math.min(600,+el.querySelector('.patternEndSeconds').value||6)),endAudioVolume:+el.querySelector('.patternEndAudioVolume').value}));state.gacha=g}
+function collectSmokingGacha(){const sg=state.smokingGacha||{};sg.fontFamily=$('smokingGachaFontFamily').value;sg.spinSeconds=+$('smokingGachaSpinSeconds').value;sg.slotNumberSize=+$('smokingGachaSlotNumberSize').value;sg.slotNumberColor=$('smokingGachaSlotNumberColor').value;sg.slotX=+$('smokingGachaSlotX').value;sg.slotY=+$('smokingGachaSlotY').value;sg.effectStyle=$('smokingGachaEffectStyle').value;sg.spinStyle=$('smokingGachaSpinStyle').value;sg.audioVolume=+$('smokingGachaAudioVolume').value;sg.resultAudioVolume=+$('smokingGachaResultAudioVolume').value;sg.endSeconds=Math.max(1,Math.min(600,+$('smokingGachaEndSeconds').value||6));sg.shortcutPlus=$('smokingGachaShortcutPlus').value;sg.shortcutMinus=$('smokingGachaShortcutMinus').value;sg.patterns=[...document.querySelectorAll('.smokingGachaPattern')].map((el,i)=>({...sg.patterns?.[i],id:el.dataset.id,name:el.querySelector('.smokingPatternName').value||'禁煙ガチャ'+(i+1),giftName:el.querySelector('.smokingPatternGift').value.trim(),outcomes:[...el.querySelectorAll('.smokingOutcomeRow')].map(row=>({minutes:parseInt(row.querySelector('.smokingOutcomeMinutes').value||1,10),probability:Math.max(0,parseInt(row.querySelector('.smokingOutcomeProbability').value||0,10))}))}));state.smokingGacha=sg}
+function collectMinecraftBridge(){const input=$('minecraftLogPath');const clean=input.value.trim().replace(/^(["'])(.*)\1$/,'$2').trim();input.value=clean;state.minecraftBridge={...(state.minecraftBridge||{}),enabled:$('minecraftBridgeEnabled').checked,logPath:clean,marker:$('minecraftMarker').value.trim()||'bedrock_win'}}
+function collectWinCounter(){const w=state.winCounter||{};
+w.cardBg=$('winCardBg').value;
+w.cardBorder=$('winCardBorder').value;
+w.cardTextColor=$('winCardTextColor').value;
+w.positiveTextColor=$('winPositiveTextColor').value;
+w.negativeTextColor=$('winNegativeTextColor').value;
+w.goalTextColor=$('winGoalTextColor').value;
+w.fontFamily=$('winFontFamily').value;
+w.cardOpacity=Math.max(0,Math.min(100,+$('winCardOpacity').value));
+w.titleSize=Math.max(12,Math.min(120,+$('winTitleSize').value||30));
+w.valueSize=Math.max(20,Math.min(180,+$('winValueSize').value||76));
+w.imageSize=Math.max(20,Math.min(240,+$('winImageSize').value||64));
+w.imageEnabled=$('winImageEnabled').checked;
+w.title=$('winCounterTitle').value.trim();
+w.currentWin=parseInt($('gachaCurrent').value||0,10);
+w.goalWin=Math.max(1,parseInt($('gachaGoal').value||10,10));
+w.shortcutAdd=$('gachaShortcutAdd').value;
+w.shortcutSub=$('gachaShortcutSub').value;
+w.giftRules=[...document.querySelectorAll('.winGiftRule')].map((el,i)=>({id:el.dataset.id||'win-gift-'+(i+1),giftName:el.querySelector('.winGiftName').value.trim(),delta:parseInt(el.querySelector('.winGiftDelta').value||0,10)}));
+state.winCounter=w}
+const collectGachaBeforeV63=collectGacha;
+collectGacha=function(){collectGachaBeforeV63();const patterns=state.gacha?.patterns||[];document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=patterns[i];if(!p)return;const checked=selector=>el.querySelector(selector)?.checked!==false,value=(selector,fallback=0)=>+(el.querySelector(selector)?.value??fallback);Object.assign(p,{upperEntrySeconds:Math.max(1,Math.min(30,value('.patternUpperEntrySeconds',3))),upperEntryAudioVolume:value('.patternUpperEntryAudioVolume',80),upperEntryVideoVolume:value('.patternUpperEntryVideoVolume',80),upperEntryVideoAudioEnabled:checked('.patternUpperEntryVideoAudioEnabled'),choiceTextColor:el.querySelector('.patternChoiceTextColor')?.value||'#ffe9a6',choiceTextSize:Math.max(14,Math.min(100,value('.patternChoiceTextSize',34))),showPatternText:checked('.patternShowPatternText'),showSenderText:checked('.patternShowSenderText'),showResultText:checked('.patternShowResultText'),showStateText:checked('.patternShowStateText'),showTotalText:checked('.patternShowTotalText'),showChoiceText:checked('.patternShowChoiceText')})})};
+const collectGachaBeforeV65=collectGacha;
+collectGacha=function(){collectGachaBeforeV65();const patterns=state.gacha?.patterns||[];document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=patterns[i];if(!p)return;const checked=selector=>el.querySelector(selector)?.checked===true,value=(selector,fallback=0)=>+(el.querySelector(selector)?.value??fallback);Object.assign(p,{continueEffectEnabled:checked('.patternContinueEffectEnabled'),continueSeconds:Math.max(1,Math.min(30,value('.patternContinueSeconds',3))),continueAudioVolume:value('.patternContinueAudioVolume',80),continueVideoVolume:value('.patternContinueVideoVolume',80),continueVideoAudioEnabled:checked('.patternContinueVideoAudioEnabled'),upperContinueEffectEnabled:checked('.patternUpperContinueEffectEnabled'),upperContinueSeconds:Math.max(1,Math.min(30,value('.patternUpperContinueSeconds',3))),upperContinueAudioVolume:value('.patternUpperContinueAudioVolume',80),upperContinueVideoVolume:value('.patternUpperContinueVideoVolume',80),upperContinueVideoAudioEnabled:checked('.patternUpperContinueVideoAudioEnabled')})})};
+async function persist(){collect();
+const version=editVersion;
+saving=true;
+try{const payload={...state,_manualWinCounterValue:currentWinEdited};const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+if(!r.ok)throw Error();
+if(editVersion===version){dirty=false;currentWinEdited=false;}
+$('status').textContent='保存しました';broadcastPreviewSettings();
+setTimeout(()=>$('status').textContent='',1700)}catch(e){dirty=true;
+$('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください'}finally{saving=false;
+if(dirty&&editVersion!==version)save()}}function save(){editVersion++;
+dirty=true;
+clearTimeout(timer);
+timer=setTimeout(()=>{timer=null;
+persist()},180)}
+function updateMissionCard(el,m){const goal=Math.max(1,+m.giftGoal||10),limit=+m.dailyLimit||10,count=+m.achievements||0,value=+m.giftValue||0;
+el.querySelector('.missionValue').textContent=value+'/'+goal+' '+(m.unit||'個');
+el.querySelector('.achievementValue').textContent=count+'/'+limit+' 回';
+el.querySelector('.achievementRow').style.display=m.showAchievements===false?'none':'flex';
+const done=count>=limit;
+el.querySelector('.missionBanner').textContent=done?'達成！':(Date.now()/1000<(+m.noticeUntil||0)?'達成！':'');
+el.querySelector('.missionCompletePlus').disabled=done;
+el.querySelector('.giftMinus').disabled=value<=0}
+let captureTarget=null;
+function wireShortcutFields(card){card.querySelectorAll('.captureShortcut').forEach(btn=>btn.onclick=()=>{captureTarget=btn.parentElement.querySelector('.shortcutValue');
+btn.textContent='キーを押してください';
+btn.classList.add('captureWait');
+$('status').textContent='設定したいキーの組み合わせを押してください（Ctrl、Alt、Shiftのいずれか必須。Escでキャンセル）'});
+card.querySelectorAll('.clearShortcut').forEach(btn=>btn.onclick=()=>{const input=btn.parentElement.querySelector('.shortcutValue');
+input.value='';
+input.dispatchEvent(new Event('input',{bubbles:true}));
+save()})}document.addEventListener('keydown',e=>{if(!captureTarget)return;
+if(e.key==='Escape'){captureTarget=null;
+$('status').textContent='キー設定をキャンセルしました';
+document.querySelectorAll('.captureWait').forEach(x=>{x.classList.remove('captureWait');
+x.textContent='キー設定'});
+return}if(['Control','Alt','Shift','Meta'].includes(e.key))return;
+e.preventDefault();
+const mods=[];
+if(e.ctrlKey)mods.push('CTRL');
+if(e.altKey)mods.push('ALT');
+if(e.shiftKey)mods.push('SHIFT');
+if(e.metaKey)mods.push('WIN');
+if(!mods.length){$('status').textContent='Ctrl、Alt、Shiftのいずれかと一緒に押してください';
+return}let k=e.key.toUpperCase();
+const aliases={' ':'SPACE','ARROWUP':'UP','ARROWDOWN':'DOWN','ARROWLEFT':'LEFT','ARROWRIGHT':'RIGHT','ESCAPE':'ESC'};
+k=aliases[k]||k;
+// Use the physical key code for the number row so Japanese layouts and Ctrl+Alt
+// combinations do not turn Digit1 into a shifted symbol such as '!'.
+const digitCode=/^Digit([0-9])$/.exec(e.code||''),numpadCode=/^Numpad([0-9])$/.exec(e.code||'');
+if(digitCode)k=digitCode[1];else if(numpadCode)k='NUMPAD'+numpadCode[1];
+if(k.length!==1&&!/^F([1-9]|1[0-9]|2[0-4])$/.test(k)&&!/^NUMPAD[0-9]$/.test(k)&&!['SPACE','TAB','ENTER','ESC','UP','DOWN','LEFT','RIGHT','HOME','END','PAGEUP','PAGEDOWN','INSERT','DELETE'].includes(k))return;
+const binding=mods.join('+')+'+'+k;
+const duplicate=[...document.querySelectorAll('.shortcutValue')].some(x=>x!==captureTarget&&x.value===binding);
+if(duplicate){$('status').textContent='そのショートカットはすでに割り当て済みです';
+return}captureTarget.value=binding;
+captureTarget.dispatchEvent(new Event('input',{bubbles:true}));
+captureTarget=null;
+document.querySelectorAll('.captureWait').forEach(x=>{x.classList.remove('captureWait');
+x.textContent='キー設定'});
+$('status').textContent='ショートカットを設定しました';
+save()});
+function renderMissions(){const host=$('missions');
+host.innerHTML='';
+(state.missions||[]).forEach((m,i)=>{const el=document.createElement('article');
+el.className='missionCard';
+el.innerHTML=`<div class="missionHeader">
+<strong>ミッション ${i+1}</strong>
+<button class="danger deleteMission">削除</button>
+</div>
+<div class="missionGrid">
+<div class="field titleField">
+<label>ミッション名</label>
+<input class="missionTitle">
+</div>
+<div class="field">
+<label>必要なギフト数</label>
+<input class="missionGoal" type="number" min="1">
+</div>
+<div class="field">
+<label>単位</label>
+<input class="missionUnit" maxlength="8" placeholder="個">
+</div>
+<div class="field">
+<label>達成回数の目標</label>
+<input class="missionDailyLimit" type="number" min="1">
+</div>
+</div>
+<div class="cardSizeGrid">
+<div class="field">
+<label>カード幅（px・0で自動）</label>
+<input class="cardWidth" type="number" min="0" max="2000" placeholder="自動">
+</div>
+<div class="field">
+<label>カード高さ（px・最小）</label>
+<input class="cardHeight" type="number" min="0" max="1200" placeholder="自動">
+</div>
+</div>
+<div class="cardStyleGrid">
+<div class="field">
+<label>カード背景色</label>
+<input class="cardBg" type="color">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input class="cardBorder" type="color">
+</div>
+<button class="secondary resetCardColors" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>カード文字色</label>
+<input class="cardTextColor" type="color">
+</div>
+<div class="field">
+<label>カード背景の透過度</label>
+<input class="cardOpacity" type="range" min="0" max="100">
+<span class="note cardOpacityVal">
+</span>
+</div>
+<div class="field"><label>カードフォント</label><select class="cardFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div><div class="field"><label>文字サイズ</label><input class="cardTextScale" type="range" min="50" max="250" step="5"><span class="note cardTextScaleVal"></span></div>
+</div>
+<details>
+<summary>ショートカット設定</summary>
+<div class="shortcutRows">
+<div class="shortcutField">
+<label>ギフト加算</label>
+<input class="shortcutAdd shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+<div class="shortcutField">
+<label>ギフト減算</label>
+<input class="shortcutSub shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+</div>
+</details>
+<div class="missionProgress">
+<span>ギフト進捗</span>
+<strong class="missionValue">
+</strong>
+</div>
+<div class="missionActions">
+<button class="secondary giftMinus">−1</button>
+<button class="giftPlus">ギフト +1</button>
+</div>
+<div class="missionProgress">
+<span class="achievementRow">
+<span>本日の達成回数</span>
+</span>
+<strong class="achievementValue">
+</strong>
+</div>
+<div class="missionActions">
+<button class="secondary achievementMinus">達成 −1</button>
+<button class="secondary achievementPlus missionCompletePlus">達成 +1</button>
+<button class="danger resetMission">カウントをリセット</button>
+</div>
+<div class="missionBanner">
+</div>
+<label class="toggle">
+<input class="showAchievements" type="checkbox">達成回数をオーバーレイに表示</label>`;
+el.querySelector('.missionTitle').value=m.title||'';
+el.querySelector('.missionGoal').value=m.giftGoal||10;
+el.querySelector('.missionUnit').value=m.unit||'個';
+el.querySelector('.missionDailyLimit').value=m.dailyLimit||10;
+el.querySelector('.cardWidth').value=m.cardWidth||'';
+el.querySelector('.cardHeight').value=m.cardHeight||'';
+el.querySelector('.cardBg').value=m.cardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+el.querySelector('.cardBorder').value=m.cardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';el.querySelector('.cardFontFamily').value=m.fontFamily||'global';
+el.querySelector('.cardBg').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.cardBorder').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.resetCardColors').onclick=()=>{for(const cls of ['.cardBg','.cardBorder']){const x=el.querySelector(cls);
+x.dataset.clear='1';
+x.dataset.changed='';
+x.value=cls==='.cardBg'?(state.panelColor||'#17181e'):(state.accent||'#e52b3c')}save()};
+bindCardAppearance(el,m);el.querySelector('.cardFontFamily').addEventListener('change',save);
+el.querySelector('.shortcutAdd').value=m.shortcutAdd||'';
+el.querySelector('.shortcutSub').value=m.shortcutSub||'';
+el.querySelector('.showAchievements').checked=m.showAchievements!==false;
+el.querySelectorAll('.missionTitle,.missionGoal,.missionUnit,.missionDailyLimit,.cardWidth,.cardHeight,.showAchievements,.shortcutValue').forEach(x=>x.addEventListener('input',save));
+wireShortcutFields(el);
+el.querySelector('.giftPlus').onclick=()=>changeGift(i,1);
+el.querySelector('.giftMinus').onclick=()=>changeGift(i,-1);
+el.querySelector('.achievementPlus').onclick=()=>changeAchievement(i,1);
+el.querySelector('.achievementMinus').onclick=()=>changeAchievement(i,-1);
+el.querySelector('.resetMission').onclick=()=>{if(confirm('このミッションのギフト進捗と達成回数を0にしますか？')){state.missions[i].giftValue=0;
+state.missions[i].achievements=0;
+state.missions[i].noticeUntil=0;
+state.missions[i].lastDate=todayJst();
+renderMissions();
+save()}};
+el.querySelector('.deleteMission').onclick=()=>{if(confirm('このミッションを削除しますか？')){state.missions.splice(i,1);
+renderMissions();
+save()}};
+host.appendChild(el);
+updateMissionCard(el,m)})}
+function changeGift(i,delta){const m=state.missions[i];
+if(!m||(+m.achievements||0)>=(+m.dailyLimit||10))return;
+m.lastDate=todayJst();
+let value=Math.max(0,(+m.giftValue||0)+delta);
+const goal=Math.max(1,+m.giftGoal||1);
+while(value>=goal&&m.achievements<(m.dailyLimit||10)){value-=goal;
+m.achievements=(+m.achievements||0)+1;
+m.noticeUntil=Date.now()/1000+3}if(m.achievements>=(m.dailyLimit||10))value=0;
+m.giftValue=value;
+renderMissions();
+save()}
+function setGift(i,v){const m=state.missions[i];
+if(!m)return;
+m.giftValue=0;
+changeGift(i,Math.max(0,+v||0))}
+function changeAchievement(i,delta){const m=state.missions[i];
+if(!m)return;
+m.achievements=Math.max(0,Math.min(+m.dailyLimit||10,(+m.achievements||0)+delta));
+m.lastDate=todayJst();
+renderMissions();
+save()}
+function renderCounters(){const host=$('counters');
+host.innerHTML='';
+(state.counters||[]).forEach((c,i)=>{const el=document.createElement('div');
+el.className='counter';
+el.dataset.id=c.id||'counter-'+(i+1);
+el.innerHTML=`<div class="row">
+<div class="field">
+<label>表示名</label>
+<input class="label">
+</div>
+<div class="field">
+<label>現在値</label>
+<input class="value" type="number" min="0">
+</div>
+<div class="field">
+<label>目標値</label>
+<input class="goal" type="number" min="0">
+</div>
+<div class="counter-controls">
+<button class="secondary minus">−1</button>
+<button class="plus">＋1</button>
+<button class="danger remove">削除</button>
+</div>
+</div>
+<div class="cardSizeGrid">
+<div class="field">
+<label>カード幅（px・0で自動）</label>
+<input class="cardWidth" type="number" min="0" max="2000" placeholder="自動">
+</div>
+<div class="field">
+<label>カード高さ（px・最小）</label>
+<input class="cardHeight" type="number" min="0" max="1200" placeholder="自動">
+</div>
+</div>
+<div class="cardStyleGrid">
+<div class="field">
+<label>カード背景色</label>
+<input class="cardBg" type="color">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input class="cardBorder" type="color">
+</div>
+<button class="secondary resetCardColors" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>カード文字色</label>
+<input class="cardTextColor" type="color">
+</div>
+<div class="field">
+<label>カード背景の透過度</label>
+<input class="cardOpacity" type="range" min="0" max="100">
+<span class="note cardOpacityVal">
+</span>
+</div>
+<div class="field"><label>カードフォント</label><select class="cardFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div><div class="field"><label>文字サイズ</label><input class="cardTextScale" type="range" min="50" max="250" step="5"><span class="note cardTextScaleVal"></span></div>
+</div>
+<label class="toggle">
+<input class="showGoal" type="checkbox">目標値を表示</label>
+<details>
+<summary>ショートカット設定</summary>
+<div class="shortcutRows">
+<div class="shortcutField">
+<label>カウント＋</label>
+<input class="shortcutAdd shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+<div class="shortcutField">
+<label>カウント−</label>
+<input class="shortcutSub shortcutValue" readonly placeholder="未設定">
+<button type="button" class="captureShortcut">キー設定</button>
+<button type="button" class="secondary clearShortcut">解除</button>
+</div>
+</div>
+</details>`;
+el.querySelector('.label').value=c.label||'';
+el.querySelector('.value').value=c.value||0;
+el.querySelector('.goal').value=c.goal??40;
+el.querySelector('.showGoal').checked=c.showGoal!==false;
+el.querySelector('.cardWidth').value=c.cardWidth||'';
+el.querySelector('.cardHeight').value=c.cardHeight||'';
+el.querySelector('.cardBg').value=c.cardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+el.querySelector('.cardBorder').value=c.cardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';el.querySelector('.cardFontFamily').value=c.fontFamily||'global';
+el.querySelector('.cardBg').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.cardBorder').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.resetCardColors').onclick=()=>{for(const cls of ['.cardBg','.cardBorder']){const x=el.querySelector(cls);
+x.dataset.clear='1';
+x.dataset.changed='';
+x.value=cls==='.cardBg'?(state.panelColor||'#17181e'):(state.accent||'#e52b3c')}save()};
+bindCardAppearance(el,c);el.querySelector('.cardFontFamily').addEventListener('change',save);
+el.querySelector('.shortcutAdd').value=c.shortcutAdd||'';
+el.querySelector('.shortcutSub').value=c.shortcutSub||'';
+el.querySelectorAll('input').forEach(x=>x.addEventListener('input',save));el.querySelectorAll('select').forEach(x=>x.addEventListener('change',save));
+wireShortcutFields(el);
+el.querySelector('.plus').onclick=()=>{el.querySelector('.value').value=+el.querySelector('.value').value+1;
+save()};
+el.querySelector('.minus').onclick=()=>{el.querySelector('.value').value=Math.max(0,+el.querySelector('.value').value-1);
+save()};
+el.querySelector('.remove').onclick=()=>{state.counters.splice(i,1);
+renderCounters();
+save()};
+host.appendChild(el)})}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function renderMemos(){const host=$('memos');host.innerHTML='';(state.memos||[]).forEach((memo,i)=>{const el=document.createElement('div');el.className='memoEditor';el.dataset.id=memo.id||'memo-'+(i+1);el.innerHTML=`<div class="memoEditorHead"><strong>メモ ${i+1}</strong><button class="danger removeMemo" type="button">削除</button></div><div class="memoEditorGrid"><div class="field"><label>見出し</label><input class="memoTitle" placeholder="例：メモ" value="${escapeHtml(memo.title||'メモ')}"></div><label class="toggle"><input class="memoShow" type="checkbox" ${memo.show!==false?'checked':''}>オーバーレイに表示</label></div><div class="field"><label>表示内容（改行できます）</label><textarea class="memoText" placeholder="ここにメモを入力"></textarea></div>`;el.querySelector('.memoText').value=memo.text||'';el.querySelectorAll('input,textarea').forEach(x=>x.addEventListener('input',save));el.querySelector('.memoShow').addEventListener('change',save);el.querySelector('.removeMemo').onclick=()=>{state.memos.splice(i,1);renderMemos();save()};host.appendChild(el)})}
+function renderSettings(){ renderMemos();
+$('compCardWidth').value=state.compCardWidth||'';
+$('compCardHeight').value=state.compCardHeight||'';
+$('compCardBg').value=state.compCardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+$('compCardBorder').value=state.compCardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';
+$('compCardTextColor').value=state.compCardTextColor||state.textColor||'#ffffff';
+$('compCardOpacity').value=state.compCardOpacity>=0?state.compCardOpacity:(state.panelOpacity??88);
+$('compCardOpacityVal').textContent=$('compCardOpacity').value+'%';
+$('compFontFamily').value=state.compFontFamily||'global';
+$('compTextScale').value=state.compTextScale??100;$('compTextScaleVal').textContent=$('compTextScale').value+'%';
+$('timerDefaultText').value=state.timer?.defaultText||'カウント：0秒';
+$('accent').value=state.accent||'#e52b3c';
+$('gaugeColor').value=state.gaugeColor||'#e52b3c';
+$('panelColor').value=state.panelColor||'#17181e';
+$('panelOpacity').value=state.panelOpacity??88;
+$('opacityLabel').textContent=$('panelOpacity').value+'%';
+$('textColor').value=state.textColor||'#ffffff';
+$('fontFamily').value=state.fontFamily||'system';
+$('textScale').value=state.textScale??100;
+$('scaleLabel').textContent=$('textScale').value+'%';
+$('textGlowEnabled').checked=state.textGlowEnabled===true;
+$('textGlowColor').value=state.textGlowColor||state.accent||'#e52b3c';
+$('textGlowStrength').value=state.textGlowStrength??12;
+$('textGlowStrengthLabel').textContent=$('textGlowStrength').value+'px';
+$('textOutlineEnabled').checked=state.textOutlineEnabled===true;
+$('textOutlineColor').value=state.textOutlineColor||'#000000';
+$('textOutlineWidth').value=state.textOutlineWidth??2;
+$('textOutlineWidthLabel').textContent=$('textOutlineWidth').value+'px';
+$('textBackgroundEnabled').checked=state.textBackgroundEnabled===true;
+$('textBackgroundColor').value=state.textBackgroundColor||'#000000';
+$('textBackgroundOpacity').value=state.textBackgroundOpacity??55;
+$('textBackgroundOpacityLabel').textContent=$('textBackgroundOpacity').value+'%'}
+function renderGiftRules(){const host=$('giftRules');
+host.innerHTML='';
+(state.giftRules||[]).forEach((rule,i)=>{const el=document.createElement('div');
+el.className='giftRule';
+el.dataset.id=rule.id||'gift-rule-'+(i+1);
+el.innerHTML=`<div class="field">
+<label>対象ギフト</label>
+<div class="giftInputRow"><input class="giftName" placeholder="例：バラ"><button class="giftPickButton secondary" type="button">ギフトを選択</button></div>
+</div>
+<div class="field">
+<label>切り替え後のテキスト</label>
+<textarea class="giftText" rows="2" maxlength="500" placeholder="例：カウント：15秒"></textarea>
+</div>
+<div class="ruleActions" style="display:flex;
+gap:8px">
+<button class="secondary testGift" type="button">テスト</button>
+<button class="danger deleteGift" type="button">削除</button>
+</div>
+<details>
+<summary>このギフトテキストの見た目</summary>
+<div class="cardStyleGrid">
+<div class="field">
+<label>背景色</label>
+<input class="cardBg" type="color">
+</div>
+<div class="field">
+<label>左ライン色</label>
+<input class="cardBorder" type="color">
+</div>
+<button class="secondary resetGiftColors" type="button">テーマ色</button>
+</div>
+<div class="cardAppearanceGrid">
+<div class="field">
+<label>文字色</label>
+<input class="cardTextColor" type="color">
+</div>
+<div class="field">
+<label>背景の透過度</label>
+<input class="cardOpacity" type="range" min="0" max="100">
+<span class="note cardOpacityVal">
+</span>
+</div>
+<div class="field"><label>カードフォント</label><select class="cardFontFamily"><option value="global">全体設定に合わせる</option><option value="system">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div><div class="field"><label>文字サイズ</label><input class="cardTextScale" type="range" min="50" max="250" step="5"><span class="note cardTextScaleVal"></span></div>
+</div>
+</details>`;
+el.querySelector('.giftName').value=rule.giftName||'';
+el.querySelector('.giftText').value=rule.text||('カウント：'+(rule.seconds||15)+'秒');
+el.querySelector('.cardBg').value=rule.cardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+el.querySelector('.cardBorder').value=rule.cardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';el.querySelector('.cardFontFamily').value=rule.fontFamily||'global';
+el.querySelector('.cardBg').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.cardBorder').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+el.querySelector('.resetGiftColors').onclick=()=>{for(const cls of ['.cardBg','.cardBorder']){const x=el.querySelector(cls);
+x.dataset.clear='1';
+x.dataset.changed='';
+x.value=cls==='.cardBg'?(state.panelColor||'#17181e'):(state.accent||'#e52b3c')}save()};
+bindCardAppearance(el,rule,'.resetGiftColors');el.querySelector('.cardFontFamily').addEventListener('change',save);
+el.querySelector('.giftPickButton').onclick=()=>openGiftPicker(el.querySelector('.giftName'));
+el.querySelector('.giftText').addEventListener('input',save);
+el.querySelectorAll('input').forEach(x=>x.addEventListener('input',save));el.querySelectorAll('select').forEach(x=>x.addEventListener('change',save));
+el.querySelector('.testGift').onclick=async()=>{const name=el.querySelector('.giftName').value.trim();
+if(!name){$('status').textContent='先にギフト名を入力してください';
+return}await persist();
+const r=await fetch('/api/gift/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({giftName:name})});
+$('status').textContent=r.ok?'表示テキストを切り替えました':'テストできませんでした'};
+el.querySelector('.deleteGift').onclick=()=>{state.giftRules.splice(i,1);
+renderGiftRules();
+save()};
+host.appendChild(el)})}
+function renderWinCounterSettings(){const w=state.winCounter||{};
+$('winCounterTitle').value=w.title??'現在';
+$('minecraftBridgeEnabled').checked=state.minecraftBridge?.enabled===true;
+$('minecraftLogPath').value=state.minecraftBridge?.logPath||'';
+$('minecraftMarker').value=state.minecraftBridge?.marker||'bedrock_win';
+$('winCardBg').value=w.cardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+$('winCardBorder').value=w.cardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';
+$('winCardTextColor').value=w.cardTextColor||state.textColor||'#ffffff';
+$('winPositiveTextColor').value=w.positiveTextColor||w.cardTextColor||state.textColor||'#ffffff';
+$('winNegativeTextColor').value=w.negativeTextColor||'#ff4055';
+$('winGoalTextColor').value=w.goalTextColor||w.cardTextColor||state.textColor||'#ffffff';
+$('winCardOpacity').value=w.cardOpacity>=0?w.cardOpacity:(state.panelOpacity??88);
+$('winCardOpacityVal').textContent=$('winCardOpacity').value+'%';
+$('winFontFamily').value=w.fontFamily||'global';
+$('winTitleSize').value=w.titleSize??30;
+$('winTitleSizeVal').textContent=$('winTitleSize').value+'px';
+$('winValueSize').value=w.valueSize??76;
+$('winValueSizeVal').textContent=$('winValueSize').value+'px';
+$('winImageName').textContent=w.imageName||'画像未設定';
+$('winImageSize').value=w.imageSize||64;
+$('winImageSizeVal').textContent=$('winImageSize').value+'px';
+$('winImageEnabled').checked=w.imageEnabled!==false;
+$('gachaCurrent').value=w.currentWin??0;
+$('gachaGoal').value=w.goalWin||10;
+$('gachaShortcutAdd').value=w.shortcutAdd||'';
+$('gachaShortcutSub').value=w.shortcutSub||'';
+const host=$('winGiftRules');
+host.innerHTML='';
+(w.giftRules||[]).forEach((rule,i)=>{const el=document.createElement('div');
+el.className='winGiftRule missionTop';
+el.dataset.id=rule.id||'win-gift-'+(i+1);
+el.innerHTML=`<div class="giftInputRow"><input class="winGiftName" placeholder="ギフト名"><button class="giftPickButton secondary" type="button">ギフトを選択</button></div>
+<input class="winGiftDelta" type="number" placeholder="WIN増減（例：5 / -3）">
+<button class="danger deleteWinGift" type="button">削除</button>`;
+el.querySelector('.winGiftName').value=rule.giftName||'';
+el.querySelector('.winGiftDelta').value=rule.delta||'';
+el.querySelector('.giftPickButton').onclick=()=>openGiftPicker(el.querySelector('.winGiftName'));
+el.querySelectorAll('input').forEach(x=>x.addEventListener('input',save));el.querySelectorAll('select').forEach(x=>x.addEventListener('change',save));
+el.querySelector('.deleteWinGift').onclick=()=>{collectWinCounter();
+state.winCounter.giftRules.splice(i,1);
+renderWinCounterSettings();
+save()};
+host.appendChild(el)});
+$('winCounterSettings').querySelectorAll('input').forEach(x=>{if(!x.dataset.winBound){x.dataset.winBound='1';
+x.addEventListener('input',save)}});if(!$('gachaCurrent').dataset.manualWinBound){$('gachaCurrent').dataset.manualWinBound='1';$('gachaCurrent').addEventListener('input',()=>{currentWinEdited=true})}
+wireShortcutFields($('winCounterSettings'))}
+async function uploadWinImage(){const file=$('winImageFile').files[0];if(!file)return;if(file.size>10*1024*1024){$('status').textContent='WIN画像は10MB以下にしてください';return}clearTimeout(timer);timer=null;collectWinCounter();await persist();const reader=new FileReader();reader.onload=async()=>{try{const response=await fetch('/api/win-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.winCounter=data.winCounter;renderWinCounterSettings();$('status').textContent='現在WINの画像を保存しました'}catch(error){$('status').textContent='画像を保存できませんでした: '+error.message}};reader.readAsDataURL(file)}
+async function clearWinImage(){clearTimeout(timer);timer=null;if(dirty)await persist();try{const response=await fetch('/api/win-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear:true})}),data=await response.json();if(!response.ok)throw Error(data.message||'解除できませんでした');state.winCounter=data.winCounter;renderWinCounterSettings();$('winImageFile').value='';$('status').textContent='現在WINの画像を解除しました'}catch(error){$('status').textContent='画像を解除できませんでした: '+error.message}}
+async function uploadPatternMedia(el,pattern,type){const spec={animation:['.patternAnimationFile','/api/gacha-animation',30,'演出素材','.patternAnimationName','animationName'],audio:['.patternAudioFile','/api/gacha-audio',15,'抽選中音源','.patternAudioName','audioName'],resultAudio:['.patternResultAudioFile','/api/gacha-result-audio',15,'結果音源','.patternResultAudioName','resultAudioName'],endAnimation:['.patternEndAnimationFile','/api/gacha-end-animation',30,'終了演出素材','.patternEndAnimationName','endAnimationName'],endAudio:['.patternEndAudioFile','/api/gacha-end-audio',15,'終了音源','.patternEndAudioName','endAudioName'],upperAnimation:['.patternUpperAnimationFile','/api/gacha-animation',30,'上位AT抽選演出素材','.patternUpperAnimationName','upperAtAnimationName'],upperAudio:['.patternUpperAudioFile','/api/gacha-audio',15,'上位AT抽選音源','.patternUpperAudioName','upperAtAudioName'],upperEntryAnimation:['.patternUpperEntryAnimationFile','/api/gacha-animation',30,'上位AT突入演出素材','.patternUpperEntryAnimationName','upperEntryAnimationName'],upperEntryAudio:['.patternUpperEntryAudioFile','/api/gacha-audio',15,'上位AT突入音源','.patternUpperEntryAudioName','upperEntryAudioName']}[type];const input=el.querySelector(spec[0]),file=input.files[0];if(!file)return;if(file.size>spec[2]*1024*1024){$('status').textContent=spec[3]+'は'+spec[2]+'MB以下にしてください';return}clearTimeout(timer);timer=null;collectGacha();await persist();const reader=new FileReader();reader.onload=async()=>{try{const stage=type.startsWith('upperEntry')?'upperEntry':(type.startsWith('upper')?'upperAT':'normal'),response=await fetch(spec[1],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:pattern.id,stage,name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.gacha=data.gacha;const updated=(state.gacha.patterns||[]).find(item=>item.id===pattern.id);if(updated)Object.assign(pattern,updated);const label=el.querySelector(spec[4]);if(label)label.textContent=updated?.[spec[5]]||file.name;input.value='';$('status').textContent='このパターン専用の'+spec[3]+'を保存しました（設定欄は開いたままです）'}catch(error){$('status').textContent=spec[3]+'を保存できませんでした: '+error.message}};reader.readAsDataURL(file)}
+const uploadPatternMediaBeforeV65=uploadPatternMedia;
+uploadPatternMedia=async function(el,pattern,type){const specs={continueAnimation:['.patternContinueAnimationFile','/api/gacha-animation',30,'通常継続演出素材','.patternContinueAnimationName','continueAnimationName','normalContinue'],continueAudio:['.patternContinueAudioFile','/api/gacha-audio',15,'通常継続音源','.patternContinueAudioName','continueAudioName','normalContinue'],upperContinueAnimation:['.patternUpperContinueAnimationFile','/api/gacha-animation',30,'上位継続演出素材','.patternUpperContinueAnimationName','upperContinueAnimationName','upperContinue'],upperContinueAudio:['.patternUpperContinueAudioFile','/api/gacha-audio',15,'上位継続音源','.patternUpperContinueAudioName','upperContinueAudioName','upperContinue']},spec=specs[type];if(!spec)return uploadPatternMediaBeforeV65(el,pattern,type);const input=el.querySelector(spec[0]),file=input?.files?.[0];if(!file)return;if(file.size>spec[2]*1024*1024){$('status').textContent=spec[3]+'は'+spec[2]+'MB以下にしてください';return}clearTimeout(timer);timer=null;collectGacha();await persist();const reader=new FileReader();reader.onload=async()=>{try{const response=await fetch(spec[1],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:pattern.id,stage:spec[6],name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.gacha=data.gacha;const updated=(state.gacha.patterns||[]).find(item=>item.id===pattern.id);if(updated)Object.assign(pattern,updated);const label=el.querySelector(spec[4]);if(label)label.textContent=updated?.[spec[5]]||file.name;input.value='';$('status').textContent=spec[3]+'を保存しました（設定欄は開いたままです）'}catch(error){$('status').textContent=spec[3]+'を保存できませんでした: '+error.message}};reader.readAsDataURL(file)};
+async function previewGachaPattern(patternId){clearTimeout(timer);timer=null;collectGacha();await persist();const pattern=state.gacha.patterns.find(item=>item.id===patternId);if(!pattern)return;let value;if(pattern.outcomeMode==='weighted'){const options=(pattern.outcomes||[]).filter(item=>+item.probability>0);if(options.length){let pick=Math.random()*options.reduce((sum,item)=>sum+(+item.probability),0);value=+options[0].value;for(const item of options){pick-=+item.probability;if(pick<=0){value=+item.value;break}}}}if(value===undefined){const low=Math.min(+pattern.minWin||0,+pattern.maxWin||0),high=Math.max(+pattern.minWin||0,+pattern.maxWin||0);value=Math.floor(Math.random()*(high-low+1))+low}value=Math.abs(value);const sign=pattern.winSign==='minus'?-1:1;const delta=pattern.winSign==='both'?value:value*sign;const playback={...state.gacha,...pattern,globalFontFamily:state.fontFamily||'system',endSeconds:600,endAnimationUrl:pattern.animationUrl||pattern.endAnimationUrl||''};playback.animationUrl=pattern.animationUrl||'';playback.audioUrl=pattern.audioUrl||'';playback.resultAudioUrl=pattern.resultAudioUrl||'';const event={id:Date.now(),type:'gacha',patternId:pattern.id,patternName:pattern.name,mode:'single',winSign:pattern.winSign,rounds:[{delta,total:delta,continued:false}],total:delta,senderName:'プレビュー',preview:true,previewChoice:'plus'};const modal=$('gachaPreviewBackdrop'),frame=$('gachaPreviewFrame');activeGachaPreview={kind:'win',patternId};modal.querySelector('strong').textContent='WINガチャ演出プレビュー（設定は随時反映）';modal.classList.remove('hidden');frame.onload=()=>frame.contentWindow.postMessage({type:'gacha-preview',event,animationUrl:playback.animationUrl||'',g:playback},location.origin);frame.src='/overlay_gacha.html?preview=1&build=666&v='+Date.now()}
+async function previewSmokingPattern(patternId){clearTimeout(timer);timer=null;collectSmokingGacha();await persist();const sg=state.smokingGacha,pattern=sg.patterns.find(item=>item.id===patternId);if(!pattern)return;const outcomes=(pattern.outcomes||[]).filter(item=>+item.probability>0);let minutes=5;if(outcomes.length){let pick=Math.random()*outcomes.reduce((sum,item)=>sum+(+item.probability),0);for(const item of outcomes){pick-=+item.probability;if(pick<=0){minutes=+item.minutes;break}}}const playback={...sg,globalFontFamily:state.fontFamily||'system',endSeconds:600},event={id:Date.now(),type:'smoking-gacha',patternId:pattern.id,patternName:pattern.name,minutes,senderName:'プレビュー',preview:true};activeGachaPreview={kind:'smoking',patternId};const modal=$('gachaPreviewBackdrop'),frame=$('gachaPreviewFrame');modal.querySelector('strong').textContent='禁煙ガチャ演出プレビュー（設定は随時反映）';modal.classList.remove('hidden');frame.onload=()=>frame.contentWindow.postMessage({type:'smoking-gacha-preview',event,g:playback,pattern},location.origin);frame.src='/overlay_smoking_gacha.html?preview=1&build=666&v='+Date.now()}
+function broadcastPreviewSettings(){if(!activeGachaPreview||$('gachaPreviewBackdrop').classList.contains('hidden'))return;const frame=$('gachaPreviewFrame');if(!frame.contentWindow)return;if(activeGachaPreview.kind==='win'){const pattern=state.gacha?.patterns?.find(item=>item.id===activeGachaPreview.patternId);if(!pattern)return;const g={...state.gacha,...pattern};frame.contentWindow.postMessage({type:'gacha-preview-update',g,animationUrl:g.animationUrl||''},location.origin)}else{const pattern=state.smokingGacha?.patterns?.find(item=>item.id===activeGachaPreview.patternId);if(!pattern)return;frame.contentWindow.postMessage({type:'smoking-gacha-preview-update',g:state.smokingGacha,pattern},location.origin)}}
+const giftNameJa={'rose':'バラ','my first rose':'はじめてのバラ','tiktok':'TikTok','finger heart':'指ハート','gg':'GG','ice cream':'アイスクリーム','perfume':'香水','money gun':'マネーガン','doughnut':'ドーナツ','donut':'ドーナツ','cap':'キャップ','lion':'ライオン','universe':'宇宙','tiktok universe':'TikTokユニバース','galaxy':'銀河','swan':'白鳥','hand heart':'ハンドハート','paper crane':'折り鶴','fireworks':'花火','sunglasses':'サングラス','love you':'大好き','heart me':'ハートミー','bouquet':'花束','concert':'コンサート','golden sport car':'ゴールデンスポーツカー','golden sports car':'ゴールデンスポーツカー','racing car':'レーシングカー','motorcycle':'バイク','diamond tree':'ダイヤモンドツリー','sailing ship':'帆船','airplane':'飛行機','sports car':'スポーツカー','train':'電車','mic':'マイク','love letter':'ラブレター','trophy':'トロフィー','corgi':'コーギー','champagne':'シャンパン','cake slice':'ケーキ','panda':'パンダ','jazz band':'ジャズバンド','confetti':'紙吹雪','heart me':'ハートミー','finger heart':'指ハート','mini speaker':'ミニスピーカー','thumbs up':'いいね','thumbs up hand':'いいね','rose hand':'バラ','ribbon':'リボン','tea':'お茶','coffee':'コーヒー','chocolate':'チョコレート','swan boat':'白鳥のボート','love balloon':'ハートの風船','heart balloon':'ハートの風船','balloon':'風船','party popper':'クラッカー','confetti':'紙吹雪','fireworks show':'花火','boxing gloves':'ボクシンググローブ','football':'サッカーボール','soccer':'サッカーボール','basketball':'バスケットボール','tennis':'テニス','soccer ball':'サッカーボール','gold medal':'金メダル','crown':'王冠','diamond':'ダイヤモンド','star':'星','starlight':'星明かり','lightning bolt':'稲妻','thunder':'雷','magic wand':'魔法の杖','magic lamp':'魔法のランプ','rocket':'ロケット','spaceship':'宇宙船','castle':'城','unicorn':'ユニコーン','dragon':'ドラゴン','phoenix':'不死鳥','dinosaur':'恐竜','panda hug':'パンダハグ','lion dance':'獅子舞','cat paw':'猫の手','puppy':'子犬','corgi':'コーギー','bear':'クマ','bunny':'うさぎ','rabbit':'うさぎ','squirrel':'リス','butterfly':'チョウ','sunflower':'ひまわり','tulip':'チューリップ','daisy':'デイジー','flower':'花','bouquet':'花束','red rose':'赤いバラ','white rose':'白いバラ','love you so much':'大好き','love you very much':'大好き','kiss':'キス','finger heart':'指ハート','hand heart':'ハンドハート','heart':'ハート','heart me':'ハートミー','love bang':'ラブバン','love you':'大好き','lollipop':'ペロペロキャンディ','candy':'キャンディ','cake':'ケーキ','birthday cake':'バースデーケーキ','cake slice':'ケーキ','cupcake':'カップケーキ','donut':'ドーナツ','doughnut':'ドーナツ','popcorn':'ポップコーン','watermelon':'スイカ','chili':'唐辛子','soda':'ソーダ','lemon tea':'レモンティー','lemon':'レモン','sushi':'寿司','ramen':'ラーメン','pizza':'ピザ','burger':'ハンバーガー','french fries':'フライドポテト','champagne':'シャンパン','wine glass':'ワイングラス','beer':'ビール','cocktail':'カクテル','perfume':'香水','lipstick':'口紅','handbag':'ハンドバッグ','high heels':'ハイヒール','sneakers':'スニーカー','sunglasses':'サングラス','cap':'キャップ','crown for you':'あなたに王冠','motorcycle':'バイク','racing car':'レーシングカー','sports car':'スポーツカー','car':'車','golden sport car':'ゴールデンスポーツカー','golden sports car':'ゴールデンスポーツカー','private jet':'プライベートジェット','jet plane':'ジェット機','airplane':'飛行機','sailing ship':'帆船','yacht':'ヨット','submarine':'潜水艦','train':'電車','magic carpet':'魔法のじゅうたん','tiktok universe':'TikTokユニバース','tiktok stars':'TikTokスター','tiktok shuttle':'TikTokシャトル','live ranking ticket':'LIVEランキングチケット','mic':'マイク','microphone':'マイク','music notes':'音符','jazz band':'ジャズバンド','drum':'ドラム','guitar':'ギター','fireworks':'花火','firework':'花火','firework show':'花火','diamond tree':'ダイヤモンドツリー','galaxy':'銀河','universe':'宇宙','planet':'惑星','moon':'月','sun':'太陽','meteor shower':'流星群','swan':'白鳥','paper crane':'折り鶴','money gun':'マネーガン','money rain':'お金の雨','treasure chest':'宝箱','gift box':'プレゼントボックス','trophy':'トロフィー','medal':'メダル','confetti':'紙吹雪','concert':'コンサート','love letter':'ラブレター','hand heart':'ハンドハート','finger heart':'指ハート','gg':'GG'};
+function normalizedGiftKey(value){return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[’‘`]/g,"'").replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ')}
+function localizedGiftName(value){const name=String(value||'ギフト').trim(),key=normalizedGiftKey(name);return giftNameJa[key]||name}
+
+function renderGiftWallHistory(){const host=$('giftWallHistoryList');if(!host)return;const items=(state.giftWall?.history||[]).slice(0,200);host.replaceChildren();if(!items.length){const empty=document.createElement('p');empty.className='note';empty.textContent='まだギフト履歴がありません';host.appendChild(empty);return}for(const item of items){const row=document.createElement('article');row.className='giftWallHistoryItem';const visuals=document.createElement('div');visuals.className='giftWallHistoryVisuals';const avatar=document.createElement('img');avatar.className='giftWallAvatar'+(item.avatarUrl?'':' empty');avatar.alt='';if(item.avatarUrl)avatar.src=item.avatarUrl;const giftImg=document.createElement('img');giftImg.className='giftWallGiftImage'+(item.giftImageUrl||item.imageUrl?'':' empty');giftImg.alt='';const imageUrl=item.giftImageUrl||item.imageUrl||'';if(imageUrl)giftImg.src=imageUrl;visuals.append(avatar,giftImg);const info=document.createElement('div');const name=document.createElement('strong');name.textContent=item.senderName||'ゲスト';const gift=document.createElement('div');gift.textContent=localizedGiftName(item.giftName)+(Number(item.count)>1?' ×'+item.count:'');const meta=document.createElement('small');meta.textContent=Number(item.totalCoins||0).toLocaleString('ja-JP')+'コイン · '+new Date((Number(item.createdAt)||0)*1000).toLocaleString('ja-JP');info.append(name,gift,meta);row.append(visuals,info);host.appendChild(row)}}
+async function refreshGiftWallHistory(){try{const fresh=await get();if(!fresh?.giftWall)return;const next=fresh.giftWall.history||[],current=state.giftWall?.history||[],list=$('giftWallHistoryList'),needsRender=next.length>0&&!list.querySelector('.giftWallHistoryItem');if(JSON.stringify(next)!==JSON.stringify(current)||needsRender){state.giftWall={...(state.giftWall||{}),history:next,displayHistory:fresh.giftWall.displayHistory||[]};$('giftWallHistoryStatus').textContent=next.length+' 件保存中（最大200件）';renderGiftWallHistory()}}catch(error){}}
+function renderGachaHistory(){const host=$('gachaHistoryList');if(!host)return;const items=(state.gacha?.history||[]).slice(0,8);host.replaceChildren();if(!items.length){const empty=document.createElement('span');empty.className='note';empty.textContent='まだガチャ履歴がありません';host.appendChild(empty);return}for(const item of items){const row=document.createElement('div');row.className='gachaHistoryItem';const name=document.createElement('strong');name.className='gachaHistoryName';name.textContent=item.senderName||'ゲスト';const meta=document.createElement('span');meta.className='gachaHistoryMeta';const date=new Date((Number(item.createdAt)||0)*1000);const time=Number.isNaN(date.getTime())?'':date.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});meta.textContent=(item.patternName||'WINガチャ')+(time?' ・ '+time:'');const result=document.createElement('strong');result.className='gachaHistoryResult'+((Number(item.result)||0)<0?' negative':'');const value=Number(item.result)||0;result.textContent=(value>0?'+':'')+value+' WIN';row.append(name,meta,result);host.appendChild(row)}}
+function bindSmokingGacha(){const root=$('smokingGachaSettings');wireShortcutFields(root);for(const [id,choice] of [['smokingGachaPlus','plus'],['smokingGachaMinus','minus']])$(id).onclick=()=>chooseSmokingGacha(choice);$('smokingGachaFontFamily').onchange=()=>{collectSmokingGacha();save()};$('smokingGachaSpinSeconds').oninput=()=>{collectSmokingGacha();$('smokingGachaSpinSecondsLabel').textContent=$('smokingGachaSpinSeconds').value+'秒';save()};$('smokingGachaSlotNumberSize').oninput=()=>{collectSmokingGacha();$('smokingGachaSlotNumberSizeLabel').textContent=$('smokingGachaSlotNumberSize').value+'px';save()};for(const [id,label] of [['smokingGachaSlotX','smokingGachaSlotXLabel'],['smokingGachaSlotY','smokingGachaSlotYLabel']])$(id).oninput=()=>{collectSmokingGacha();$(label).textContent=$(id).value+'%';save()};$('smokingGachaSpinStyle').onchange=()=>{collectSmokingGacha();save()};$('smokingGachaEffectStyle').onchange=()=>{collectSmokingGacha();save()};for(const id of ['smokingGachaSlotNumberColor','smokingGachaAudioVolume','smokingGachaResultAudioVolume'])$(id).oninput=()=>{collectSmokingGacha();$(id+'Label')&&($(id+'Label').textContent=$(id).value+(id.includes('Volume')?'%':''));save()};$('smokingGachaEndSeconds').oninput=()=>{collectSmokingGacha();save()};$('smokingGachaShortcutPlus').oninput=$('smokingGachaShortcutMinus').oninput=()=>{collectSmokingGacha();save()};for(const [id,path,field,kind] of [['smokingGachaAnimationFile','/api/smoking-gacha-animation','animation','演出素材'],['smokingGachaAudioFile','/api/smoking-gacha-audio','audio','抽選中の音源'],['smokingGachaResultAudioFile','/api/smoking-gacha-result-audio','resultAudio','結果音源']])$(id).onchange=async()=>{const file=$(id).files[0];if(!file)return;const max=kind==='演出素材'?30:15;if(file.size>max*1024*1024){$('status').textContent=kind+'は'+max+'MB以下にしてください';return}const reader=new FileReader();reader.onload=async()=>{try{const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.smokingGacha=data.smokingGacha;renderSmokingGacha();$('status').textContent=kind+'を保存しました'}catch(error){$('status').textContent=kind+'を保存できませんでした: '+error.message}};reader.readAsDataURL(file)};$('testSmokingGachaAudio').onclick=()=>previewSmokeAudio('audioUrl','audioVolume');$('testSmokingGachaResultAudio').onclick=()=>previewSmokeAudio('resultAudioUrl','resultAudioVolume');$('clearSmokingGachaAudio').onclick=()=>clearSmokingMedia('audio');$('clearSmokingGachaResultAudio').onclick=()=>clearSmokingMedia('resultAudio');$('addSmokingGachaPattern').onclick=()=>{collectSmokingGacha();state.smokingGacha.patterns.push({id:'smoking-pattern-'+Date.now(),name:'禁煙ガチャ'+(state.smokingGacha.patterns.length+1),giftName:'',outcomes:[5,10,15,30].map(minutes=>({minutes,probability:25}))});renderSmokingGacha();save()}}
+async function chooseSmokingGacha(choice){const ev=state.smokingGacha?.event||{};if(!ev.active||!ev.choiceReady||ev.choice)return;const result=await fetch('/api/smoking-gacha/choose-sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:ev.id,choice})});if(result.ok){state.smokingGacha.event.choice=choice;renderSmokingGacha()}}
+function previewSmokeAudio(urlField,volumeField){const g=state.smokingGacha||{};if(!g[urlField]){$('status').textContent='先に音源を選択してください';return}const audio=new Audio(g[urlField]);audio.volume=Math.max(0,Math.min(100,+g[volumeField]||0))/100;audio.play().then(()=>$('status').textContent='試聴中です').catch(()=>$('status').textContent='音源を再生できませんでした')}
+function clearSmokingMedia(field){state.smokingGacha[field+'Url']='';state.smokingGacha[field+'Name']='';save();renderSmokingGacha()}
+function renderSmokingGacha(){const sg=state.smokingGacha||{},ev=sg.event||{};$('smokingGachaFontFamily').value=sg.fontFamily||'global';const active=ev.active&&ev.type==='smoking-gacha';$('smokingGachaQueueStatus').textContent=(sg.queue||[]).length?'禁煙ガチャ待機 ×'+sg.queue.length:(active?'禁煙ガチャ演出中（待機なし）':'禁煙ガチャ待機なし');$('smokingGachaChoiceStatus').textContent=active?(ev.choiceReady?(ev.choice?'確定済み：'+(ev.choice==='plus'?'＋':'－')+ev.minutes+'分':'抽選結果 '+ev.minutes+'分：＋か－を選択'):'抽選中：'+ev.minutes+'分'):'抽選待ちです。';$('smokingGachaPlus').disabled=!active||!ev.choiceReady||!!ev.choice;$('smokingGachaMinus').disabled=!active||!ev.choiceReady||!!ev.choice;$('smokingGachaShortcutPlus').value=sg.shortcutPlus||'';$('smokingGachaShortcutMinus').value=sg.shortcutMinus||'';$('smokingGachaSpinSeconds').value=sg.spinSeconds??7;$('smokingGachaSpinSecondsLabel').textContent=$('smokingGachaSpinSeconds').value+'秒';$('smokingGachaSlotNumberSize').value=sg.slotNumberSize??130;$('smokingGachaSlotNumberSizeLabel').textContent=$('smokingGachaSlotNumberSize').value+'px';$('smokingGachaSlotNumberColor').value=sg.slotNumberColor||'#ffffff';$('smokingGachaSlotX').value=sg.slotX??50;$('smokingGachaSlotXLabel').textContent=$('smokingGachaSlotX').value+'%';$('smokingGachaSlotY').value=sg.slotY??50;$('smokingGachaSlotYLabel').textContent=$('smokingGachaSlotY').value+'%';$('smokingGachaSpinStyle').value=sg.spinStyle||'dramatic';$('smokingGachaEffectStyle').value=sg.effectStyle||'fullscreen-slot';$('smokingGachaAudioVolume').value=sg.audioVolume??75;$('smokingGachaAudioVolumeLabel').textContent=$('smokingGachaAudioVolume').value+'%';$('smokingGachaResultAudioVolume').value=sg.resultAudioVolume??80;$('smokingGachaResultAudioVolumeLabel').textContent=$('smokingGachaResultAudioVolume').value+'%';$('smokingGachaEndSeconds').value=sg.endSeconds??6;$('smokingGachaAnimationName').textContent=sg.animationName||'共通演出未設定';$('smokingGachaAudioName').textContent=sg.audioName||'抽選中の音源未設定';$('smokingGachaResultAudioName').textContent=sg.resultAudioName||'結果音源未設定';const host=$('smokingGachaPatterns');host.replaceChildren();(sg.patterns||[]).forEach((pattern,i)=>{const card=document.createElement('div');card.className='smokingGachaPattern';card.dataset.id=pattern.id;card.innerHTML='<div class="missionGrid"><div class="field"><label>パターン名</label><input class="smokingPatternName"></div><div class="field"><label>発動ギフト</label><div class="giftInputRow"><input class="smokingPatternGift patternGift"><button class="giftPickButton secondary smokingGiftPick" type="button">ギフトを選択</button></div></div></div><div class="weightedOutcomeSection"><strong>抽選する分数と確率</strong><div class="smokingOutcomeRows weightedOutcomeRows"></div><button class="secondary addSmokingOutcome" type="button">＋ 分数と確率を追加</button></div><div class="missionTop"><button class="secondary previewSmokingPattern" type="button">演出プレビュー</button><button class="secondary testSmokingPattern" type="button">禁煙ガチャをテスト</button><button class="danger deleteSmokingPattern" type="button">削除</button></div>';card.querySelector('.smokingPatternName').value=pattern.name||'禁煙ガチャ'+(i+1);card.querySelector('.smokingPatternGift').value=pattern.giftName||'';card.querySelector('.smokingGiftPick').onclick=()=>openGiftPicker(card.querySelector('.smokingPatternGift'));let options=Array.isArray(pattern.outcomes)?pattern.outcomes:[];if(!options.length){options=[5,10,15,30].map(minutes=>({minutes,probability:25}));pattern.outcomes=options}const optionHost=card.querySelector('.smokingOutcomeRows');for(const option of options){const row=document.createElement('div');row.className='weightedOutcomeRow smokingOutcomeRow';row.innerHTML='<input class="smokingOutcomeMinutes" type="number" min="1" aria-label="分数"><span>分</span><input class="smokingOutcomeProbability" type="number" min="0" aria-label="確率"><span>%</span><button class="secondary removeSmokingOutcome" type="button">削除</button>';row.querySelector('.smokingOutcomeMinutes').value=option.minutes??5;row.querySelector('.smokingOutcomeProbability').value=option.probability??25;row.querySelectorAll('input').forEach(input=>input.addEventListener('input',save));row.querySelector('.removeSmokingOutcome').onclick=()=>{collectSmokingGacha();state.smokingGacha.patterns[i].outcomes.splice([...optionHost.children].indexOf(row),1);renderSmokingGacha();save()};optionHost.appendChild(row)}card.querySelector('.addSmokingOutcome').onclick=()=>{collectSmokingGacha();state.smokingGacha.patterns[i].outcomes.push({minutes:5,probability:10});renderSmokingGacha();save()};card.querySelector('.previewSmokingPattern').onclick=()=>previewSmokingPattern(card.dataset.id);card.querySelector('.testSmokingPattern').onclick=async()=>{const previewTab=window.open('about:blank','live-overlay-smoking-gacha-test','width=960,height=540');if(!previewTab){$('status').textContent='テスト画面を開けません。ブラウザで127.0.0.1のポップアップを許可してください';return}try{if(dirty)await persist();previewTab.location.href='/overlay_smoking_gacha.html?test=1&patternId='+encodeURIComponent(card.dataset.id)+'&build=666';$('status').textContent='テスト演出を別ウィンドウで開始しました（タイマーは変わりません）'}catch(error){previewTab.close();$('status').textContent='テストできませんでした：'+error.message}};card.querySelector('.deleteSmokingPattern').onclick=()=>{collectSmokingGacha();state.smokingGacha.patterns.splice(i,1);renderSmokingGacha();save()};card.querySelectorAll('input').forEach(input=>input.addEventListener('input',save));host.appendChild(card)});wireShortcutFields($('smokingGachaSettings'))}
+function renderGachaSettings(){const g=state.gacha||{};$('gachaHistoryFontFamily').value=g.historyFontFamily||'global';$('gachaHistoryTextScale').value=g.historyTextScale??100;$('gachaHistoryTextScaleVal').textContent=$('gachaHistoryTextScale').value+'%';$('gachaHistoryCardBg').value=g.historyCardBg||'#17181e';$('gachaHistoryCardBorder').value=g.historyCardBorder||'#ffcf59';$('gachaHistoryTextColor').value=g.historyTextColor||'#ffffff';$('gachaHistoryCardOpacity').value=g.historyCardOpacity??93;$('gachaHistoryCardOpacityVal').textContent=$('gachaHistoryCardOpacity').value+'%';renderGachaHistory();
+$('gachaQueueStatus').textContent=(g.queue||[]).length?'ガチャ待機 ×'+g.queue.length:(g.event?.active?'ガチャ演出中（待機なし）':'ガチャ待機なし');
+$('gachaChoicePlusShortcut').value=g.shortcutChoicePlus||'';
+$('gachaChoiceMinusShortcut').value=g.shortcutChoiceMinus||'';
+const choiceEvent=g.event||{},waiting=choiceEvent.type==='gacha'&&choiceEvent.winSign==='both'&&choiceEvent.choiceReady&&!choiceEvent.choice;
+$('gachaChoosePlus').disabled=!waiting;
+$('gachaChooseMinus').disabled=!waiting;
+$('gachaChoiceStatus').textContent=waiting?'抽選結果 '+Math.abs(+choiceEvent.total||0)+' WIN：＋か－を選んでください':(choiceEvent.choice?'確定済み：'+(choiceEvent.choice==='minus'?'－':'＋')+Math.abs(+choiceEvent.total||0)+' WIN':'±両方の抽選結果が出ると、ここから＋か－を選べます。');
+const host=$('gachaPatterns');
+host.innerHTML='';
+(g.patterns||[]).forEach((pattern,i)=>{const el=document.createElement('div');
+el.className='gachaPattern';
+el.dataset.id=pattern.id||'gacha-pattern-'+(i+1);
+el.innerHTML=`<div class="gachaPatternHead"><span class="gachaPatternIndex">ガチャ ${String(i+1).padStart(2,'0')}</span><strong>このガチャの設定・抽選内容</strong></div><div class="missionGrid">
+<div class="field">
+<label>パターン名</label>
+<input class="patternName">
+</div>
+<div class="field">
+<label>発動ギフト</label>
+<div class="giftInputRow"><input class="patternGift" placeholder="例：バラ"><button class="giftPickButton secondary" type="button">ギフトを選択</button></div>
+</div>
+<div class="field">
+<label>WIN最小</label>
+<input class="patternMin" type="number">
+</div>
+<div class="field">
+<label>WIN最大</label>
+<input class="patternMax" type="number">
+</div>
+<div class="field">
+<label>WINの方向</label>
+<select class="patternSign">
+<option value="both">＋／－両方</option>
+<option value="plus">＋だけ</option>
+<option value="minus">－だけ</option>
+</select>
+</div>
+<div class="field">
+<label>抽選方式</label>
+<select class="patternMode">
+<option value="single">一発抽選</option>
+<option value="continue">継続抽選</option>
+</select>
+</div>
+<div class="field patternRateField">
+<label>継続率（％）</label>
+<input class="patternRate" type="number" min="0" max="100">
+</div>
+<div class="field"><label>WIN抽選方法</label><select class="outcomeMode"><option value="range">最小〜最大から抽選</option><option value="weighted">固定数字と確率</option></select></div>
+<div class="field"><label class="toggle"><input class="patternUpperEnabled" type="checkbox"> 上位ATを使う</label><span class="note">通常AT継続後に、別の確率で上位AT突入を抽選します</span></div>
+<div class="upperAtSettings hidden"><h4>上位AT設定（このパターン専用）</h4><div class="cardSizeGrid"><div class="field"><label>上位AT突入率（通常AT継続後・％）</label><input class="patternUpperEntryRate" type="number" min="0" max="100"></div><div class="field"><label>上位AT継続率（％）</label><input class="patternUpperContinueRate" type="number" min="0" max="100"></div></div>
+<h4>上位AT当選時の突入演出</h4><p class="note">通常抽選で上位ATに当選した直後、上位AT抽選へ移る前に一度だけ再生します。未設定の場合はそのまま上位AT抽選へ進みます。</p><div class="field"><label>上位AT突入の画像・動画（30MB以下）</label><input class="patternUpperEntryAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternUpperEntryAnimationName">突入素材未設定</span><button class="secondary clearPatternUpperEntryAnimation" type="button">突入素材を解除</button></div><div class="field"><label>上位AT突入音源（15MB以下）</label><input class="patternUpperEntryAudioFile" type="file" accept="audio/*"><span class="note patternUpperEntryAudioName">突入音源未設定</span><div class="missionTop"><button class="secondary testPatternUpperEntryAudio" type="button">突入音源を試聴</button><button class="secondary clearPatternUpperEntryAudio" type="button">突入音源を解除</button></div></div><div class="cardSizeGrid"><div class="field"><label>突入演出の表示時間（秒）</label><input class="patternUpperEntrySeconds" type="number" min="1" max="30"></div><div class="field"><label>突入音量</label><input class="patternUpperEntryAudioVolume" type="number" min="0" max="100"><span class="note patternUpperEntryAudioVolumeLabel"></span></div><div class="field"><label class="toggle"><input class="patternUpperEntryVideoAudioEnabled" type="checkbox"> 突入動画の音声を再生</label><input class="patternUpperEntryVideoVolume" type="number" min="0" max="100"><span class="note patternUpperEntryVideoVolumeLabel"></span></div></div>
+<h4>上位AT抽選中の専用演出</h4><div class="field"><label>上位AT抽選中の画像・動画（30MB以下）</label><input class="patternUpperAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternUpperAnimationName">素材未設定</span><button class="secondary clearPatternUpperAnimation" type="button">素材を解除</button></div><div class="field"><label>上位AT抽選中の音源（15MB以下）</label><input class="patternUpperAudioFile" type="file" accept="audio/*"><span class="note patternUpperAudioName">音源未設定</span><div class="missionTop"><button class="secondary testPatternUpperAudio" type="button">上位AT音源を試聴</button><button class="secondary clearPatternUpperAudio" type="button">音源を解除</button></div><label>上位AT動画の音声</label><div class="cardSizeGrid"><label class="toggle"><input class="patternUpperVideoAudioEnabled" type="checkbox"> 動画音声を再生</label><input class="patternUpperAudioVolume" type="number" min="0" max="100"><span class="note patternUpperAudioVolumeLabel"></span><input class="patternUpperVideoVolume" type="number" min="0" max="100"><span class="note patternUpperVideoVolumeLabel"></span></div></div></div>
+</div>
+<details class="patternSettingsGroup continuationEffectSettings"><summary>継続時の演出（通常AT・上位AT）</summary>
+<h4>通常ATの継続演出</h4><label class="toggle"><input class="patternContinueEffectEnabled" type="checkbox"> 通常AT継続時に専用演出を再生</label><p class="note">「継続！」のあと、次の通常抽選へ進む前に再生します。</p>
+<div class="field"><label>通常継続の画像・動画（30MB以下）</label><input class="patternContinueAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternContinueAnimationName">素材未設定</span><button class="secondary clearPatternContinueAnimation" type="button">素材を解除</button></div>
+<div class="field"><label>通常継続の音源（15MB以下）</label><input class="patternContinueAudioFile" type="file" accept="audio/*"><span class="note patternContinueAudioName">音源未設定</span><div class="missionTop"><button class="secondary testPatternContinueAudio" type="button">音源を試聴</button><button class="secondary clearPatternContinueAudio" type="button">音源を解除</button></div></div>
+<div class="cardSizeGrid"><div class="field"><label>表示時間（秒）</label><input class="patternContinueSeconds" type="number" min="1" max="30"></div><div class="field"><label>音源の音量</label><input class="patternContinueAudioVolume" type="number" min="0" max="100"><span class="note patternContinueAudioVolumeLabel"></span></div><div class="field"><label class="toggle"><input class="patternContinueVideoAudioEnabled" type="checkbox"> 動画音声を再生</label><input class="patternContinueVideoVolume" type="number" min="0" max="100"><span class="note patternContinueVideoVolumeLabel"></span></div></div>
+<h4>上位ATの継続演出</h4><label class="toggle"><input class="patternUpperContinueEffectEnabled" type="checkbox"> 上位AT継続時に専用演出を再生</label><p class="note">「上位AT 継続！」のあと、次の上位抽選へ進む前に再生します。</p>
+<div class="field"><label>上位継続の画像・動画（30MB以下）</label><input class="patternUpperContinueAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternUpperContinueAnimationName">素材未設定</span><button class="secondary clearPatternUpperContinueAnimation" type="button">素材を解除</button></div>
+<div class="field"><label>上位継続の音源（15MB以下）</label><input class="patternUpperContinueAudioFile" type="file" accept="audio/*"><span class="note patternUpperContinueAudioName">音源未設定</span><div class="missionTop"><button class="secondary testPatternUpperContinueAudio" type="button">音源を試聴</button><button class="secondary clearPatternUpperContinueAudio" type="button">音源を解除</button></div></div>
+<div class="cardSizeGrid"><div class="field"><label>表示時間（秒）</label><input class="patternUpperContinueSeconds" type="number" min="1" max="30"></div><div class="field"><label>音源の音量</label><input class="patternUpperContinueAudioVolume" type="number" min="0" max="100"><span class="note patternUpperContinueAudioVolumeLabel"></span></div><div class="field"><label class="toggle"><input class="patternUpperContinueVideoAudioEnabled" type="checkbox"> 動画音声を再生</label><input class="patternUpperContinueVideoVolume" type="number" min="0" max="100"><span class="note patternUpperContinueVideoVolumeLabel"></span></div></div>
+</details>
+<div class="weightedOutcomeSection"><p class="note">確率の比率で抽選します。合計100%でなくても自動調整されます。</p><div class="weightedOutcomeRows"></div><button class="secondary addWeightedOutcome" type="button">＋ 数字と確率を追加</button></div>
+<details class="patternMediaSettings"><summary>このパターン専用の演出・見た目・音（設定を開く）</summary><p class="note">必要な項目だけ開いて編集できます。設定はこのガチャパターンだけに保存されます。</p><details class="patternSettingsGroup" open><summary>抽選演出・数字</summary>
+<div class="cardSizeGrid"><div class="field"><label>演出レイアウト</label><select class="patternEffectStyle"><option value="card">カード内</option><option value="fullscreen-slot">画面いっぱいのスロット</option></select></div><div class="field"><label>抽選演出時間（秒）</label><input class="patternSpinSeconds" type="number" min="3" max="30"><span class="note patternSpinSecondsLabel"></span></div><div class="field"><label>数字サイズ（px）</label><input class="patternSlotNumberSize" type="range" min="40" max="220"><span class="note patternSlotNumberSizeLabel"></span></div><div class="field"><label>数字色</label><input class="patternSlotNumberColor" type="color"></div><div class="field"><label>数字の横位置</label><input class="patternSlotX" type="range" min="5" max="95"><span class="note patternSlotXLabel"></span></div><div class="field"><label>数字の縦位置</label><input class="patternSlotY" type="range" min="10" max="90"><span class="note patternSlotYLabel"></span></div><div class="field"><label>数字の止まり方</label><select class="patternSpinStyle"><option value="dramatic">後半ゆっくり（ドキドキ）</option><option value="ease-out">なめらかに減速</option><option value="steady">一定に近い</option></select></div><div class="field"><label>標準効果音の音量</label><input class="patternSoundVolume" type="number" min="0" max="100"><span class="note patternSoundVolumeLabel"></span></div></div></details><details class="patternSettingsGroup"><summary>文字色・サイズ・フォント</summary>
+<div class="cardSizeGrid"><div class="field"><label>抽選中メッセージの文字色</label><input class="patternStateTextColor" type="color"></div><div class="field"><label>抽選中メッセージの文字サイズ</label><input class="patternStateTextSize" type="range" min="14" max="72"><span class="note patternStateTextSizeLabel"></span></div><div class="field"><label>±選択案内の文字色</label><input class="patternChoiceTextColor" type="color"></div><div class="field"><label>±選択案内の文字サイズ</label><input class="patternChoiceTextSize" type="range" min="14" max="100"><span class="note patternChoiceTextSizeLabel"></span></div><div class="field"><label>フォント</label><select class="patternFontFamily"><option value="global">全体設定に合わせる</option><option value="native">標準（システム）</option><option value="yuGothic">游ゴシック</option><option value="meiryo">メイリオ</option><option value="gothic">太字ゴシック</option><option value="serif">明朝体</option><option value="mono">等幅フォント</option></select></div><div class="field"><label><input class="patternGlowEnabled" type="checkbox"> ネオン効果</label><span class="note">オンにすると文字が発光します</span></div><div class="field"><label>ネオン色</label><input class="patternGlowColor" type="color"></div><div class="field"><label>ネオンの強さ</label><input class="patternGlowStrength" type="range" min="0" max="40"><span class="note patternGlowStrengthLabel"></span></div></div><h4>文字ごとの表示ON/OFF</h4><div class="cardSizeGrid"><label class="toggle"><input class="patternShowPatternText" type="checkbox">パターン名</label><label class="toggle"><input class="patternShowSenderText" type="checkbox">ギフター名</label><label class="toggle"><input class="patternShowResultText" type="checkbox">抽選数字・結果</label><label class="toggle"><input class="patternShowStateText" type="checkbox">抽選中・継続などの状態</label><label class="toggle"><input class="patternShowTotalText" type="checkbox">START・今回合計・最終合計</label><label class="toggle"><input class="patternShowChoiceText" type="checkbox">＋か－を選んでください</label></div><h4>表示テキスト別の色・サイズ</h4><div class="cardSizeGrid textStyleGrid"><div class="field"><label>START 色／サイズ</label><input class="patternStartColor" type="color"><input class="patternStartSize" type="number" min="16" max="120"><span>px</span></div><div class="field"><label>今回のWIN 色／サイズ</label><input class="patternResultColor" type="color"><input class="patternResultSize" type="number" min="30" max="220"><span>px</span></div><div class="field"><label>今回合計WIN 色／サイズ</label><input class="patternRoundTotalColor" type="color"><input class="patternRoundTotalSize" type="number" min="14" max="100"><span>px</span></div><div class="field"><label>最終合計WIN 色／サイズ</label><input class="patternFinalTotalColor" type="color"><input class="patternFinalTotalSize" type="number" min="18" max="130"><span>px</span></div><div class="field"><label>パターン名 色／サイズ</label><input class="patternNameColor" type="color"><input class="patternNameSize" type="number" min="18" max="100"><span>px</span></div><div class="field"><label>ギフター名 色／サイズ</label><input class="patternSenderColor" type="color"><input class="patternSenderSize" type="number" min="14" max="80"><span>px</span></div></div></details><details class="patternSettingsGroup"><summary>通常ATの演出動画・音源</summary>
+<div class="field"><label>演出素材（GIF／MP4／WebM／PNG／JPG／WebP、30MB以下）</label><input class="patternAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternAnimationName"></span><button class="secondary clearPatternAnimation" type="button">素材を解除</button></div>
+<div class="field"><label>抽選中の音源（15MB以下）</label><input class="patternAudioFile" type="file" accept="audio/*"><span class="note patternAudioName"></span><div class="missionTop"><button class="secondary testPatternAudio" type="button">抽選中音源を試聴</button><button class="secondary clearPatternAudio" type="button">音源を解除</button></div><label>音源の音量</label><input class="patternAudioVolume" type="number" min="0" max="100"><span class="note patternAudioVolumeLabel"></span></div>
+<div class="field"><label>結果音源（15MB以下）</label><input class="patternResultAudioFile" type="file" accept="audio/*"><span class="note patternResultAudioName"></span><div class="missionTop"><button class="secondary testPatternResultAudio" type="button">結果音を試聴</button><button class="secondary clearPatternResultAudio" type="button">結果音を解除</button></div><label>結果音量</label><input class="patternResultAudioVolume" type="number" min="0" max="100"><span class="note patternResultAudioVolumeLabel"></span></div>
+</details><details class="patternSettingsGroup"><summary>カード背景・文字の色</summary><div class="cardSizeGrid"><div class="field"><label><input class="patternVideoAudioEnabled" type="checkbox"> 演出動画の音声を再生</label><input class="patternVideoVolume" type="number" min="0" max="100"><span class="note patternVideoVolumeLabel"></span></div><div class="field"><label>カード背景色</label><input class="patternCardBg" type="color"></div><div class="field"><label>カード枠色</label><input class="patternCardBorder" type="color"></div><div class="field"><label>カード文字色</label><input class="patternCardTextColor" type="color"></div><div class="field"><label>カード背景の透過度</label><input class="patternCardOpacity" type="range" min="0" max="100"><span class="note patternCardOpacityLabel"></span></div></div>
+</details><details class="patternSettingsGroup"><summary>終了画面・終了時の音</summary><h4>終了画面・終了時の音</h4><div class="cardSizeGrid"><div class="field"><label>終了画面の表示時間（秒）</label><input class="patternEndSeconds" type="number" min="1" max="600"></div><div class="field"><label>終了音量</label><input class="patternEndAudioVolume" type="number" min="0" max="100"><span class="note patternEndAudioVolumeLabel"></span></div></div>
+<div class="field"><label>終了演出素材（30MB以下）</label><input class="patternEndAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternEndAnimationName"></span><button class="secondary clearPatternEndAnimation" type="button">終了素材を解除</button></div>
+<div class="field"><label>終了音源（15MB以下）</label><input class="patternEndAudioFile" type="file" accept="audio/*"><span class="note patternEndAudioName"></span><div class="missionTop"><button class="secondary testPatternEndAudio" type="button">終了音を試聴</button><button class="secondary clearPatternEndAudio" type="button">終了音を解除</button></div></div>
+<p class="note">ここで設定した内容はこのパターンだけに反映されます。</p></details></details>
+<div class="missionTop">
+<button class="secondary testPattern" type="button">このパターンをテスト</button><button class="secondary previewPattern" type="button">演出プレビュー</button>
+<button class="secondary copyPattern" type="button">複製</button><button class="danger deletePattern" type="button">削除</button>
+</div>`;
+el.querySelector('.patternName').value=pattern.name||'';
+el.querySelector('.patternGift').value=pattern.giftName||'';
+el.querySelector('.giftPickButton').onclick=()=>openGiftPicker(el.querySelector('.patternGift'));
+el.querySelector('.patternMin').value=pattern.minWin??1;
+el.querySelector('.patternMax').value=pattern.maxWin??10;
+el.querySelector('.patternSign').value=pattern.winSign||'both';
+el.querySelector('.patternMode').value=pattern.mode||g.mode||'continue';
+el.querySelector('.patternRate').value=pattern.continuationRate??g.continuationRate??70;
+el.querySelector('.outcomeMode').value=pattern.outcomeMode||'range';
+const outcomeHost=el.querySelector('.weightedOutcomeRows');
+let outcomes=Array.isArray(pattern.outcomes)?pattern.outcomes:[];
+if(el.querySelector('.outcomeMode').value==='weighted'&&!outcomes.length){outcomes=[10,20,30,40,50].map(value=>({value,probability:20}));pattern.outcomes=outcomes}
+for(const outcome of outcomes){
+const row=document.createElement('div');row.className='weightedOutcomeRow';
+row.innerHTML='<input class="outcomeValue" type="number" aria-label="WIN数"><span>WIN</span><input class="outcomeProbability" type="number" min="0" max="100000" aria-label="確率"><span>%</span><button class="secondary removeOutcome" type="button">削除</button>';
+row.querySelector('.outcomeValue').value=outcome.value??0;row.querySelector('.outcomeProbability').value=outcome.probability??0;
+row.querySelectorAll('input').forEach(input=>input.addEventListener('input',save));
+row.querySelector('.removeOutcome').onclick=()=>{collectGacha();state.gacha.patterns[i].outcomes.splice([...outcomeHost.children].indexOf(row),1);renderGachaSettings();save()};outcomeHost.appendChild(row)}
+el.querySelector('.weightedOutcomeSection').classList.toggle('hidden',el.querySelector('.outcomeMode').value!=='weighted');
+el.querySelector('.outcomeMode').onchange=()=>{collectGacha();const p=state.gacha.patterns[i];p.outcomeMode=el.querySelector('.outcomeMode').value;if(p.outcomeMode==='weighted'&&!p.outcomes.length)p.outcomes=[10,20,30,40,50].map(value=>({value,probability:20}));renderGachaSettings();save()};el.querySelector('.patternFontFamily').onchange=()=>save();
+el.querySelector('.addWeightedOutcome').onclick=()=>{collectGacha();state.gacha.patterns[i].outcomes.push({value:10,probability:10});renderGachaSettings();save()};
+const set=(selector,value)=>{const node=el.querySelector(selector);if(node)node.value=value};const label=(selector,value)=>{const node=el.querySelector(selector);if(node)node.textContent=value};
+set('.patternEffectStyle',pattern.effectStyle||'card');set('.patternSpinSeconds',pattern.spinSeconds??5);label('.patternSpinSecondsLabel',(pattern.spinSeconds??5)+'秒');set('.patternSlotNumberSize',pattern.slotNumberSize??130);label('.patternSlotNumberSizeLabel',(pattern.slotNumberSize??130)+'px');set('.patternSlotNumberColor',pattern.slotNumberColor||'#ffffff');set('.patternSlotX',pattern.slotX??50);label('.patternSlotXLabel',(pattern.slotX??50)+'%');set('.patternSlotY',pattern.slotY??50);label('.patternSlotYLabel',(pattern.slotY??50)+'%');set('.patternSpinStyle',pattern.spinStyle||'dramatic');set('.patternSoundVolume',pattern.soundVolume??65);label('.patternSoundVolumeLabel',(pattern.soundVolume??65)+'%');
+label('.patternAnimationName',pattern.animationName||'素材未設定');label('.patternAudioName',pattern.audioName||'音源未設定');label('.patternResultAudioName',pattern.resultAudioName||'結果音源未設定');label('.patternEndAnimationName',pattern.endAnimationName||'終了素材未設定');label('.patternEndAudioName',pattern.endAudioName||'終了音源未設定');label('.patternUpperAnimationName',pattern.upperAtAnimationName||'上位AT素材未設定');label('.patternUpperAudioName',pattern.upperAtAudioName||'上位AT音源未設定');
+set('.patternAudioVolume',pattern.audioVolume??75);label('.patternAudioVolumeLabel',(pattern.audioVolume??75)+'%');set('.patternResultAudioVolume',pattern.resultAudioVolume??80);label('.patternResultAudioVolumeLabel',(pattern.resultAudioVolume??80)+'%');set('.patternVideoVolume',pattern.videoVolume??75);label('.patternVideoVolumeLabel',(pattern.videoVolume??75)+'%');el.querySelector('.patternVideoAudioEnabled').checked=pattern.videoAudioEnabled!==false;set('.patternCardBg',pattern.cardBg||'#17151c');set('.patternCardBorder',pattern.cardBorder||'#ffcf59');set('.patternCardTextColor',pattern.cardTextColor||'#ffffff');set('.patternCardOpacity',pattern.cardOpacity??94);label('.patternCardOpacityLabel',(pattern.cardOpacity??94)+'%');set('.patternStateTextColor',pattern.stateTextColor||'#ffe9a6');set('.patternStateTextSize',pattern.stateTextSize??30);label('.patternStateTextSizeLabel',(pattern.stateTextSize??30)+'px');set('.patternFontFamily',pattern.fontFamily||'global');el.querySelector('.patternGlowEnabled').checked=pattern.textGlowEnabled===true;set('.patternGlowColor',pattern.textGlowColor||'#e52b3c');set('.patternGlowStrength',pattern.textGlowStrength??12);label('.patternGlowStrengthLabel',(pattern.textGlowStrength??12)+'px');el.querySelector('.patternUpperEnabled').checked=pattern.upperAtEnabled===true;el.querySelector('.patternUpperEntryRate').value=pattern.upperAtEntryRate??5;el.querySelector('.patternUpperContinueRate').value=pattern.upperAtContinuationRate??80;el.querySelector('.patternUpperAudioVolume').value=pattern.upperAtAudioVolume??75;el.querySelector('.patternUpperVideoVolume').value=pattern.upperAtVideoVolume??75;el.querySelector('.patternUpperVideoAudioEnabled').checked=pattern.upperAtVideoAudioEnabled!==false;el.querySelector('.patternUpperAudioVolumeLabel').textContent=(pattern.upperAtAudioVolume??75)+'%';el.querySelector('.patternUpperVideoVolumeLabel').textContent=(pattern.upperAtVideoVolume??75)+'%';el.querySelector('.upperAtSettings').classList.toggle('hidden',!pattern.upperAtEnabled);for(const [sel,val] of [['.patternStartColor',pattern.startTextColor||'#fff'],['.patternStartSize',pattern.startTextSize??48],['.patternResultColor',pattern.resultTextColor||'#fff'],['.patternResultSize',pattern.resultTextSize??130],['.patternRoundTotalColor',pattern.roundTotalTextColor||'#fff'],['.patternRoundTotalSize',pattern.roundTotalTextSize??32],['.patternFinalTotalColor',pattern.finalTotalTextColor||'#fff'],['.patternFinalTotalSize',pattern.finalTotalTextSize??48],['.patternNameColor',pattern.patternTextColor||'#fff'],['.patternNameSize',pattern.patternTextSize??40],['.patternSenderColor',pattern.senderTextColor||'#ffe9a6'],['.patternSenderSize',pattern.senderTextSize??32]])set(sel,val);set('.patternEndSeconds',pattern.endSeconds??6);set('.patternEndAudioVolume',pattern.endAudioVolume??75);label('.patternEndAudioVolumeLabel',(pattern.endAudioVolume??75)+'%');
+for(const [input,labelSelector,suffix] of [['.patternSpinSeconds','.patternSpinSecondsLabel','秒'],['.patternSlotNumberSize','.patternSlotNumberSizeLabel','px'],['.patternSlotX','.patternSlotXLabel','%'],['.patternSlotY','.patternSlotYLabel','%'],['.patternSoundVolume','.patternSoundVolumeLabel','%'],['.patternAudioVolume','.patternAudioVolumeLabel','%'],['.patternResultAudioVolume','.patternResultAudioVolumeLabel','%'],['.patternVideoVolume','.patternVideoVolumeLabel','%'],['.patternCardOpacity','.patternCardOpacityLabel','%'],['.patternStateTextSize','.patternStateTextSizeLabel','px'],['.patternGlowStrength','.patternGlowStrengthLabel','px'],['.patternEndAudioVolume','.patternEndAudioVolumeLabel','%']])el.querySelector(input).oninput=e=>{label(labelSelector,e.target.value+suffix);save()};
+label('.patternUpperEntryAnimationName',pattern.upperEntryAnimationName||'突入素材未設定');label('.patternUpperEntryAudioName',pattern.upperEntryAudioName||'突入音源未設定');set('.patternUpperEntrySeconds',pattern.upperEntrySeconds??3);set('.patternUpperEntryAudioVolume',pattern.upperEntryAudioVolume??80);label('.patternUpperEntryAudioVolumeLabel',(pattern.upperEntryAudioVolume??80)+'%');set('.patternUpperEntryVideoVolume',pattern.upperEntryVideoVolume??80);label('.patternUpperEntryVideoVolumeLabel',(pattern.upperEntryVideoVolume??80)+'%');el.querySelector('.patternUpperEntryVideoAudioEnabled').checked=pattern.upperEntryVideoAudioEnabled!==false;set('.patternChoiceTextColor',pattern.choiceTextColor||'#ffe9a6');set('.patternChoiceTextSize',pattern.choiceTextSize??34);label('.patternChoiceTextSizeLabel',(pattern.choiceTextSize??34)+'px');for(const [selector,key] of [['.patternShowPatternText','showPatternText'],['.patternShowSenderText','showSenderText'],['.patternShowResultText','showResultText'],['.patternShowStateText','showStateText'],['.patternShowTotalText','showTotalText'],['.patternShowChoiceText','showChoiceText']])el.querySelector(selector).checked=pattern[key]!==false;for(const [selector,labelSelector,suffix] of [['.patternUpperEntryAudioVolume','.patternUpperEntryAudioVolumeLabel','%'],['.patternUpperEntryVideoVolume','.patternUpperEntryVideoVolumeLabel','%'],['.patternChoiceTextSize','.patternChoiceTextSizeLabel','px']])el.querySelector(selector).oninput=e=>{label(labelSelector,e.target.value+suffix);save()};
+el.querySelector('.patternAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'animation');el.querySelector('.patternAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'audio');el.querySelector('.patternResultAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'resultAudio');el.querySelector('.patternEndAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'endAnimation');el.querySelector('.patternEndAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'endAudio');el.querySelector('.patternUpperAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'upperAnimation');el.querySelector('.patternUpperAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'upperAudio');el.querySelector('.patternUpperEntryAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'upperEntryAnimation');el.querySelector('.patternUpperEntryAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'upperEntryAudio');
+const clear=(urlKey,nameKey,labelSelector,emptyText)=>{pattern[urlKey]='';pattern[nameKey]='';const node=el.querySelector(labelSelector);if(node)node.textContent=emptyText;save()};el.querySelector('.clearPatternAnimation').onclick=()=>clear('animationUrl','animationName','.patternAnimationName','素材未設定');el.querySelector('.clearPatternAudio').onclick=()=>clear('audioUrl','audioName','.patternAudioName','音源未設定');el.querySelector('.clearPatternResultAudio').onclick=()=>clear('resultAudioUrl','resultAudioName','.patternResultAudioName','結果音源未設定');el.querySelector('.clearPatternEndAnimation').onclick=()=>clear('endAnimationUrl','endAnimationName','.patternEndAnimationName','終了素材未設定');el.querySelector('.clearPatternEndAudio').onclick=()=>clear('endAudioUrl','endAudioName','.patternEndAudioName','終了音源未設定');el.querySelector('.clearPatternUpperAnimation').onclick=()=>clear('upperAtAnimationUrl','upperAtAnimationName','.patternUpperAnimationName','上位AT素材未設定');el.querySelector('.clearPatternUpperAudio').onclick=()=>clear('upperAtAudioUrl','upperAtAudioName','.patternUpperAudioName','上位AT音源未設定');el.querySelector('.clearPatternUpperEntryAnimation').onclick=()=>clear('upperEntryAnimationUrl','upperEntryAnimationName','.patternUpperEntryAnimationName','突入素材未設定');el.querySelector('.clearPatternUpperEntryAudio').onclick=()=>clear('upperEntryAudioUrl','upperEntryAudioName','.patternUpperEntryAudioName','突入音源未設定');
+const testAudio=async(urlKey,volumeSelector)=>{const url=pattern[urlKey];if(!url){$('status').textContent='このパターンの音源は未設定です';return}try{const audio=new Audio(url);audio.volume=Math.max(0,Math.min(1,(+(el.querySelector(volumeSelector)?.value||75))/100));await audio.play();setTimeout(()=>audio.pause(),4000);$('status').textContent='音源を試聴しています'}catch(e){$('status').textContent='音源を再生できませんでした'}};el.querySelector('.testPatternAudio').onclick=()=>testAudio('audioUrl','.patternAudioVolume');el.querySelector('.testPatternResultAudio').onclick=()=>testAudio('resultAudioUrl','.patternResultAudioVolume');el.querySelector('.testPatternEndAudio').onclick=()=>testAudio('endAudioUrl','.patternEndAudioVolume');el.querySelector('.testPatternUpperAudio').onclick=()=>testAudio('upperAtAudioUrl','.patternUpperAudioVolume');el.querySelector('.testPatternUpperEntryAudio').onclick=()=>testAudio('upperEntryAudioUrl','.patternUpperEntryAudioVolume');
+el.querySelector('.patternContinueEffectEnabled').checked=pattern.continueEffectEnabled===true;el.querySelector('.patternUpperContinueEffectEnabled').checked=pattern.upperContinueEffectEnabled===true;
+for(const [selector,value] of [['.patternContinueSeconds',pattern.continueSeconds??3],['.patternContinueAudioVolume',pattern.continueAudioVolume??80],['.patternContinueVideoVolume',pattern.continueVideoVolume??80],['.patternUpperContinueSeconds',pattern.upperContinueSeconds??3],['.patternUpperContinueAudioVolume',pattern.upperContinueAudioVolume??80],['.patternUpperContinueVideoVolume',pattern.upperContinueVideoVolume??80]])set(selector,value);
+el.querySelector('.patternContinueVideoAudioEnabled').checked=pattern.continueVideoAudioEnabled!==false;el.querySelector('.patternUpperContinueVideoAudioEnabled').checked=pattern.upperContinueVideoAudioEnabled!==false;
+label('.patternContinueAnimationName',pattern.continueAnimationName||'素材未設定');label('.patternContinueAudioName',pattern.continueAudioName||'音源未設定');label('.patternUpperContinueAnimationName',pattern.upperContinueAnimationName||'素材未設定');label('.patternUpperContinueAudioName',pattern.upperContinueAudioName||'音源未設定');
+for(const [selector,labelSelector] of [['.patternContinueAudioVolume','.patternContinueAudioVolumeLabel'],['.patternContinueVideoVolume','.patternContinueVideoVolumeLabel'],['.patternUpperContinueAudioVolume','.patternUpperContinueAudioVolumeLabel'],['.patternUpperContinueVideoVolume','.patternUpperContinueVideoVolumeLabel']]){label(labelSelector,el.querySelector(selector).value+'%');el.querySelector(selector).oninput=e=>{label(labelSelector,e.target.value+'%');save()}}
+el.querySelector('.patternContinueAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'continueAnimation');el.querySelector('.patternContinueAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'continueAudio');el.querySelector('.patternUpperContinueAnimationFile').onchange=()=>uploadPatternMedia(el,pattern,'upperContinueAnimation');el.querySelector('.patternUpperContinueAudioFile').onchange=()=>uploadPatternMedia(el,pattern,'upperContinueAudio');
+el.querySelector('.clearPatternContinueAnimation').onclick=()=>clear('continueAnimationUrl','continueAnimationName','.patternContinueAnimationName','素材未設定');el.querySelector('.clearPatternContinueAudio').onclick=()=>clear('continueAudioUrl','continueAudioName','.patternContinueAudioName','音源未設定');el.querySelector('.clearPatternUpperContinueAnimation').onclick=()=>clear('upperContinueAnimationUrl','upperContinueAnimationName','.patternUpperContinueAnimationName','素材未設定');el.querySelector('.clearPatternUpperContinueAudio').onclick=()=>clear('upperContinueAudioUrl','upperContinueAudioName','.patternUpperContinueAudioName','音源未設定');
+el.querySelector('.testPatternContinueAudio').onclick=()=>testAudio('continueAudioUrl','.patternContinueAudioVolume');el.querySelector('.testPatternUpperContinueAudio').onclick=()=>testAudio('upperContinueAudioUrl','.patternUpperContinueAudioVolume');
+const toggleRate=()=>el.querySelector('.patternRateField').classList.toggle('hidden',el.querySelector('.patternMode').value==='single');
+el.querySelector('.patternUpperEnabled').onchange=()=>{el.querySelector('.upperAtSettings').classList.toggle('hidden',!el.querySelector('.patternUpperEnabled').checked);save()};el.querySelector('.patternMode').onchange=()=>{toggleRate();
+save()};
+toggleRate();
+el.querySelectorAll('input,select').forEach(x=>x.addEventListener('input',save));
+el.querySelector('.copyPattern').onclick=()=>{collectGacha();const source=state.gacha.patterns[i],clone=JSON.parse(JSON.stringify(source));clone.id='gacha-pattern-'+Date.now();clone.name=(source.name||'パターン')+'（コピー）';clone.giftName='';state.gacha.patterns.splice(i+1,0,clone);renderGachaSettings();save()};
+el.querySelector('.deletePattern').onclick=()=>{collectGacha();
+state.gacha.patterns.splice(i,1);
+renderGachaSettings();
+save()};
+el.querySelector('.previewPattern').onclick=()=>previewGachaPattern(el.dataset.id);
+el.querySelector('.testPattern').onclick=async()=>{if(dirty)await persist();
+const r=await fetch('/api/gacha/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:el.dataset.id})});
+$('status').textContent=r.ok?'テスト抽選を開始しました':'抽選できませんでした'};
+host.appendChild(el)});
+$('gachaSettings').querySelectorAll('input,select').forEach(x=>{if(!x.dataset.gachaBound){x.dataset.gachaBound='1';
+x.addEventListener('input',save);
+x.addEventListener('change',save)}});
+wireShortcutFields($('gachaSettings'))}
+const renderSmokingGachaBase=renderSmokingGacha;
+renderSmokingGacha=function(){renderSmokingGachaBase();document.querySelectorAll('#smokingGachaPatterns .smokingGachaPattern').forEach(card=>{const button=card.querySelector('.testSmokingPattern');if(!button)return;button.onclick=async()=>{try{if(dirty)await persist();const response=await fetch('/api/smoking-gacha/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:card.dataset.id})}),result=await response.json();if(!response.ok||!result.ok)throw Error(result.message||'テスト抽選を開始できませんでした');state.smokingGacha=result.smokingGacha||state.smokingGacha;renderSmokingGacha();$('status').textContent=(state.smokingGacha.queue||[]).length?'禁煙ガチャのテストを待機列へ追加しました':'禁煙ガチャ専用オーバーレイでテストを開始しました（タイマーは変わりません）'}catch(error){$('status').textContent='テストできませんでした：'+error.message}}})};
+function bindGachaControls(){for(const [ids,obj] of [[['winCardBg','winCardBorder','winCardTextColor','winCardOpacity'],'winCounter'],[['compCardBg','compCardBorder','compCardTextColor','compCardOpacity'],'comp'],[['smokeCardBg','smokeCardBorder','smokeTextColor','smokeCardOpacity'],'smokingTimer']])for(const id of ids){const x=$(id);x.oninput=()=>{x.dataset.changed='1';x.dataset.clear='';const label=$(id==='winCardOpacity'?'winCardOpacityVal':id==='compCardOpacity'?'compCardOpacityVal':id==='smokeCardOpacity'?'smokeCardOpacityVal':'');if(label)label.textContent=x.value+'%';if(obj==='smokingTimer')state.smokingTimer={...(state.smokingTimer||{}),[id==='smokeTextColor'?'cardTextColor':id==='smokeCardOpacity'?'cardOpacity':id==='smokeCardBg'?'cardBg':'cardBorder']:id==='smokeCardOpacity'?+x.value:x.value};if(obj==='winCounter')state.winCounter={...(state.winCounter||{}),[id==='winCardTextColor'?'cardTextColor':id==='winCardOpacity'?'cardOpacity':id==='winCardBg'?'cardBg':'cardBorder']:id==='winCardOpacity'?+x.value:x.value};save()}}$('resetWinCardStyle').onclick=()=>{for(const id of ['winCardBg','winCardBorder','winCardTextColor','winCardOpacity']){$(id).dataset.clear='1';$(id).dataset.changed=''}state.winCounter={...(state.winCounter||{}),cardBg:'',cardBorder:'',cardTextColor:'',cardOpacity:-1};renderWinCounterSettings();save()};$('winImageFile').onchange=uploadWinImage;$('clearWinImage').onclick=clearWinImage;$('winImageSize').oninput=()=>{$('winImageSizeVal').textContent=$('winImageSize').value+'px';save()};$('winTitleSize').oninput=()=>{$('winTitleSizeVal').textContent=$('winTitleSize').value+'px';save()};$('winValueSize').oninput=()=>{$('winValueSizeVal').textContent=$('winValueSize').value+'px';save()};$('addGachaPattern').onclick=()=>{collectGacha();state.gacha.patterns.push({id:'gacha-pattern-'+Date.now(),name:'パターン'+(state.gacha.patterns.length+1),giftName:'',minWin:1,maxWin:10,winSign:'both',mode:'continue',continuationRate:70,upperAtEnabled:false,upperAtEntryRate:5,upperAtContinuationRate:80,upperAtAudioVolume:75,upperAtVideoVolume:75,upperAtVideoAudioEnabled:true,outcomeMode:'range',outcomes:[],effectStyle:'card',spinSeconds:5,slotNumberSize:130,slotNumberColor:'#ffffff',slotX:50,slotY:50,spinStyle:'dramatic',soundVolume:65,audioVolume:75,resultAudioVolume:80,videoAudioEnabled:true,videoVolume:75,stateTextColor:'#ffe9a6',stateTextSize:30,startTextColor:'#ffffff',startTextSize:48,resultTextColor:'#ffffff',resultTextSize:130,roundTotalTextColor:'#ffffff',roundTotalTextSize:32,finalTotalTextColor:'#ffffff',finalTotalTextSize:48,patternTextColor:'#ffffff',patternTextSize:40,senderTextColor:'#ffe9a6',senderTextSize:32,fontFamily:'global',textGlowEnabled:false,textGlowColor:'#e52b3c',textGlowStrength:12,cardBg:'#17151c',cardBorder:'#ffcf59',cardTextColor:'#ffffff',cardOpacity:94,endSeconds:6,endAudioVolume:75});renderGachaSettings();save()};$('addWinGift').onclick=()=>{collectWinCounter();state.winCounter.giftRules.push({id:'win-gift-'+Date.now(),giftName:'',delta:1});renderWinCounterSettings();save()};const chooseSign=async choice=>{const ev=state.gacha?.event||{};if(!ev.id)return;const r=await fetch('/api/gacha/choose-sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:ev.id,choice})}),d=await r.json();if(r.ok&&d.ok){state=await(await fetch('/api/state',{cache:'no-store'})).json();renderAll();$('status').textContent=(choice==='minus'?'－':'＋')+'で確定しました'}else $('status').textContent='結果表示後に確定してください'};$('gachaChoosePlus').onclick=()=>chooseSign('plus');$('gachaChooseMinus').onclick=()=>chooseSign('minus')}
+function fmtSmoke(n){n=Math.max(0,Math.floor(n));
+return [Math.floor(n/3600),Math.floor(n%3600/60),n%60].map(v=>String(v).padStart(2,'0')).join(':')}function smokeRemaining(t=state.smokingTimer||{}){return Math.max(0,Math.floor(t.endAt?Number(t.endAt)-Date.now()/1000:Number(t.remainingSeconds||0)))}function updateSmokeDisplay(){const t=state.smokingTimer||{};
+if(document.activeElement!==$('smokeCardBg'))$('smokeCardBg').value=t.cardBg||state.cardDefaults?.background||state.panelColor||'#17181e';
+if(document.activeElement!==$('smokeCardBorder'))$('smokeCardBorder').value=t.cardBorder||state.cardDefaults?.border||state.accent||'#e52b3c';
+if(document.activeElement!==$('smokeTextColor'))$('smokeTextColor').value=t.cardTextColor||state.textColor||'#ffffff';
+if(document.activeElement!==$('smokeCardOpacity'))$('smokeCardOpacity').value=t.cardOpacity>=0?t.cardOpacity:(state.panelOpacity??88);$('smokeFontFamily').value=t.fontFamily||'global';
+$('smokeCardOpacityVal').textContent=$('smokeCardOpacity').value+'%';
+$('smokeCurrent').textContent='残り時間：'+fmtSmoke(smokeRemaining(t));
+$('smokeAudioName').textContent=t.audioName||'音源未設定';
+if(document.activeElement!==$('smokeVolume'))$('smokeVolume').value=t.volume??80;
+$('smokeVolumeLabel').textContent=$('smokeVolume').value+'%';
+if(document.activeElement!==$('smokeFontSize'))$('smokeFontSize').value=t.fontSize??130;
+$('smokeFontSizeLabel').textContent=$('smokeFontSize').value+'px';
+if(document.activeElement!==$('smokeTitleSize'))$('smokeTitleSize').value=t.titleSize??56;
+$('smokeTitleSizeLabel').textContent=$('smokeTitleSize').value+'px'}async function smokeChange(delta){const now=Date.now()/1000,remain=smokeRemaining();
+let next=Math.max(0,remain+delta);
+state.smokingTimer={...(state.smokingTimer||{}),remainingSeconds:next,endAt:next?now+next:0,runId:next?(+((state.smokingTimer||{}).runId||0)+(!remain?1:0)):((state.smokingTimer||{}).runId||0)};
+await persist();
+updateSmokeDisplay()}async function smokeSet(seconds){seconds=Math.max(0,Math.floor(seconds));
+state.smokingTimer={...(state.smokingTimer||{}),remainingSeconds:seconds,endAt:seconds?Date.now()/1000+seconds:0,runId:seconds?(+((state.smokingTimer||{}).runId||0)+1):(+((state.smokingTimer||{}).runId||0))};
+await persist();
+updateSmokeDisplay()}function bindSmokeControls(){const shortcutHost=$('smokeShortcuts');shortcutHost.replaceChildren();for(const minutes of [5,10,15,30])for(const [suffix,label] of [['Add','＋'],['Sub','－']]){const row=document.createElement('div');row.className='shortcutField';row.innerHTML='<label>'+label+minutes+'分</label><input class="shortcutValue" readonly placeholder="未設定"><button class="captureShortcut" type="button">キー設定</button><button class="clearShortcut secondary" type="button">解除</button>';const input=row.querySelector('input');input.value=state.smokingTimer?.['shortcut'+suffix+minutes]||'';input.oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),['shortcut'+suffix+minutes]:input.value};save()};shortcutHost.appendChild(row)}wireShortcutFields(shortcutHost);document.querySelectorAll('[data-smoke-add]').forEach(b=>b.onclick=()=>smokeChange(+b.dataset.smokeAdd));
+$('smokeAddCustom').onclick=()=>smokeChange(Math.max(1,+$('smokeCustomMinutes').value||1)*60);
+$('smokeSubCustom').onclick=()=>smokeChange(-Math.max(1,+$('smokeCustomMinutes').value||1)*60);
+$('smokeSetTime').onclick=()=>smokeSet((+$('smokeHours').value||0)*3600+(+$('smokeMinutes').value||0)*60+(+$('smokeSeconds').value||0));
+$('smokeAudioTest').onclick=async()=>{const t=state.smokingTimer||{};
+if(!t.audioUrl){$('status').textContent='先に音源を選択してください';
+return}const a=new Audio(t.audioUrl);
+a.volume=Math.max(0,Math.min(100,+$('smokeVolume').value||0))/100;
+try{await a.play();
+$('status').textContent='テスト再生中です'}catch(e){$('status').textContent='再生できません。MP3またはWAVの音源を選び直してください'}};
+$('smokeVolume').oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),volume:+$('smokeVolume').value};
+$('smokeVolumeLabel').textContent=$('smokeVolume').value+'%';
+save()};
+$('smokeFontSize').oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),fontSize:+$('smokeFontSize').value};
+$('smokeFontSizeLabel').textContent=$('smokeFontSize').value+'px';
+save()};
+$('smokeTitleSize').oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),titleSize:+$('smokeTitleSize').value};
+$('smokeTitleSizeLabel').textContent=$('smokeTitleSize').value+'px';
+save()};
+$('smokeCardBg').oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),cardBg:$('smokeCardBg').value};
+save()};
+$('smokeCardBorder').oninput=()=>{state.smokingTimer={...(state.smokingTimer||{}),cardBorder:$('smokeCardBorder').value};
+save()};
+$('resetSmokeColors').onclick=()=>{state.smokingTimer={...(state.smokingTimer||{}),cardBg:'',cardBorder:'',cardTextColor:'',cardOpacity:-1};
+for(const id of ['smokeCardBg','smokeCardBorder','smokeTextColor','smokeCardOpacity']){$(id).dataset.clear='1';
+$(id).dataset.changed=''}updateSmokeDisplay();
+save()};
+$('smokeAudio').onchange=async()=>{const f=$('smokeAudio').files[0];
+if(!f)return;
+if(f.size>15*1024*1024){$('status').textContent='音源は15MB以下にしてください';
+return}const reader=new FileReader();
+reader.onload=async()=>{try{const r=await fetch('/api/smoking-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,dataUrl:reader.result})}),d=await r.json();
+if(!r.ok)throw Error(d.message||'保存できませんでした');
+state.smokingTimer=d.smokingTimer;
+updateSmokeDisplay();
+$('status').textContent='音源を保存しました'}catch(e){$('status').textContent='音源を保存できませんでした: '+e.message}};
+reader.readAsDataURL(f)}}
+function setOverlayLinks(){const paths={all:'overlay.html?build=666',missions:'overlay_missions.html?build=666',counters:'overlay_counters.html?build=666',comp:'overlay_comp.html?build=666',timer:'overlay_timer.html?build=666',smoking:'overlay_smoking.html?build=666',smokingGacha:'overlay_smoking_gacha.html?build=666',giftWall:'overlay_gift_history.html?build=666',gachaCard:'overlay_gacha.html?layout=card&build=666',gachaFullscreen:'overlay_gacha.html?layout=fullscreen&build=666',gachaHistory:'overlay_gacha_history.html?build=666',win:'overlay_win.html?build=666'};
+document.querySelectorAll('.overlayUrl').forEach(input=>{const fallback='http://127.0.0.1:8765/';
+try{input.textContent=new URL(paths[input.dataset.view],location.href.startsWith('file:')?fallback:location.href).href}catch(e){input.textContent=fallback+paths[input.dataset.view]}input.title=input.textContent});
+document.querySelectorAll('.copyOverlay').forEach(btn=>btn.onclick=async()=>{const field=btn.parentElement.querySelector('.overlayUrl'),url=field.textContent.trim();
+try{await navigator.clipboard.writeText(url)}catch(e){const range=document.createRange();
+range.selectNodeContents(field);
+const sel=getSelection();
+sel.removeAllRanges();
+sel.addRange(range);
+document.execCommand('copy');
+sel.removeAllRanges()}$('status').textContent=field.dataset.view+' のリンクをコピーしました';
+setTimeout(()=>$('status').textContent='',1800)})}
+async function refreshHotkeyStatus(){try{const r=await fetch('/api/hotkeys/status',{cache:'no-store'}),s=await r.json();$('shortcutStatus').textContent=s.active?'ショートカット監視中（'+(s.bindings||0)+'件登録）':(s.message||'ショートカット監視停止中');$('shortcutStatus').style.color=s.active?'#91e6aa':'#ffd27a'}catch(e){$('shortcutStatus').textContent='ショートカット状態を取得できません'}}
+async function refreshMinecraftStatus(){try{const r=await fetch('/api/minecraft/status',{cache:'no-store'}),s=await r.json();$('minecraftStatus').textContent=s.message||s.status||'状態を取得できません';$('minecraftStatus').style.color=s.status==='watching'?'#91e6aa':(s.status==='error'?'#ff9aa5':'#ffd27a')}catch(e){$('minecraftStatus').textContent='状態を取得できません'}}
+async function refreshGiftStatus(){try{const r=await fetch('/api/tiktok/status',{cache:'no-store'}),s=await r.json();
+tiktokEnabled=s.enabled===true;$('giftConnectionStatus').textContent=s.message||s.status||'未接続';$('connectTikTok').textContent=tiktokEnabled?'受信OFF':'受信ON';$('connectTikTok').classList.toggle('danger',tiktokEnabled);$('tiktokStatusDot').classList.toggle('on',tiktokEnabled&&s.status==='connected');$('tiktokStatusDot').classList.toggle('wait',tiktokEnabled&&s.status!=='connected')}catch(e){$('giftConnectionStatus').textContent='状態を取得できませんでした'}}
+function setupSettingsNavigation(){
+ const categories={
+  'オーバーレイリンク':'links','禁煙ガチャ':'smokingGacha','禁煙タイマー':'smokingTimer','現在のWIN数':'gacha','WINガチャ':'gacha','Minecraft連携':'minecraft',
+  'ギフトミッション':'missions','カウンター':'counters','カード色を一括設定':'appearance',
+  'ギフトでテキスト変更':'giftTimer','メモ':'comp','ギフト履歴オーバーレイ':'gifts','色と文字サイズ':'appearance'
+ };
+ const sections=[...document.querySelectorAll('main.wrap > section.card')];
+ for(const section of sections){const heading=section.querySelector('h2');section.dataset.category=section.id==='giftWallSettings'?'gifts':(categories[heading?.textContent.trim()]||'all')}
+ const choose=category=>{for(const section of sections)section.classList.toggle('sectionHidden',category!=='all'&&section.dataset.category!==category);document.querySelectorAll('#settingsNav button').forEach(button=>button.classList.toggle('active',button.dataset.category===category));localStorage.setItem('live-overlay-settings-category',category);if(category==='gifts')refreshGiftWallHistory();window.scrollTo({top:0,behavior:'smooth'})};
+ document.querySelectorAll('#settingsNav button').forEach(button=>button.onclick=()=>choose(button.dataset.category));
+ choose(localStorage.getItem('live-overlay-settings-category')||'all');
+ document.querySelectorAll('input[type="color"],input[type="range"]').forEach(input=>input.addEventListener('input',()=>{input.classList.add('colorChanged');setTimeout(()=>input.classList.remove('colorChanged'),700)}));
+}
+async function init(){state=await get()||{};
+state.counters=(state.counters||[]).map(c=>({goal:40,showGoal:true,...c}));
+state.giftRules=state.giftRules||[];
+ state.winCounter=state.winCounter||{currentWin:state.gacha?.currentWin||0,goalWin:state.gacha?.goalWin||10,shortcutAdd:state.gacha?.shortcutAdd||'CTRL+ALT+7',shortcutSub:state.gacha?.shortcutSub||'CTRL+ALT+SHIFT+7',giftRules:state.gacha?.winGiftRules||[]};
+state.gacha=state.gacha||{mode:'continue',continuationRate:70,patterns:[{id:'gacha-pattern-1',name:'WINガチャ',giftName:'',minWin:1,maxWin:10}],animationUrl:'',animationName:'',event:{id:0,type:'',patternName:'',rounds:[],total:0}};
+state.cardDefaults=state.cardDefaults||{background:'',border:''};
+state.textEffects=state.textEffects||{};
+state.smokingTimer=state.smokingTimer||{endAt:0,remainingSeconds:0,runId:0,audioUrl:'',audioName:'',volume:80,fontSize:130,titleSize:56};
+state.smokingGacha=state.smokingGacha||{patterns:[],event:{id:0,active:false},queue:[],spinSeconds:7,slotNumberSize:130,endSeconds:6,shortcutPlus:'CTRL+ALT+5',shortcutMinus:'CTRL+ALT+SHIFT+5'};
+state.giftWall=state.giftWall||{minCoins:100,columns:4,rows:2,pageSeconds:8,history:[],nextId:1};
+state.memos=Array.isArray(state.memos)?state.memos:[{id:'memo-1',title:state.compTitle||'メモ',text:state.compText||'',show:state.showComp!==false}];
+if(!state.giftRules.length)state.giftRules=[{id:'gift-rule-'+Date.now(),giftName:'',seconds:15}];
+state.tiktokUsername=state.tiktokUsername||'';
+if(!state.missions){const old=state.mission;
+state.missions=old?[{id:'mission-1',title:'ギフトミッション',unit:'個',dailyLimit:10,showAchievements:true,...old}]:[{id:'mission-1',title:'ギフトミッション',giftValue:0,giftGoal:10,unit:'個',achievements:0,dailyLimit:10,lastDate:todayJst(),showAchievements:true,noticeUntil:0,shortcutAdd:'CTRL+ALT+0',shortcutSub:'CTRL+ALT+SHIFT+0'}]}state.missions=(state.missions||[]).map((m,i)=>({id:'mission-'+(i+1),title:'ミッション'+(i+1),cardBg:state.cardDefaults?.background||'',cardBorder:state.cardDefaults?.border||'',giftValue:0,giftGoal:10,unit:'個',achievements:0,dailyLimit:10,lastDate:'',showAchievements:true,noticeUntil:0,shortcutAdd:'CTRL+ALT+F'+Math.min(12,i+1),shortcutSub:'CTRL+ALT+SHIFT+F'+Math.min(12,i+1),...m}));
+renderSettings();
+$('giftWallMinCoins').value=state.giftWall.minCoins??100;$('giftWallColumns').value=state.giftWall.columns??4;$('giftWallRows').value=state.giftWall.rows??2;$('giftWallPageSeconds').value=state.giftWall.pageSeconds??8;$('giftWallScrollDirection').value=state.giftWall.scrollDirection||'vertical';$('giftWallFontFamily').value=state.giftWall.fontFamily||'global';$('giftWallTextScale').value=state.giftWall.textScale??100;$('giftWallTextScaleVal').textContent=$('giftWallTextScale').value+'%';$('giftWallAvatarSize').value=state.giftWall.avatarSize??44;$('giftWallNameSize').value=state.giftWall.nameSize??18;$('giftWallGiftNameSize').value=state.giftWall.giftNameSize??16;$('giftWallCountSize').value=state.giftWall.countSize??15;$('giftWallImageSize').value=state.giftWall.giftImageSize??44;$('giftWallCardBg').value=state.giftWall.cardBg||'#1c1c24';$('giftWallCardBorder').value=state.giftWall.cardBorder||'#ffcf59';$('giftWallTextColor').value=state.giftWall.cardTextColor||'#ffffff';$('giftWallCardOpacity').value=state.giftWall.cardOpacity??93;$('giftWallCardOpacityVal').textContent=$('giftWallCardOpacity').value+'%';$('giftWallHistoryStatus').textContent=(state.giftWall.history||[]).length+' 件保存中（最大200件）';renderGiftWallHistory();
+for(const id of ['giftWallMinCoins','giftWallColumns','giftWallRows','giftWallPageSeconds','giftWallAvatarSize','giftWallNameSize','giftWallGiftNameSize','giftWallCountSize','giftWallImageSize'])$(id).addEventListener('input',save);$('giftWallScrollDirection').addEventListener('change',save);for(const id of ['giftWallFontFamily','compFontFamily','winFontFamily','smokeFontFamily','gachaHistoryFontFamily'])$(id).addEventListener('change',save);
+for(const id of ['giftWallTextScale','giftWallCardBg','giftWallCardBorder','giftWallTextColor','giftWallCardOpacity','compTextScale','gachaHistoryTextScale','gachaHistoryCardBg','gachaHistoryCardBorder','gachaHistoryTextColor','gachaHistoryCardOpacity'])$(id).addEventListener('input',()=>{if(id==='giftWallTextScale')$('giftWallTextScaleVal').textContent=$(id).value+'%';if(id==='giftWallCardOpacity')$('giftWallCardOpacityVal').textContent=$(id).value+'%';if(id==='compTextScale')$('compTextScaleVal').textContent=$(id).value+'%';if(id==='gachaHistoryTextScale')$('gachaHistoryTextScaleVal').textContent=$(id).value+'%';if(id==='gachaHistoryCardOpacity')$('gachaHistoryCardOpacityVal').textContent=$(id).value+'%';save()});
+$('refreshGiftWallHistory').onclick=async()=>{await refreshGiftWallHistory();$('status').textContent='ギフト履歴を更新しました';setTimeout(()=>$('status').textContent='',1500)};$('restoreGiftWallDisplay').onclick=async()=>{try{const r=await fetch('/api/giftwall/restore-display',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),d=await r.json();if(!r.ok)throw Error(d.message||'復元できませんでした');await refreshGiftWallHistory();$('status').textContent=d.displayCount+'件の対象ギフトをオーバーレイに再表示しました'}catch(e){$('status').textContent='履歴を再表示できませんでした'}};
+$('resetGiftWallDisplay').onclick=async()=>{if(dirty)await persist();const response=await fetch('/api/giftwall/reset-display',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok){state=await get();renderGiftWallHistory();$('status').textContent='オーバーレイの表示だけをリセットしました。保存履歴は残っています'}else $('status').textContent='表示をリセットできませんでした'};renderGiftWallHistory();
+renderGiftRules();
+renderMissions();
+renderCounters();
+renderWinCounterSettings();
+renderGachaSettings();
+renderSmokingGacha();
+renderTextFxTargets();
+$('textFxTarget').addEventListener('change',renderTextFxEditor);
+for(const id of ['textFxMode','textFxOutlineEnabled','textFxOutlineColor','textFxOutlineWidth','textFxBackgroundEnabled','textFxBackgroundColor','textFxBackgroundOpacity'])$(id).addEventListener('input',updateTextFxFromEditor);
+for(const id of ['counters','missions','memos','giftRules','gachaPatterns','smokingGachaPatterns'])new MutationObserver(()=>renderTextFxTargets($('textFxTarget').value)).observe($(id),{childList:true});
+bindGachaControls();
+for(const id of ['minecraftBridgeEnabled','minecraftLogPath','minecraftMarker'])$(id).addEventListener(id==='minecraftBridgeEnabled'?'change':'input',save);
+$('minecraftCheck').onclick=async()=>{await persist();await refreshMinecraftStatus()};refreshMinecraftStatus();setInterval(refreshMinecraftStatus,3000);
+bindSmokingGacha();
+bindSmokeControls();
+updateSmokeDisplay();
+$('tiktokUsername').value=state.tiktokUsername;
+setOverlayLinks();
+setupSettingsNavigation();
+const closeGachaPreview=()=>{$('gachaPreviewBackdrop').classList.add('hidden');$('gachaPreviewFrame').src='about:blank';activeGachaPreview=null};$('gachaPreviewClose').onclick=closeGachaPreview;$('gachaPreviewBackdrop').onclick=e=>{if(e.target===$('gachaPreviewBackdrop')&&e.clientX<window.innerWidth-780)closeGachaPreview()};
+$('giftPickerClose').onclick=closeGiftPicker;
+$('giftPickerReload').onclick=loadGiftCatalog;
+$('giftPickerSearch').oninput=renderGiftPicker;
+$('giftPickerHideUsed').onchange=renderGiftPicker;
+$('giftPickerBackdrop').onclick=event=>{if(event.target===$('giftPickerBackdrop'))closeGiftPicker()};
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('giftPickerBackdrop').classList.contains('hidden'))closeGiftPicker()});
+refreshGiftStatus();
+refreshHotkeyStatus();
+['compCardWidth','compCardHeight','compCardTextColor','compCardOpacity','accent','gaugeColor','panelColor','panelOpacity','textColor','fontFamily','textScale','textGlowEnabled','textGlowColor','textGlowStrength','textOutlineEnabled','textOutlineColor','textOutlineWidth','textBackgroundEnabled','textBackgroundColor','textBackgroundOpacity'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='panelOpacity')$('opacityLabel').textContent=$('panelOpacity').value+'%';
+if(id==='compCardTextColor'||id==='compCardOpacity'){$(id).dataset.changed='1';
+$(id).dataset.clear='';
+if(id==='compCardOpacity')$('compCardOpacityVal').textContent=$('compCardOpacity').value+'%'}if(id==='textScale')$('scaleLabel').textContent=$('textScale').value+'%';if(id==='textGlowStrength')$('textGlowStrengthLabel').textContent=$('textGlowStrength').value+'px';if(id==='textOutlineWidth')$('textOutlineWidthLabel').textContent=$('textOutlineWidth').value+'px';if(id==='textBackgroundOpacity')$('textBackgroundOpacityLabel').textContent=$('textBackgroundOpacity').value+'%';
+save()}));
+$('saveNow').onclick=()=>{clearTimeout(timer);
+timer=null;
+persist()};
+$('addMission').onclick=()=>{state.missions.push(freshMission(state.missions.length));
+renderMissions();
+save()};
+$('addCounter').onclick=()=>{state.counters.push({id:'counter-'+Date.now(),label:'新しいカウンター',cardBg:state.cardDefaults?.background||'',cardBorder:state.cardDefaults?.border||'',value:0,goal:40,showGoal:true,shortcutAdd:'',shortcutSub:''});
+renderCounters();
+save()};
+$('addMemo').onclick=()=>{state.memos.push({id:'memo-'+Date.now(),title:'メモ '+(state.memos.length+1),text:'',show:true});renderMemos();save()};
+$('bulkCardBg').value=state.cardDefaults.background||state.panelColor||'#17181e';
+$('bulkCardBorder').value=state.cardDefaults.border||state.accent||'#e52b3c';
+$('bulkCardTextColor').value=state.textColor||'#ffffff';
+$('bulkCardOpacity').value=state.panelOpacity??88;
+$('bulkCardOpacityVal').textContent=$('bulkCardOpacity').value+'%';
+$('bulkCardOpacity').oninput=()=>{$('bulkCardOpacityVal').textContent=$('bulkCardOpacity').value+'%'};
+$('applyCardColors').onclick=()=>{state.cardDefaults={background:$('bulkCardBg').value,border:$('bulkCardBorder').value};
+state.textColor=$('bulkCardTextColor').value;
+state.panelOpacity=+$('bulkCardOpacity').value;
+$('textColor').value=state.textColor;
+$('panelOpacity').value=state.panelOpacity;
+$('opacityLabel').textContent=state.panelOpacity+'%';
+state.missions=(state.missions||[]).map(x=>({...x,cardBg:state.cardDefaults.background,cardBorder:state.cardDefaults.border,cardTextColor:state.textColor,cardOpacity:state.panelOpacity}));
+state.counters=(state.counters||[]).map(x=>({...x,cardBg:state.cardDefaults.background,cardBorder:state.cardDefaults.border,cardTextColor:state.textColor,cardOpacity:state.panelOpacity}));
+state.giftRules=(state.giftRules||[]).map(x=>({...x,cardBg:state.cardDefaults.background,cardBorder:state.cardDefaults.border,cardTextColor:state.textColor,cardOpacity:state.panelOpacity}));
+state.compCardTextColor=state.textColor;
+state.compCardOpacity=state.panelOpacity;
+state.winCounter={...(state.winCounter||{}),cardBg:state.cardDefaults.background,cardBorder:state.cardDefaults.border,cardTextColor:state.textColor,cardOpacity:state.panelOpacity};
+state.compCardBg=state.cardDefaults.background;
+state.compCardBorder=state.cardDefaults.border;
+document.querySelectorAll('.cardTextColor,.cardOpacity,#compCardTextColor,#compCardOpacity,#smokeTextColor,#smokeCardOpacity,#winCardTextColor,#winCardOpacity,#gachaCardTextColor,#gachaCardOpacity').forEach(x=>{x.dataset.clear='1';
+x.dataset.changed=''});
+document.querySelectorAll('.cardTextColor,#compCardTextColor,#smokeTextColor,#winCardTextColor,#gachaCardTextColor').forEach(x=>x.value=state.textColor);
+document.querySelectorAll('.cardOpacity,#compCardOpacity,#smokeCardOpacity,#winCardOpacity,#gachaCardOpacity').forEach(x=>{x.value=state.panelOpacity;
+const label=x.parentElement.querySelector('.cardOpacityVal')||document.getElementById(x.id+'Val');
+if(label)label.textContent=state.panelOpacity+'%'});
+state.smokingTimer={...(state.smokingTimer||{}),cardBg:state.cardDefaults.background,cardBorder:state.cardDefaults.border,cardTextColor:state.textColor,cardOpacity:state.panelOpacity};
+document.querySelectorAll('.cardBg').forEach(x=>{x.value=state.cardDefaults.background||state.panelColor||'#17181e';
+x.dataset.changed='1';
+x.dataset.clear=''});
+document.querySelectorAll('.cardBorder').forEach(x=>{x.value=state.cardDefaults.border||state.accent||'#e52b3c';
+x.dataset.changed='1';
+x.dataset.clear=''});
+$('compCardTextColor').value=state.textColor;
+$('compCardOpacity').value=state.panelOpacity;
+$('compCardOpacityVal').textContent=state.panelOpacity+'%';
+$('compCardBg').value=state.cardDefaults.background;
+$('compCardBg').dataset.changed='1';
+$('compCardBg').dataset.clear='';
+$('compCardBorder').value=state.cardDefaults.border;
+$('compCardBorder').dataset.changed='1';
+$('compCardBorder').dataset.clear='';
+$('smokeCardBg').value=state.cardDefaults.background||state.panelColor;
+$('smokeCardBg').dataset.changed='1';
+$('smokeCardBg').dataset.clear='';
+$('smokeCardBorder').value=state.cardDefaults.border||state.accent;
+$('smokeCardBorder').dataset.changed='1';
+$('smokeCardBorder').dataset.clear='';
+$('smokeTextColor').value=state.textColor;
+$('smokeTextColor').dataset.changed='1';
+$('smokeTextColor').dataset.clear='';
+$('smokeCardOpacity').value=state.panelOpacity;
+$('smokeCardOpacityVal').textContent=state.panelOpacity+'%';
+$('winCardBg').value=state.cardDefaults.background;
+$('winCardBg').dataset.changed='1';
+$('winCardBg').dataset.clear='';
+$('winCardBorder').value=state.cardDefaults.border;
+$('winCardBorder').dataset.changed='1';
+$('winCardBorder').dataset.clear='';
+$('winCardTextColor').value=state.textColor;
+$('winCardTextColor').dataset.changed='1';
+$('winCardTextColor').dataset.clear='';
+$('winCardOpacity').value=state.panelOpacity;
+$('winCardOpacityVal').textContent=state.panelOpacity+'%';
+save()};
+$('resetCardColors').onclick=()=>{state.cardDefaults={background:'',border:''};
+state.smokingTimer={...(state.smokingTimer||{}),cardBg:'',cardBorder:''};
+document.querySelectorAll('.cardBg').forEach(x=>{x.value=state.panelColor||'#17181e';
+x.dataset.clear='1';
+x.dataset.changed=''});
+document.querySelectorAll('.cardBorder').forEach(x=>{x.value=state.accent||'#e52b3c';
+x.dataset.clear='1';
+x.dataset.changed=''});
+$('bulkCardBg').value=state.panelColor||'#17181e';
+$('bulkCardBorder').value=state.accent||'#e52b3c';
+$('compCardBg').value=state.panelColor||'#17181e';
+$('compCardBg').dataset.clear='1';
+$('compCardBg').dataset.changed='';
+$('compCardBorder').value=state.accent||'#e52b3c';
+$('compCardBorder').dataset.clear='1';
+$('compCardBorder').dataset.changed='';
+save()};
+$('compCardBg').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+$('compCardBorder').oninput=e=>{e.target.dataset.changed='1';
+e.target.dataset.clear='';
+save()};
+$('resetCompCardColors').onclick=()=>{for(const x of [$('compCardBg'),$('compCardBorder'),$('compCardTextColor'),$('compCardOpacity')]){x.dataset.clear='1';
+x.dataset.changed=''}$('compCardBg').value=state.panelColor||'#17181e';
+$('compCardBorder').value=state.accent||'#e52b3c';
+$('compCardTextColor').value=state.textColor||'#ffffff';
+$('compCardOpacity').value=state.panelOpacity??88;
+$('compCardOpacityVal').textContent=$('compCardOpacity').value+'%';
+save()};
+$('addGiftRule').onclick=()=>{state.giftRules.push({id:'gift-rule-'+Date.now(),giftName:'',seconds:15,text:'カウント：15秒',cardBg:state.cardDefaults?.background||'',cardBorder:state.cardDefaults?.border||'',cardTextColor:'',cardOpacity:-1});
+renderGiftRules();
+save()};
+$('tiktokUsername').addEventListener('input',save);
+$('timerDefaultText').addEventListener('input',save);
+$('connectTikTok').onclick=async()=>{clearTimeout(timer);
+timer=null;
+if(dirty)await persist();
+if(!$('tiktokUsername').value.trim()){ $('giftConnectionStatus').textContent='先にTikTokユーザー名を入力してください';
+return}const r=await fetch('/api/tiktok/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!tiktokEnabled})});
+const result=await r.json();
+$('giftConnectionStatus').textContent=result.message||result.status;
+refreshGiftStatus()};
+setInterval(async()=>{if(captureTarget||dirty||saving||timer||(document.activeElement&&document.activeElement.matches('input,textarea,select'))||document.querySelector('details[open]'))return;
+const fresh=await get();
+if(fresh){state.missions=fresh.missions||state.missions;
+state.counters=fresh.counters||state.counters;
+if(fresh.giftRules&&(fresh.giftRules.length||(state.giftRules||[]).length===0))state.giftRules=fresh.giftRules;
+state.timer=fresh.timer||state.timer;
+state.smokingTimer=fresh.smokingTimer||state.smokingTimer;
+state.smokingGacha=fresh.smokingGacha||state.smokingGacha;
+state.gacha=fresh.gacha||state.gacha;
+state.giftWall=fresh.giftWall||state.giftWall;$('giftWallHistoryStatus').textContent=(state.giftWall.history||[]).length+' 件保存中（最大200件）';renderGiftWallHistory();
+state.winCounter=fresh.winCounter||state.winCounter;
+updateSmokeDisplay();
+renderWinCounterSettings();
+renderGachaSettings();
+renderSmokingGacha();
+renderMissions();
+renderCounters();
+renderGiftRules()}},1000);
+setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},600);
+setInterval(refreshGiftWallHistory,1200);
+setInterval(refreshGiftStatus,3000);
+setInterval(refreshHotkeyStatus,3000);
+setInterval(updateSmokeDisplay,500)}
+
+/* v0.65.7: ギフトごとに表示文を切り替える設定 */
+const renderGiftRulesBeforeV657=renderGiftRules;
+renderGiftRules=function(){renderGiftRulesBeforeV657();document.querySelectorAll('.giftRule').forEach(el=>{const colorLabel=el.querySelector('.cardTextColor')?.closest('.field')?.querySelector('label'),scaleLabel=el.querySelector('.cardTextScale')?.closest('.field')?.querySelector('label');if(colorLabel)colorLabel.textContent='テキストの文字色';if(scaleLabel)scaleLabel.textContent='テキストの文字サイズ'})};
+const collectBeforeV657=collect;collect=function(){collectBeforeV657()};
+/* legacy split-label collector removed; gift rules now store one display text */
+const collectGachaBeforeV654=collectGacha;
+collectGacha=function(){collectGachaBeforeV654();document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const pattern=state.gacha?.patterns?.[i];if(!pattern)return;pattern.choiceTextSize=Math.max(14,Math.min(400,+el.querySelector('.patternChoiceTextSize')?.value||34))})};
+
+/* v0.65.4: 禁煙ガチャのテストは別ウィンドウを使わず専用オーバーレイへ送る */
+$('smokingGachaPatterns').addEventListener('click',async event=>{const button=event.target.closest('.testSmokingPattern');if(!button)return;event.preventDefault();event.stopImmediatePropagation();const card=button.closest('.smokingGachaPattern');if(!card)return;button.disabled=true;try{if(dirty)await persist();const response=await fetch('/api/smoking-gacha/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:card.dataset.id})}),result=await response.json();if(!response.ok||!result.ok)throw Error(result.message||'テスト抽選を開始できませんでした');state.smokingGacha=result.smokingGacha||state.smokingGacha;renderSmokingGacha();$('status').textContent=(state.smokingGacha.queue||[]).length?'禁煙ガチャのテストを待機列へ追加しました':'禁煙ガチャ専用オーバーレイでテストを開始しました（タイマーは変わりません）'}catch(error){$('status').textContent='テストできませんでした：'+error.message}finally{button.disabled=false}},true);
+
+/* v0.65.4: プレビューとテストで同じ文字サイズ上限を使う */
+function applyGachaTextSizeLimits(){const limits={'.patternSlotNumberSize':400,'.patternStateTextSize':400,'.patternChoiceTextSize':400,'.patternStartSize':400,'.patternResultSize':400,'.patternRoundTotalSize':400,'.patternFinalTotalSize':400,'.patternNameSize':400,'.patternSenderSize':400};for(const [selector,max] of Object.entries(limits))document.querySelectorAll(selector).forEach(input=>input.max=String(max))}
+new MutationObserver(applyGachaTextSizeLimits).observe($('gachaPatterns'),{childList:true,subtree:true});
+init().then(applyGachaTextSizeLimits);
+
+</script>
+</body>
+</html>
