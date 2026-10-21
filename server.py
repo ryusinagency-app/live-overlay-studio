@@ -19,13 +19,29 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.19'
+APP_VERSION = '0.65.21'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
 def prepare_app_root():
     if not FROZEN_APP:
-        return Path(__file__).resolve().parent
+        source_root = Path(__file__).resolve().parent
+        # A test/source build should reuse the installed app's saved settings
+        # on its first launch, while leaving the original app data untouched.
+        local_base = Path(os.environ.get('LOCALAPPDATA') or Path.home())
+        installed_root = local_base / 'LiveOverlayStudio'
+        source_state = source_root / 'state.json'
+        installed_state = installed_root / 'state.json'
+        if not source_state.exists() and installed_state.exists():
+            try:
+                shutil.copy2(installed_state, source_state)
+                media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'win_counter_image.')
+                for item in installed_root.iterdir():
+                    if item.is_file() and item.name.startswith(media_prefixes):
+                        shutil.copy2(item, source_root / item.name)
+            except OSError as error:
+                print(f'Could not copy existing settings into test folder: {error}')
+        return source_root
     local_base = Path(os.environ.get('LOCALAPPDATA') or Path.home())
     app_root = local_base / 'LiveOverlayStudio'
     app_root.mkdir(parents=True, exist_ok=True)
@@ -137,6 +153,7 @@ DEFAULT = {
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
     'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True},
     'minecraftBridge': {'enabled': False, 'logPath': '', 'marker': 'bedrock_win'},
+    'gtaBridge': {'enabled': False, 'logPath': '', 'marker': 'Sent WebSocket message: {"type":"win"', 'winAmount': 1, 'loseEnabled': True, 'loseMarker': 'Sent WebSocket message: {"type":"lose"', 'loseAmount': 1},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
     'smokingTimer': {'endAt': 0, 'remainingSeconds': 0, 'runId': 0, 'audioUrl': '', 'audioName': '', 'volume': 80, 'fontSize': 130, 'titleSize': 56, 'cardBg': '', 'cardBorder': '', 'shortcutAdd5':'', 'shortcutSub5':'', 'shortcutAdd10':'', 'shortcutSub10':'', 'shortcutAdd15':'', 'shortcutSub15':'', 'shortcutAdd30':'', 'shortcutSub30':''},
     'smokingGacha': {'fontFamily':'global', 'patterns': [], 'event': {'id':0,'type':'','active':False,'patternName':'','minutes':0,'senderName':'','choice':'','choiceReady':False,'createdAt':0}, 'queue': [], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'fullscreen-slot', 'spinSeconds':7, 'endSeconds':6, 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'shortcutPlus':'CTRL+ALT+5', 'shortcutMinus':'CTRL+ALT+SHIFT+5'},
@@ -155,6 +172,9 @@ HOTKEY_STATUS_LOCK = threading.Lock()
 MINECRAFT_WATCH_STATUS = {'status': 'stopped', 'message': 'Minecraftログ連携はオフです', 'lastEventAt': 0, 'winsReceived': 0}
 MINECRAFT_WATCH_LOCK = threading.Lock()
 MINECRAFT_WATCH_THREAD = None
+GTA_WATCH_STATUS = {'status': 'stopped', 'message': 'GTA連携はオフです', 'lastEventAt': 0, 'eventsReceived': 0}
+GTA_WATCH_LOCK = threading.Lock()
+GTA_WATCH_THREAD = None
 
 def _gift_value(value, *names):
     for name in names:
@@ -458,6 +478,19 @@ def normalize_state(data):
         'logPath': clean_local_path(raw_bridge.get('logPath'))[:1000],
         'marker': marker,
     }
+    raw_gta_bridge = merged.get('gtaBridge') if isinstance(merged.get('gtaBridge'), dict) else {}
+    gta_marker = str(raw_gta_bridge.get('marker') or 'Sent WebSocket message: {"type":"win"').strip()[:160]
+    if not gta_marker:
+        gta_marker = 'Sent WebSocket message: {"type":"win"'
+    merged['gtaBridge'] = {
+        'enabled': bool(raw_gta_bridge.get('enabled', False)),
+        'logPath': clean_local_path(raw_gta_bridge.get('logPath'))[:1000],
+        'marker': gta_marker,
+        'winAmount': max(1, min(999999, safe_int(raw_gta_bridge.get('winAmount', 1), 1))),
+        'loseEnabled': raw_gta_bridge.get('loseEnabled', True) is not False,
+        'loseMarker': str(raw_gta_bridge.get('loseMarker') or 'Sent WebSocket message: {"type":"lose"').strip()[:160] or 'Sent WebSocket message: {"type":"lose"',
+        'loseAmount': max(1, min(999999, safe_int(raw_gta_bridge.get('loseAmount', 1), 1))),
+    }
     raw_gacha = merged.get('gacha') if isinstance(merged.get('gacha'), dict) else {}
     patterns = []
     for index, item in enumerate(raw_gacha.get('patterns') or []):
@@ -635,6 +668,8 @@ def normalize_state(data):
     if merged.get('winCounter') != data.get('winCounter', DEFAULT['winCounter']):
         changed = True
     if merged.get('minecraftBridge') != data.get('minecraftBridge', DEFAULT['minecraftBridge']):
+        changed = True
+    if merged.get('gtaBridge') != data.get('gtaBridge', DEFAULT['gtaBridge']):
         changed = True
     if merged.get('tiktokUsername') != data.get('tiktokUsername', ''):
         changed = True
@@ -1305,6 +1340,103 @@ def minecraft_log_watcher():
                 MINECRAFT_WATCH_STATUS.update(status='error', message='ログ監視エラー: ' + str(error)[:160])
             time.sleep(2)
 
+def get_gta_watch_status():
+    with GTA_WATCH_LOCK:
+        status = dict(GTA_WATCH_STATUS)
+    config = read_state().get('gtaBridge', {})
+    clean_path = clean_local_path(config.get('logPath'))
+    path = Path(clean_path).expanduser() if clean_path else None
+    exists = bool(path and path.is_file())
+    status.update({'enabled': bool(config.get('enabled')), 'logPath': str(path or ''), 'fileExists': exists,
+                   'winAmount': max(1, safe_int(config.get('winAmount', 1), 1)),
+                   'loseEnabled': config.get('loseEnabled', True) is not False,
+                   'loseAmount': max(1, safe_int(config.get('loseAmount', 1), 1))})
+    if not config.get('enabled'):
+        status.update({'status': 'stopped', 'message': 'GTA連携はオフです'})
+    elif not path:
+        status.update({'status': 'waiting', 'message': 'GTAWebhook.log の場所を入力してください'})
+    elif not exists and status.get('status') != 'error':
+        status.update({'status': 'waiting', 'message': 'ログファイルが見つかりません。GTAVWebhook.log の場所を確認してください'})
+    return status
+
+def gta_log_watcher():
+    """Tail GTAVWebhook.log and apply the configured WIN amount for each new marker line."""
+    watched_path = None
+    watched_marker = None
+    file_id = None
+    offset = 0
+    carry = b''
+    while True:
+        try:
+            config = read_state().get('gtaBridge', {})
+            enabled = bool(config.get('enabled'))
+            path_text = clean_local_path(config.get('logPath'))
+            marker = str(config.get('marker') or 'Sent WebSocket message: {"type":"win"').strip()
+            win_amount = max(1, min(999999, safe_int(config.get('winAmount', 1), 1)))
+            lose_enabled = config.get('loseEnabled', True) is not False
+            lose_marker = str(config.get('loseMarker') or 'Sent WebSocket message: {"type":"lose"').strip()
+            lose_amount = max(1, min(999999, safe_int(config.get('loseAmount', 1), 1)))
+            if not enabled or not path_text:
+                watched_path = None; watched_marker = None; file_id = None; offset = 0; carry = b''
+                with GTA_WATCH_LOCK:
+                    GTA_WATCH_STATUS.update(status='stopped' if not enabled else 'waiting', message='GTA連携はオフです' if not enabled else 'GTAWebhook.log の場所を入力してください')
+                time.sleep(1)
+                continue
+            path = Path(path_text).expanduser()
+            if not path.is_file():
+                with GTA_WATCH_LOCK:
+                    GTA_WATCH_STATUS.update(status='waiting', message='ログファイルが見つかりません。GTAVWebhook.log の場所を確認してください')
+                time.sleep(1)
+                continue
+            stat = path.stat()
+            current_id = (stat.st_dev, stat.st_ino)
+            marker_key = marker.casefold() + '\0' + lose_marker.casefold()
+            if path_text != watched_path or marker_key != str(watched_marker or ''):
+                watched_path, watched_marker, file_id = path_text, marker_key, current_id
+                offset, carry = stat.st_size, b''  # ignore old events when first connecting or changing the marker
+            elif current_id != file_id or stat.st_size < offset:
+                file_id, offset, carry = current_id, 0, b''
+            with path.open('rb') as logfile:
+                logfile.seek(offset)
+                chunk = logfile.read(1024 * 1024)
+                offset = logfile.tell()
+            with GTA_WATCH_LOCK:
+                received = int(GTA_WATCH_STATUS.get('eventsReceived', 0))
+                loss_text = f' / デス時 -{lose_amount} WIN' if lose_enabled else ''
+                GTA_WATCH_STATUS.update(status='watching', message=f'GTAログ監視中（検知 {received} 回・WIN +{win_amount}{loss_text}）', logPath=path_text)
+            if chunk:
+                parts = (carry + chunk).split(b'\n')
+                carry = parts.pop() if parts else b''
+                marker_folded = marker.casefold()
+                lose_marker_folded = lose_marker.casefold()
+                events = []
+                for line in parts:
+                    line_folded = line.decode('utf-8', errors='ignore').casefold()
+                    if marker_folded and marker_folded in line_folded:
+                        events.append(win_amount)
+                    elif lose_enabled and lose_marker_folded and lose_marker_folded in line_folded:
+                        events.append(-lose_amount)
+                for delta in events:
+                    with STATE_LOCK:
+                        try:
+                            raw = json.loads(STATE.read_text(encoding='utf-8'))
+                        except Exception:
+                            raw = copy.deepcopy(DEFAULT)
+                        data, _ = normalize_state(raw)
+                        win = data['winCounter']
+                        win['currentWin'] = max(-999999, min(999999, win['currentWin'] + delta))
+                        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+                    with GTA_WATCH_LOCK:
+                        GTA_WATCH_STATUS['lastEventAt'] = time.time()
+                        GTA_WATCH_STATUS['eventsReceived'] = int(GTA_WATCH_STATUS.get('eventsReceived', 0)) + 1
+                        event_text = f'+{win_amount} WIN' if delta > 0 else f'-{lose_amount} WIN'
+                        GTA_WATCH_STATUS['message'] = f'GTA {"WIN" if delta > 0 else "デス"}検知 {GTA_WATCH_STATUS["eventsReceived"]} 回（{event_text}）'
+            time.sleep(0.5)
+        except Exception as error:
+            with GTA_WATCH_LOCK:
+                GTA_WATCH_STATUS.update(status='error', message='GTAログ監視エラー: ' + str(error)[:160])
+            time.sleep(2)
+
 def version_numbers(value):
     parts = re.findall(r'\d+', str(value or ''))
     return tuple(int(part) for part in (parts[:4] or ['0']))
@@ -1369,6 +1501,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/minecraft/status':
             body = json.dumps(get_minecraft_watch_status(), ensure_ascii=False).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if self.path == '/api/gta/status':
+            body = json.dumps(get_gta_watch_status(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/gifts':
             with TIKTOK_GIFT_CATALOG_LOCK:
@@ -1826,10 +1961,13 @@ def run_desktop_app(server):
 
 def main():
     start_global_hotkeys()
-    global MINECRAFT_WATCH_THREAD
+    global MINECRAFT_WATCH_THREAD, GTA_WATCH_THREAD
     if MINECRAFT_WATCH_THREAD is None or not MINECRAFT_WATCH_THREAD.is_alive():
         MINECRAFT_WATCH_THREAD = threading.Thread(target=minecraft_log_watcher, daemon=True)
         MINECRAFT_WATCH_THREAD.start()
+    if GTA_WATCH_THREAD is None or not GTA_WATCH_THREAD.is_alive():
+        GTA_WATCH_THREAD = threading.Thread(target=gta_log_watcher, daemon=True)
+        GTA_WATCH_THREAD.start()
     try:
         # Every page is used only by this PC, so listening on localhost avoids
         # firewall prompts and accidental access from other devices.
