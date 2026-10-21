@@ -30,6 +30,7 @@ if errorlevel 1 (
 
 %PYTHON_CMD% -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --name "Live_Overlay_Studio_Windows_x64" ^
+  --icon "app_icon.ico" ^
   --collect-all TikTokLive ^
   --add-data "control.html;." ^
   --add-data "overlay.html;." ^
@@ -45,6 +46,7 @@ if errorlevel 1 (
   --add-data "overlay_win.html;." ^
   --add-data "README.txt;." ^
   --add-data "update_config.json;." ^
+  --add-data "app_icon.ico;." ^
   server.py
 
 if errorlevel 1 (

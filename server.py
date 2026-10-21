@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.21'
+APP_VERSION = '0.65.28'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -51,7 +51,7 @@ def prepare_app_root():
         'overlay_gacha_history.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_smoking.html',
         'overlay_smoking_gacha.html', 'overlay_timer.html',
-        'overlay_win.html', 'README.txt', 'update_config.json'
+        'overlay_win.html', 'README.txt', 'update_config.json', 'app_icon.ico'
     ]
     for name in assets:
         source = SOURCE_ROOT / name
@@ -613,6 +613,38 @@ def normalize_state(data):
         'queue':([x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100] if event_active else []),
         'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
+    # Store one independent WIN counter + WIN gacha snapshot per game profile.
+    # Older saves are migrated into a single profile without changing values.
+    raw_profiles = data.get('winProfiles') if isinstance(data.get('winProfiles'), list) else []
+    active_profile_id = str(data.get('activeWinProfileId') or '')[:80]
+    profiles = []
+    seen_profile_ids = set()
+    for index, item in enumerate(raw_profiles[:50]):
+        if not isinstance(item, dict):
+            continue
+        profile_id = str(item.get('id') or f'win-profile-{index + 1}')[:80]
+        if profile_id in seen_profile_ids:
+            profile_id = f'{profile_id}-{index + 1}'
+        seen_profile_ids.add(profile_id)
+        profiles.append({
+            'id': profile_id,
+            'name': str(item.get('name') or f'プロファイル{index + 1}')[:40],
+            'enabled': item.get('enabled', True) is not False,
+            'winCounter': item.get('winCounter') if isinstance(item.get('winCounter'), dict) else {},
+            'gacha': item.get('gacha') if isinstance(item.get('gacha'), dict) else {},
+        })
+    if not profiles:
+        profiles = [{'id':'win-profile-default','name':'標準','enabled':True,'winCounter':copy.deepcopy(merged['winCounter']),'gacha':copy.deepcopy(merged['gacha'])}]
+        active_profile_id = profiles[0]['id']
+    active_profile = next((item for item in profiles if item['id'] == active_profile_id and item['enabled']), None)
+    if active_profile is None:
+        active_profile = next((item for item in profiles if item['enabled']), profiles[0])
+        active_profile['enabled'] = True
+        active_profile_id = active_profile['id']
+    active_profile['winCounter'] = copy.deepcopy(merged['winCounter'])
+    active_profile['gacha'] = copy.deepcopy(merged['gacha'])
+    merged['winProfiles'] = profiles
+    merged['activeWinProfileId'] = active_profile_id
     merged['tiktokUsername'] = str(merged.get('tiktokUsername') or '').strip().lstrip('@')
     raw_timer = merged.get('timer') if isinstance(merged.get('timer'), dict) else {}
     merged['timer'] = {
@@ -666,6 +698,8 @@ def normalize_state(data):
     if merged.get('giftWall') != data.get('giftWall', DEFAULT['giftWall']):
         changed = True
     if merged.get('winCounter') != data.get('winCounter', DEFAULT['winCounter']):
+        changed = True
+    if merged.get('winProfiles') != data.get('winProfiles') or merged.get('activeWinProfileId') != data.get('activeWinProfileId'):
         changed = True
     if merged.get('minecraftBridge') != data.get('minecraftBridge', DEFAULT['minecraftBridge']):
         changed = True
@@ -1775,6 +1809,10 @@ def run_desktop_app(server):
     overlay_url = 'http://127.0.0.1:8765/overlay.html?build=664'
     window = tk.Tk()
     window.title('Live Overlay Studio')
+    try:
+        window.iconbitmap(str(SOURCE_ROOT / 'app_icon.ico'))
+    except Exception:
+        pass
     window.geometry('560x400')
     window.minsize(500, 300)
     window.configure(bg='#17181e')

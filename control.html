@@ -159,7 +159,7 @@ margin-right:-4px}}</style>
 <p class="sub">変更は自動保存されます。必要なときは「設定を保存」を押してください。</p>
 <p class="note" id="shortcutStatus">グローバルショートカットを確認しています…</p>
 <button id="saveNow" type="button">設定を保存</button>
-<nav class="settingsNav" id="settingsNav" aria-label="設定カテゴリー"><button type="button" data-category="all" class="active">すべて</button><button type="button" data-category="missions">ミッション</button><button type="button" data-category="counters">カウンター</button><button type="button" data-category="giftTimer">ギフトでテキスト変更</button><button type="button" data-category="smokingTimer">禁煙タイマー</button><button type="button" data-category="smokingGacha">禁煙ガチャ</button><button type="button" data-category="comp">メモ</button><button type="button" data-category="gacha">WIN・ガチャ</button><button type="button" data-category="minecraft">Minecraft連携</button><button type="button" data-category="gta">GTA連携</button><button type="button" data-category="gifts">ギフト履歴</button><button type="button" data-category="appearance">見た目</button><button type="button" data-category="links">リンク</button></nav>
+<nav class="settingsNav" id="settingsNav" aria-label="設定カテゴリー"><button type="button" data-category="all" class="active">すべて</button><button type="button" data-category="missions">ミッション</button><button type="button" data-category="counters">カウンター</button><button type="button" data-category="giftTimer">ギフトでテキスト変更</button><button type="button" data-category="smokingTimer">禁煙タイマー</button><button type="button" data-category="smokingGacha">禁煙ガチャ</button><button type="button" data-category="comp">メモ</button><button type="button" data-category="gacha">WINガチャ</button><button type="button" data-category="winGift">ギフトでWINを増減</button><button type="button" data-category="currentWin">現在WIN</button><button type="button" data-category="minecraft">Minecraft連携</button><button type="button" data-category="gta">GTA連携</button><button type="button" data-category="gifts">ギフト履歴</button><button type="button" data-category="appearance">見た目</button><button type="button" data-category="links">リンク</button></nav>
 <section class="card">
 <h2>オーバーレイリンク</h2>
 <p class="note">表示したい項目のリンクをTikTok LIVE Studioに別々のソースとして追加すると、個別に移動・サイズ調整できます。</p>
@@ -335,9 +335,17 @@ margin-right:-4px}}</style>
 <h3>抽選パターン</h3><div id="smokingGachaPatterns"></div><button id="addSmokingGachaPattern" class="secondary" type="button">＋ 禁煙ガチャ追加</button>
 <p class="note">数字ごとの確率は比率で抽選されます。合計100%でなくても自動調整します。テスト抽選では実際のタイマーは変わりません。</p>
 </section>
+<section class="card" id="winProfileSettings">
+<h2>ゲーム別プロファイル</h2>
+<p class="note">Minecraft用・GTA用など、現在WIN数・WINガチャ・ギフトWIN設定をゲームごとに切り替えられます。</p>
+<div class="cardSizeGrid"><div class="field"><label for="winProfileSelect">使用するプロファイル</label><select id="winProfileSelect"></select></div><div class="field"><label for="winProfileName">プロファイル名</label><input id="winProfileName" maxlength="40" placeholder="例：Minecraft"></div></div>
+<div class="missionTop"><button id="addWinProfile" class="secondary" type="button">＋ プロファイル追加</button><button id="toggleWinProfile" class="secondary" type="button">このプロファイルを停止</button><button id="deleteWinProfile" class="danger" type="button">削除</button></div>
+<p class="note" id="winProfileStatus"></p>
+</section>
 <section class="card" id="winCounterSettings">
 <h2>現在のWIN数</h2>
-<p class="note">WINガチャとは別の設定です。ガチャの獲得WINや登録ギフトはこの数に反映されます。</p>
+<p class="note">WIN数はWINガチャ・登録ギフト・有効にしたゲーム連携で増減します。このタブから直接入力できます。WINガチャ・ギフト設定・ゲーム連携でも増減できます。</p>
+
 <div class="field">
 <label>WIN数の上に表示する文字</label>
 <input id="winCounterTitle" maxlength="60" placeholder="例：現在／次回の耐久数">
@@ -345,7 +353,7 @@ margin-right:-4px}}</style>
 <div class="cardSizeGrid">
 <div class="field">
 <label>現在のWIN数（マイナス可）</label>
-<input id="gachaCurrent" type="number" min="-999999">
+<input id="gachaCurrent" type="number" min="-999999" aria-label="現在WIN数">
 </div>
 <div class="field">
 <label>表示目標WIN数</label>
@@ -353,22 +361,13 @@ margin-right:-4px}}</style>
 </div>
 </div>
 <details>
-<summary>ショートカット設定</summary>
+<summary>現在WINのショートカット</summary>
 <div class="shortcutRows">
-<div class="shortcutField">
-<label>WIN＋1</label>
-<input id="gachaShortcutAdd" class="shortcutValue" readonly placeholder="未設定">
-<button type="button" class="captureShortcut">キー設定</button>
-<button type="button" class="secondary clearShortcut">解除</button>
-</div>
-<div class="shortcutField">
-<label>WIN−1</label>
-<input id="gachaShortcutSub" class="shortcutValue" readonly placeholder="未設定">
-<button type="button" class="captureShortcut">キー設定</button>
-<button type="button" class="secondary clearShortcut">解除</button>
-</div>
+<div class="shortcutField"><label>WIN＋1</label><input id="gachaShortcutAdd" class="shortcutValue" readonly placeholder="未設定"><button type="button" class="captureShortcut">キー設定</button><button type="button" class="secondary clearShortcut">解除</button></div>
+<div class="shortcutField"><label>WIN−1</label><input id="gachaShortcutSub" class="shortcutValue" readonly placeholder="未設定"><button type="button" class="captureShortcut">キー設定</button><button type="button" class="secondary clearShortcut">解除</button></div>
 </div>
 </details>
+
 <h3>現在WINカードのデザイン</h3>
 <div class="cardStyleGrid">
 <div class="field">
@@ -405,11 +404,15 @@ margin-right:-4px}}</style>
 <div class="field"><label>画像（PNG・JPG・WebP・GIF、10MB以下）</label><input id="winImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><span id="winImageName" class="note">画像未設定</span></div>
 <div class="field" style="margin-top:10px"><label>画像サイズ</label><input id="winImageSize" type="range" min="20" max="240" step="2"><span id="winImageSizeVal" class="note"></span></div>
 <div class="missionTop"><label class="toggle"><input id="winImageEnabled" type="checkbox">画像を表示</label><button id="clearWinImage" class="secondary" type="button">画像を解除</button></div>
-<h3>ギフトでWINを増減</h3>
+</section>
+<section class="card" id="winGiftSettings">
+<h2>ギフトでWINを増減</h2>
+<p class="note">選択中のゲーム別プロファイルにギフト設定を保存します。上のプロファイルを切り替えると、Minecraft用・GTA用など別々のギフト設定を使えます。</p>
 <div id="winGiftRules">
 </div>
 <button id="addWinGift" class="secondary" type="button">＋ ギフト設定追加</button>
-<p class="note">例：バラで＋5、爆弾で−3。WINショートカットはこのカウンターだけを変更します。</p>
+<p class="note">例：バラで＋5、爆弾で−3。</p>
+
 </section>
 <section class="card" id="giftWallSettings">
 <h2>ギフト履歴オーバーレイ</h2>
@@ -639,6 +642,7 @@ let giftPickerTarget=null;
 let giftCatalog=[];
 let activeGachaPreview=null;
 let currentWinEdited=false;
+let selectedWinProfileId='';
 const $=id=>document.getElementById(id);
 async function get(){try{const r=await fetch('/api/state',{cache:'no-store'});
 return await r.json()}catch(e){return null}}
@@ -761,7 +765,24 @@ const collectGachaBeforeV63=collectGacha;
 collectGacha=function(){collectGachaBeforeV63();const patterns=state.gacha?.patterns||[];document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=patterns[i];if(!p)return;const checked=selector=>el.querySelector(selector)?.checked!==false,value=(selector,fallback=0)=>+(el.querySelector(selector)?.value??fallback);Object.assign(p,{upperEntrySeconds:Math.max(1,Math.min(30,value('.patternUpperEntrySeconds',3))),upperEntryAudioVolume:value('.patternUpperEntryAudioVolume',80),upperEntryVideoVolume:value('.patternUpperEntryVideoVolume',80),upperEntryVideoAudioEnabled:checked('.patternUpperEntryVideoAudioEnabled'),choiceTextColor:el.querySelector('.patternChoiceTextColor')?.value||'#ffe9a6',choiceTextSize:Math.max(14,Math.min(100,value('.patternChoiceTextSize',34))),showPatternText:checked('.patternShowPatternText'),showSenderText:checked('.patternShowSenderText'),showResultText:checked('.patternShowResultText'),showStateText:checked('.patternShowStateText'),showTotalText:checked('.patternShowTotalText'),showChoiceText:checked('.patternShowChoiceText')})})};
 const collectGachaBeforeV65=collectGacha;
 collectGacha=function(){collectGachaBeforeV65();const patterns=state.gacha?.patterns||[];document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=patterns[i];if(!p)return;const checked=selector=>el.querySelector(selector)?.checked===true,value=(selector,fallback=0)=>+(el.querySelector(selector)?.value??fallback);Object.assign(p,{continueEffectEnabled:checked('.patternContinueEffectEnabled'),continueSeconds:Math.max(1,Math.min(30,value('.patternContinueSeconds',3))),continueAudioVolume:value('.patternContinueAudioVolume',80),continueVideoVolume:value('.patternContinueVideoVolume',80),continueVideoAudioEnabled:checked('.patternContinueVideoAudioEnabled'),upperContinueEffectEnabled:checked('.patternUpperContinueEffectEnabled'),upperContinueSeconds:Math.max(1,Math.min(30,value('.patternUpperContinueSeconds',3))),upperContinueAudioVolume:value('.patternUpperContinueAudioVolume',80),upperContinueVideoVolume:value('.patternUpperContinueVideoVolume',80),upperContinueVideoAudioEnabled:checked('.patternUpperContinueVideoAudioEnabled')})})};
+function cloneWinProfileValue(value){return JSON.parse(JSON.stringify(value||{}))}
+function activeWinProfile(){return (state.winProfiles||[]).find(profile=>profile.id===state.activeWinProfileId)}
+function saveActiveWinProfileSnapshot(){const profile=activeWinProfile();if(profile){profile.winCounter=cloneWinProfileValue(state.winCounter);profile.gacha=cloneWinProfileValue(state.gacha)}}
+function selectedWinProfile(){return (state.winProfiles||[]).find(profile=>profile.id===selectedWinProfileId)}
+function renderWinProfiles(){const select=$('winProfileSelect');if(!select)return;state.winProfiles=Array.isArray(state.winProfiles)&&state.winProfiles.length?state.winProfiles:[{id:'win-profile-default',name:'標準',enabled:true,winCounter:cloneWinProfileValue(state.winCounter),gacha:cloneWinProfileValue(state.gacha)}];let active=activeWinProfile();if(!active||!active.enabled){active=state.winProfiles.find(profile=>profile.enabled)||state.winProfiles[0];active.enabled=true;state.activeWinProfileId=active.id}if(!state.winProfiles.some(profile=>profile.id===selectedWinProfileId))selectedWinProfileId=state.activeWinProfileId;select.replaceChildren();for(const profile of state.winProfiles){const option=document.createElement('option');option.value=profile.id;option.textContent=(profile.name||'名称なし')+(profile.enabled?'':'（停止中）');select.appendChild(option)}select.value=selectedWinProfileId;const selected=selectedWinProfile()||active;$('winProfileName').value=selected.name||'';$('toggleWinProfile').textContent=selected.enabled?'このプロファイルを停止':'このプロファイルを再開';$('deleteWinProfile').disabled=state.winProfiles.length<=1;$('winProfileStatus').textContent=state.winProfiles.length+' 個のプロファイルを保存中。'+(selected.enabled?'選択中：「'+(selected.name||'名称なし')+'」':'「'+(selected.name||'名称なし')+'」は停止中です。WINガチャ・ギフトWINにはまだ反映されていません。「再開」で切り替わります')}
+function winGachaBusy(){return !!(state.gacha?.event?.active||(state.gacha?.queue||[]).length)}
+function makeBlankWinProfile(){const win={fontFamily:'global',title:'現在',currentWin:0,goalWin:10,shortcutAdd:'',shortcutSub:'',giftRules:[],positiveTextColor:'',negativeTextColor:'#ff4055',goalTextColor:'',cardBg:'',cardBorder:'',cardTextColor:'',cardOpacity:-1,titleSize:30,valueSize:76,imageUrl:'',imageName:'',imageSize:64,imageEnabled:true};const gacha=cloneWinProfileValue(state.gacha);Object.assign(gacha,{mode:'continue',continuationRate:70,spinSeconds:5,soundVolume:65,shortcutChoicePlus:'',shortcutChoiceMinus:'',audioUrl:'',audioName:'',audioVolume:75,resultAudioUrl:'',resultAudioName:'',resultAudioVolume:80,effectStyle:'card',slotNumberSize:130,slotNumberColor:'#ffffff',slotX:50,slotY:50,spinStyle:'dramatic',videoAudioEnabled:true,videoVolume:75,endAnimationUrl:'',endAnimationName:'',endAudioUrl:'',endAudioName:'',endAudioVolume:75,endSeconds:6,cardBg:'',cardBorder:'',cardTextColor:'',cardOpacity:-1,patterns:[],animationUrl:'',animationName:'',historyFontFamily:'global',historyTextScale:100,historyCardBg:'#17181e',historyCardBorder:'#ffcf59',historyTextColor:'#ffffff',historyCardOpacity:93,history:[],queue:[],event:{id:0,type:'',active:false,patternName:'',rounds:[],total:0,giftName:'',senderName:'',createdAt:0}});return {winCounter:win,gacha}}
+async function switchWinProfile(profileId){const target=(state.winProfiles||[]).find(profile=>profile.id===profileId);if(!target)return;selectedWinProfileId=target.id;if(!target.enabled){renderWinProfiles();$('winProfileStatus').textContent='「'+(target.name||'名称なし')+'」は停止中です。選択だけでは切り替わりません。「再開」を押してください';return}if(profileId===state.activeWinProfileId){renderWinProfiles();return}if(winGachaBusy()){renderWinProfiles();$('winProfileStatus').textContent='ガチャ抽選中・待機中は切り替えできません。終了後に切り替えてください';return}clearTimeout(timer);timer=null;collect();saveActiveWinProfileSnapshot();await persist();state.activeWinProfileId=target.id;state.winCounter=cloneWinProfileValue(target.winCounter);state.gacha=cloneWinProfileValue(target.gacha);currentWinEdited=false;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();$('winProfileStatus').textContent='「'+target.name+'」に切り替えました';save()}
+function bindWinProfiles(){
+renderWinProfiles();
+$('winProfileSelect').onchange=()=>switchWinProfile($('winProfileSelect').value);
+$('winProfileName').oninput=()=>{const profile=selectedWinProfile();if(!profile)return;profile.name=$('winProfileName').value.trim().slice(0,40)||'名称なし';const option=[...$('winProfileSelect').options].find(item=>item.value===profile.id);if(option)option.textContent=profile.name+(profile.enabled?'':'（停止中）');save()};
+$('addWinProfile').onclick=async()=>{if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は追加できません';return}clearTimeout(timer);timer=null;collect();saveActiveWinProfileSnapshot();await persist();const {winCounter,gacha}=makeBlankWinProfile(),id='win-profile-'+Date.now();state.winProfiles.push({id,name:'新しいプロファイル',enabled:true,winCounter,gacha});state.activeWinProfileId=id;selectedWinProfileId=id;state.winCounter=winCounter;state.gacha=gacha;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();$('winProfileName').focus();$('winProfileName').select();save()};
+$('toggleWinProfile').onclick=async()=>{const profile=selectedWinProfile();if(!profile)return;if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は変更できません';return}clearTimeout(timer);timer=null;collect();saveActiveWinProfileSnapshot();await persist();if(!profile.enabled){profile.enabled=true;state.activeWinProfileId=profile.id;state.winCounter=cloneWinProfileValue(profile.winCounter);state.gacha=cloneWinProfileValue(profile.gacha);currentWinEdited=false;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を再開しました';save();return}if(profile.id!==state.activeWinProfileId){$('winProfileStatus').textContent='停止・再開できるのは現在使用中のプロファイルです';return}if(state.winProfiles.filter(item=>item.enabled).length<=1){$('winProfileStatus').textContent='有効なプロファイルを最低1つ残してください';return}profile.enabled=false;const next=state.winProfiles.find(item=>item.enabled);if(!next){profile.enabled=true;$('winProfileStatus').textContent='切り替え先のプロファイルがありません';return}state.activeWinProfileId=next.id;selectedWinProfileId=next.id;state.winCounter=cloneWinProfileValue(next.winCounter);state.gacha=cloneWinProfileValue(next.gacha);renderWinProfiles();renderWinCounterSettings();renderGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を停止しました';save()};
+$('deleteWinProfile').onclick=async()=>{if(state.winProfiles.length<=1){$('winProfileStatus').textContent='最後のプロファイルは削除できません';return}if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は削除できません';return}const profile=selectedWinProfile();if(!profile)return;const wasActive=profile.id===state.activeWinProfileId;if(wasActive){clearTimeout(timer);timer=null;collect();saveActiveWinProfileSnapshot();await persist()}const index=state.winProfiles.findIndex(item=>item.id===profile.id);state.winProfiles.splice(index,1);if(wasActive){const next=state.winProfiles.find(item=>item.enabled)||state.winProfiles[0];if(!next.enabled)next.enabled=true;state.activeWinProfileId=next.id;state.winCounter=cloneWinProfileValue(next.winCounter);state.gacha=cloneWinProfileValue(next.gacha);selectedWinProfileId=next.id;renderWinCounterSettings();renderGachaSettings()}else selectedWinProfileId=state.activeWinProfileId;renderWinProfiles();save()}
+}
 async function persist(){collect();
+saveActiveWinProfileSnapshot();
 const version=editVersion;
 saving=true;
 try{const payload={...state,_manualWinCounterValue:currentWinEdited};const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -1223,18 +1244,15 @@ $('winImageSizeVal').textContent=$('winImageSize').value+'px';
 $('winImageEnabled').checked=w.imageEnabled!==false;
 $('gachaCurrent').value=w.currentWin??0;
 $('gachaGoal').value=w.goalWin||10;
-$('gachaShortcutAdd').value=w.shortcutAdd||'';
-$('gachaShortcutSub').value=w.shortcutSub||'';
+$('gachaShortcutAdd').value=w.shortcutAdd||'';$('gachaShortcutSub').value=w.shortcutSub||'';
 const host=$('winGiftRules');
 host.innerHTML='';
 (w.giftRules||[]).forEach((rule,i)=>{const el=document.createElement('div');
-el.className='winGiftRule missionTop';
+el.className='card winGiftRule';
 el.dataset.id=rule.id||'win-gift-'+(i+1);
-el.innerHTML=`<div class="giftInputRow"><input class="winGiftName" placeholder="ギフト名"><button class="giftPickButton secondary" type="button">ギフトを選択</button></div>
-<input class="winGiftDelta" type="number" placeholder="WIN増減（例：5 / -3）">
-<button class="danger deleteWinGift" type="button">削除</button>`;
+el.innerHTML=`<div class="cardSizeGrid"><div class="field"><label>対象ギフト</label><div class="giftInputRow"><input class="winGiftName" placeholder="ギフト名"><button class="giftPickButton secondary" type="button">ギフトを選択</button></div></div><div class="field"><label>WIN増減（例：5 / -3）</label><input class="winGiftDelta" type="number"></div><div class="field"><button class="danger deleteWinGift" type="button">このギフト設定を削除</button></div></div>`;
 el.querySelector('.winGiftName').value=rule.giftName||'';
-el.querySelector('.winGiftDelta').value=rule.delta||'';
+el.querySelector('.winGiftDelta').value=rule.delta??1;
 el.querySelector('.giftPickButton').onclick=()=>openGiftPicker(el.querySelector('.winGiftName'));
 el.querySelectorAll('input').forEach(x=>x.addEventListener('input',save));el.querySelectorAll('select').forEach(x=>x.addEventListener('change',save));
 el.querySelector('.deleteWinGift').onclick=()=>{collectWinCounter();
@@ -1243,8 +1261,7 @@ renderWinCounterSettings();
 save()};
 host.appendChild(el)});
 $('winCounterSettings').querySelectorAll('input').forEach(x=>{if(!x.dataset.winBound){x.dataset.winBound='1';
-x.addEventListener('input',save)}});if(!$('gachaCurrent').dataset.manualWinBound){$('gachaCurrent').dataset.manualWinBound='1';$('gachaCurrent').addEventListener('input',()=>{currentWinEdited=true})}
-wireShortcutFields($('winCounterSettings'))}
+x.addEventListener('input',save)}});if(!$('gachaCurrent').dataset.manualWinBound){$('gachaCurrent').dataset.manualWinBound='1';$('gachaCurrent').addEventListener('input',()=>{currentWinEdited=true})}wireShortcutFields($('winCounterSettings'))}
 async function uploadWinImage(){const file=$('winImageFile').files[0];if(!file)return;if(file.size>10*1024*1024){$('status').textContent='WIN画像は10MB以下にしてください';return}clearTimeout(timer);timer=null;collectWinCounter();await persist();const reader=new FileReader();reader.onload=async()=>{try{const response=await fetch('/api/win-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.winCounter=data.winCounter;renderWinCounterSettings();$('status').textContent='現在WINの画像を保存しました'}catch(error){$('status').textContent='画像を保存できませんでした: '+error.message}};reader.readAsDataURL(file)}
 async function clearWinImage(){clearTimeout(timer);timer=null;if(dirty)await persist();try{const response=await fetch('/api/win-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear:true})}),data=await response.json();if(!response.ok)throw Error(data.message||'解除できませんでした');state.winCounter=data.winCounter;renderWinCounterSettings();$('winImageFile').value='';$('status').textContent='現在WINの画像を解除しました'}catch(error){$('status').textContent='画像を解除できませんでした: '+error.message}}
 async function uploadPatternMedia(el,pattern,type){const spec={animation:['.patternAnimationFile','/api/gacha-animation',30,'演出素材','.patternAnimationName','animationName'],audio:['.patternAudioFile','/api/gacha-audio',15,'抽選中音源','.patternAudioName','audioName'],resultAudio:['.patternResultAudioFile','/api/gacha-result-audio',15,'結果音源','.patternResultAudioName','resultAudioName'],endAnimation:['.patternEndAnimationFile','/api/gacha-end-animation',30,'終了演出素材','.patternEndAnimationName','endAnimationName'],endAudio:['.patternEndAudioFile','/api/gacha-end-audio',15,'終了音源','.patternEndAudioName','endAudioName'],upperAnimation:['.patternUpperAnimationFile','/api/gacha-animation',30,'上位AT抽選演出素材','.patternUpperAnimationName','upperAtAnimationName'],upperAudio:['.patternUpperAudioFile','/api/gacha-audio',15,'上位AT抽選音源','.patternUpperAudioName','upperAtAudioName'],upperEntryAnimation:['.patternUpperEntryAnimationFile','/api/gacha-animation',30,'上位AT突入演出素材','.patternUpperEntryAnimationName','upperEntryAnimationName'],upperEntryAudio:['.patternUpperEntryAudioFile','/api/gacha-audio',15,'上位AT突入音源','.patternUpperEntryAudioName','upperEntryAudioName']}[type];const input=el.querySelector(spec[0]),file=input.files[0];if(!file)return;if(file.size>spec[2]*1024*1024){$('status').textContent=spec[3]+'は'+spec[2]+'MB以下にしてください';return}clearTimeout(timer);timer=null;collectGacha();await persist();const reader=new FileReader();reader.onload=async()=>{try{const stage=type.startsWith('upperEntry')?'upperEntry':(type.startsWith('upper')?'upperAT':'normal'),response=await fetch(spec[1],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patternId:pattern.id,stage,name:file.name,dataUrl:reader.result})}),data=await response.json();if(!response.ok)throw Error(data.message||'保存できませんでした');state.gacha=data.gacha;const updated=(state.gacha.patterns||[]).find(item=>item.id===pattern.id);if(updated)Object.assign(pattern,updated);const label=el.querySelector(spec[4]);if(label)label.textContent=updated?.[spec[5]]||file.name;input.value='';$('status').textContent='このパターン専用の'+spec[3]+'を保存しました（設定欄は開いたままです）'}catch(error){$('status').textContent=spec[3]+'を保存できませんでした: '+error.message}};reader.readAsDataURL(file)}
@@ -1483,13 +1500,13 @@ async function refreshGiftStatus(){try{const r=await fetch('/api/tiktok/status',
 tiktokEnabled=s.enabled===true;$('giftConnectionStatus').textContent=s.message||s.status||'未接続';$('connectTikTok').textContent=tiktokEnabled?'受信OFF':'受信ON';$('connectTikTok').classList.toggle('danger',tiktokEnabled);$('tiktokStatusDot').classList.toggle('on',tiktokEnabled&&s.status==='connected');$('tiktokStatusDot').classList.toggle('wait',tiktokEnabled&&s.status!=='connected')}catch(e){$('giftConnectionStatus').textContent='状態を取得できませんでした'}}
 function setupSettingsNavigation(){
  const categories={
-  'オーバーレイリンク':'links','禁煙ガチャ':'smokingGacha','禁煙タイマー':'smokingTimer','現在のWIN数':'gacha','WINガチャ':'gacha','Minecraft連携':'minecraft','GTA連携':'gta',
+  'オーバーレイリンク':'links','禁煙ガチャ':'smokingGacha','禁煙タイマー':'smokingTimer','現在のWIN数':'currentWin','WINガチャ':'gacha','ゲーム別プロファイル':'gacha','ギフトでWINを増減':'winGift','Minecraft連携':'minecraft','GTA連携':'gta',
   'ギフトミッション':'missions','カウンター':'counters','カード色を一括設定':'appearance',
   'ギフトでテキスト変更':'giftTimer','メモ':'comp','ギフト履歴オーバーレイ':'gifts','色と文字サイズ':'appearance'
  };
  const sections=[...document.querySelectorAll('main.wrap > section.card')];
  for(const section of sections){const heading=section.querySelector('h2');section.dataset.category=section.id==='giftWallSettings'?'gifts':(categories[heading?.textContent.trim()]||'all')}
- const choose=category=>{for(const section of sections)section.classList.toggle('sectionHidden',category!=='all'&&section.dataset.category!==category);document.querySelectorAll('#settingsNav button').forEach(button=>button.classList.toggle('active',button.dataset.category===category));localStorage.setItem('live-overlay-settings-category',category);if(category==='gifts')refreshGiftWallHistory();window.scrollTo({top:0,behavior:'smooth'})};
+ const choose=category=>{for(const section of sections){const sharedProfiles=section.id==='winProfileSettings'&&(category==='gacha'||category==='winGift');section.classList.toggle('sectionHidden',category!=='all'&&section.dataset.category!==category&&!sharedProfiles)}document.querySelectorAll('#settingsNav button').forEach(button=>button.classList.toggle('active',button.dataset.category===category));localStorage.setItem('live-overlay-settings-category',category);if(category==='gifts')refreshGiftWallHistory();window.scrollTo({top:0,behavior:'smooth'})};
  document.querySelectorAll('#settingsNav button').forEach(button=>button.onclick=()=>choose(button.dataset.category));
  choose(localStorage.getItem('live-overlay-settings-category')||'all');
  document.querySelectorAll('input[type="color"],input[type="range"]').forEach(input=>input.addEventListener('input',()=>{input.classList.add('colorChanged');setTimeout(()=>input.classList.remove('colorChanged'),700)}));
@@ -1520,6 +1537,7 @@ renderMissions();
 renderCounters();
 renderWinCounterSettings();
 renderGachaSettings();
+bindWinProfiles();
 renderSmokingGacha();
 renderTextFxTargets();
 $('textFxTarget').addEventListener('change',renderTextFxEditor);
@@ -1679,6 +1697,7 @@ state.smokingGacha=fresh.smokingGacha||state.smokingGacha;
 state.gacha=fresh.gacha||state.gacha;
 state.giftWall=fresh.giftWall||state.giftWall;$('giftWallHistoryStatus').textContent=(state.giftWall.history||[]).length+' 件保存中（最大200件）';renderGiftWallHistory();
 state.winCounter=fresh.winCounter||state.winCounter;
+state.winProfiles=fresh.winProfiles||state.winProfiles;state.activeWinProfileId=fresh.activeWinProfileId||state.activeWinProfileId;renderWinProfiles();
 updateSmokeDisplay();
 renderWinCounterSettings();
 renderGachaSettings();
@@ -1686,7 +1705,7 @@ renderSmokingGacha();
 renderMissions();
 renderCounters();
 renderGiftRules()}},1000);
-setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},600);
+setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},600);
 setInterval(refreshGiftWallHistory,1200);
 setInterval(refreshGiftStatus,3000);
 setInterval(refreshHotkeyStatus,3000);
