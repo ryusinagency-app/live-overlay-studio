@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.11'
+APP_VERSION = '0.65.15'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -115,7 +115,7 @@ DEFAULT = {
         {'id': 'mission-1', 'title': 'ギフトミッション', 'giftValue': 0, 'giftGoal': 10, 'unit': '個', 'achievements': 0, 'dailyLimit': 10, 'lastDate': '', 'showAchievements': True, 'noticeUntil': 0, 'textScale': 100, 'shortcutAdd': 'CTRL+ALT+0', 'shortcutSub': 'CTRL+ALT+SHIFT+0'}
     ],
     'giftRules': [],
-    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
+    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
     'tiktokUsername': '',
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
     'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True},
@@ -401,6 +401,11 @@ def normalize_state(data):
         'displayHistory': [item for item in gift_history if item['id'] in ({x.get('id') for x in (raw_wall.get('displayHistory') or []) if isinstance(x,dict)} if 'displayHistory' in raw_wall else {x['id'] for x in gift_history})][:200],
         'fontFamily':raw_wall.get('fontFamily') if raw_wall.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global',
         'textScale': max(50, min(250, safe_int(raw_wall.get('textScale', 100), 100))),
+        'avatarSize': max(20, min(160, safe_int(raw_wall.get('avatarSize', 44), 44))),
+        'nameSize': max(8, min(80, safe_int(raw_wall.get('nameSize', 18), 18))),
+        'giftNameSize': max(8, min(80, safe_int(raw_wall.get('giftNameSize', 16), 16))),
+        'countSize': max(8, min(80, safe_int(raw_wall.get('countSize', 15), 15))),
+        'giftImageSize': max(20, min(160, safe_int(raw_wall.get('giftImageSize', 44), 44))),
         'cardBg': valid_hex(raw_wall.get('cardBg')) or '#1c1c24',
         'cardBorder': valid_hex(raw_wall.get('cardBorder')) or '#ffcf59',
         'cardTextColor': valid_hex(raw_wall.get('cardTextColor')) or '#ffffff',
@@ -1239,7 +1244,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -1256,7 +1261,21 @@ class Handler(SimpleHTTPRequestHandler):
                     current['giftWall']['displayHistory']=[]
                     STATE.write_text(json.dumps(current,ensure_ascii=False,indent=2),encoding='utf-8')
                 result={'ok':True,'historyCount':len(current['giftWall'].get('history',[]))}
+            elif self.path == '/api/giftwall/restore-display':
+                if self.client_address[0] not in ('127.0.0.1','::1'):
+                    self.send_error(403); return
+                with STATE_LOCK:
+                    try:
+                        current=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception:
+                        current=copy.deepcopy(DEFAULT)
+                    current,_=normalize_state(current)
+                    wall=current['giftWall']; threshold=wall['minCoins']
+                    wall['displayHistory']=[copy.deepcopy(item) for item in wall.get('history',[]) if item.get('totalCoins',0)>=threshold][:200]
+                    STATE.write_text(json.dumps(current,ensure_ascii=False,indent=2),encoding='utf-8')
+                result={'ok':True,'displayCount':len(wall['displayHistory']),'historyCount':len(wall.get('history',[]))}
             elif self.path == '/api/state':
+                manual_win_value = bool(data.pop('_manualWinCounterValue', False))
                 # Apply control-panel settings and live gift events as one
                 # transaction. A stale control-page snapshot must never erase
                 # history received since that page was opened.
@@ -1269,9 +1288,15 @@ class Handler(SimpleHTTPRequestHandler):
                     if isinstance(data.get('timer'), dict):
                         data['timer']['currentText'] = current.get('timer', {}).get('currentText', data['timer'].get('currentText', ''))
                         data['timer']['giftName'] = current.get('timer', {}).get('giftName', data['timer'].get('giftName', ''))
+                    if isinstance(data.get('winCounter'),dict) and not manual_win_value:
+                        data['winCounter']['currentWin']=current.get('winCounter',{}).get('currentWin',data['winCounter'].get('currentWin',0))
                     if isinstance(data.get('gacha'),dict):
-                        data['gacha']['event']=current.get('gacha',{}).get('event',{})
-                        data['gacha']['queue']=current.get('gacha',{}).get('queue',[])
+                        live_gacha=current.get('gacha',{})
+                        data['gacha']['event']=live_gacha.get('event',{})
+                        data['gacha']['queue']=live_gacha.get('queue',[])
+                        # A stale control-page save must not erase history that
+                        # the overlay appended after the page's last refresh.
+                        data['gacha']['history']=copy.deepcopy(live_gacha.get('history',[]))
                     if isinstance(data.get('smokingGacha'),dict):
                         data['smokingGacha']['event']=current.get('smokingGacha',{}).get('event',{})
                         data['smokingGacha']['queue']=current.get('smokingGacha',{}).get('queue',[])
@@ -1478,7 +1503,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = 'http://127.0.0.1:8765/control.html'
-    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=661'
+    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=664'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     window.geometry('560x400')
