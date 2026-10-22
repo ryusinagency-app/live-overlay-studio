@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.65'
+APP_VERSION = '0.65.66'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -628,6 +628,15 @@ def normalize_state(data):
             'upperEntryVideoAudioEnabled':bool(item.get('upperEntryVideoAudioEnabled',True)),
             'upperEntryVideoVolume':max(0,min(100,safe_int(item.get('upperEntryVideoVolume',80)))),
             'upperEntrySeconds':max(1,min(30,safe_int(item.get('upperEntrySeconds',3),3))),
+            'startAnimationUrl':str(item.get('startAnimationUrl') or '')[:2000], 'startAnimationName':str(item.get('startAnimationName') or '')[:120],
+            'startAudioUrl':str(item.get('startAudioUrl') or '')[:2000], 'startAudioName':str(item.get('startAudioName') or '')[:120],
+            'startSeconds':max(1,min(30,safe_int(item.get('startSeconds',2),2))), 'startAudioVolume':max(0,min(100,safe_int(item.get('startAudioVolume',80),80))), 'startVideoAudioEnabled':bool(item.get('startVideoAudioEnabled',True)), 'startVideoVolume':max(0,min(100,safe_int(item.get('startVideoVolume',75),75))),
+            'hitAnimationUrl':str(item.get('hitAnimationUrl') or '')[:2000], 'hitAnimationName':str(item.get('hitAnimationName') or '')[:120],
+            'hitAudioUrl':str(item.get('hitAudioUrl') or '')[:2000], 'hitAudioName':str(item.get('hitAudioName') or '')[:120],
+            'hitSeconds':max(1,min(30,safe_int(item.get('hitSeconds',2),2))), 'hitAudioVolume':max(0,min(100,safe_int(item.get('hitAudioVolume',80),80))), 'hitVideoAudioEnabled':bool(item.get('hitVideoAudioEnabled',True)), 'hitVideoVolume':max(0,min(100,safe_int(item.get('hitVideoVolume',75),75))),
+            'missAnimationUrl':str(item.get('missAnimationUrl') or '')[:2000], 'missAnimationName':str(item.get('missAnimationName') or '')[:120],
+            'missAudioUrl':str(item.get('missAudioUrl') or '')[:2000], 'missAudioName':str(item.get('missAudioName') or '')[:120],
+            'missSeconds':max(1,min(30,safe_int(item.get('missSeconds',2),2))), 'missAudioVolume':max(0,min(100,safe_int(item.get('missAudioVolume',80),80))), 'missVideoAudioEnabled':bool(item.get('missVideoAudioEnabled',True)), 'missVideoVolume':max(0,min(100,safe_int(item.get('missVideoVolume',75),75))),
             'continueEffectEnabled':bool(item.get('continueEffectEnabled',False)),
             'continueAnimationUrl':str(item.get('continueAnimationUrl') or '')[:2000], 'continueAnimationName':str(item.get('continueAnimationName') or '')[:120],
             'continueAudioUrl':str(item.get('continueAudioUrl') or '')[:2000], 'continueAudioName':str(item.get('continueAudioName') or '')[:120],
@@ -1843,7 +1852,7 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
+                stage_prefixes = {'start':'gacha_start_audio_','hit':'gacha_hit_audio_','miss':'gacha_miss_audio_','upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
                 prefix = stage_prefixes.get(stage, 'gacha_audio_')
                 filename = (prefix + safe_id if safe_id else prefix.rstrip('_')) + '.' + ext
                 (ROOT / filename).write_bytes(raw)
@@ -1855,8 +1864,8 @@ class Handler(SimpleHTTPRequestHandler):
                     alert_index = int(alert_match.group(1)) - 1
                     while len(pattern.setdefault('preAlerts', [])) < 3: pattern['preAlerts'].append({})
                     target = pattern['preAlerts'][alert_index]
-                url_key = 'audioUrl' if alert_match and pattern is not None else {'upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
-                name_key = 'audioName' if alert_match and pattern is not None else {'upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
+                url_key = 'audioUrl' if alert_match and pattern is not None else {'start':'startAudioUrl','hit':'hitAudioUrl','miss':'missAudioUrl','upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
+                name_key = 'audioName' if alert_match and pattern is not None else {'start':'startAudioName','hit':'hitAudioName','miss':'missAudioName','upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
                 target[url_key] = '/' + filename + '?v=' + str(safe_int(time.time() * 1000))
                 target[name_key] = Path(str(data.get('name') or filename)).name[:120]
                 write_state(state)
@@ -1901,11 +1910,11 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'upperEntry':'gacha_upper_entry_animation_','upperAT':'gacha_upper_animation_','normalContinue':'gacha_continue_animation_','upperContinue':'gacha_upper_continue_animation_','preAlert':'gacha_prealert_animation_','preAlert1':'gacha_prealert1_animation_','preAlert2':'gacha_prealert2_animation_','preAlert3':'gacha_prealert3_animation_'}
+                stage_prefixes = {'start':'gacha_start_animation_','hit':'gacha_hit_animation_','miss':'gacha_miss_animation_','upperEntry':'gacha_upper_entry_animation_','upperAT':'gacha_upper_animation_','normalContinue':'gacha_continue_animation_','upperContinue':'gacha_upper_continue_animation_','preAlert':'gacha_prealert_animation_','preAlert1':'gacha_prealert1_animation_','preAlert2':'gacha_prealert2_animation_','preAlert3':'gacha_prealert3_animation_'}
                 prefix = stage_prefixes.get(stage, 'gacha_animation_')
                 filename=(prefix + safe_id if safe_id else prefix.rstrip('_'))+'.'+ext
                 (ROOT/filename).write_bytes(raw)
-                state=read_state();pattern=next((item for item in state['gacha']['patterns'] if item['id']==pattern_id),None) if pattern_id else None;target=pattern if pattern is not None else state['gacha'];url_key={'upperEntry':'upperEntryAnimationUrl','upperAT':'upperAtAnimationUrl','normalContinue':'continueAnimationUrl','upperContinue':'upperContinueAnimationUrl','preAlert':'preAlertAnimationUrl'}.get(stage,'animationUrl');name_key={'upperEntry':'upperEntryAnimationName','upperAT':'upperAtAnimationName','normalContinue':'continueAnimationName','upperContinue':'upperContinueAnimationName','preAlert':'preAlertAnimationName'}.get(stage,'animationName')
+                state=read_state();pattern=next((item for item in state['gacha']['patterns'] if item['id']==pattern_id),None) if pattern_id else None;target=pattern if pattern is not None else state['gacha'];url_key={'start':'startAnimationUrl','hit':'hitAnimationUrl','miss':'missAnimationUrl','upperEntry':'upperEntryAnimationUrl','upperAT':'upperAtAnimationUrl','normalContinue':'continueAnimationUrl','upperContinue':'upperContinueAnimationUrl','preAlert':'preAlertAnimationUrl'}.get(stage,'animationUrl');name_key={'start':'startAnimationName','hit':'hitAnimationName','miss':'missAnimationName','upperEntry':'upperEntryAnimationName','upperAT':'upperAtAnimationName','normalContinue':'continueAnimationName','upperContinue':'upperContinueAnimationName','preAlert':'preAlertAnimationName'}.get(stage,'animationName')
                 alert_match=re.fullmatch(r'preAlert([123])',stage)
                 if alert_match and pattern is not None:
                     alert_index=int(alert_match.group(1))-1
