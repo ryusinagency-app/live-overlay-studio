@@ -37,8 +37,10 @@ if errorlevel 1 (
   --add-data "overlay_comp.html;." ^
   --add-data "overlay_counters.html;." ^
   --add-data "overlay_gacha.html;." ^
+  --add-data "overlay_other_gacha.html;." ^
   --add-data "overlay_gacha_history.html;." ^
   --add-data "overlay_gift_history.html;." ^
+  --add-data "overlay_gift_media.html;." ^
   --add-data "overlay_missions.html;." ^
   --add-data "overlay_smoking.html;." ^
   --add-data "overlay_smoking_gacha.html;." ^

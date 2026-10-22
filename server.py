@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.28'
+APP_VERSION = '0.65.58'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -35,7 +35,7 @@ def prepare_app_root():
         if not source_state.exists() and installed_state.exists():
             try:
                 shutil.copy2(installed_state, source_state)
-                media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'win_counter_image.')
+                media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
                 for item in installed_root.iterdir():
                     if item.is_file() and item.name.startswith(media_prefixes):
                         shutil.copy2(item, source_root / item.name)
@@ -47,9 +47,9 @@ def prepare_app_root():
     app_root.mkdir(parents=True, exist_ok=True)
     assets = [
         'control.html', 'overlay.html', 'overlay_comp.html',
-        'overlay_counters.html', 'overlay_gacha.html',
+        'overlay_counters.html', 'overlay_gacha.html', 'overlay_other_gacha.html',
         'overlay_gacha_history.html', 'overlay_gift_history.html',
-        'overlay_missions.html', 'overlay_smoking.html',
+        'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
         'overlay_smoking_gacha.html', 'overlay_timer.html',
         'overlay_win.html', 'README.txt', 'update_config.json', 'app_icon.ico'
     ]
@@ -65,7 +65,7 @@ def prepare_app_root():
     old_state = executable_root / 'state.json'
     if not (app_root / 'state.json').exists() and old_state.exists():
         shutil.copy2(old_state, app_root / 'state.json')
-        media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'win_counter_image.')
+        media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
         for item in executable_root.iterdir():
             if item.is_file() and item.name.startswith(media_prefixes):
                 shutil.copy2(item, app_root / item.name)
@@ -155,6 +155,8 @@ DEFAULT = {
     'minecraftBridge': {'enabled': False, 'logPath': '', 'marker': 'bedrock_win'},
     'gtaBridge': {'enabled': False, 'logPath': '', 'marker': 'Sent WebSocket message: {"type":"win"', 'winAmount': 1, 'loseEnabled': True, 'loseMarker': 'Sent WebSocket message: {"type":"lose"', 'loseAmount': 1},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
+    'otherGacha': {'patterns':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'patternId':'','patternName':'','rounds':[],'senderName':'','createdAt':0}},
+    'giftMedia': {'rules':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'ruleId':'','giftName':'','senderName':'','count':1,'imageUrl':'','videoUrl':'','audioUrl':'','audioVolume':75,'videoVolume':75,'width':800,'height':450,'duration':6,'createdAt':0}},
     'smokingTimer': {'endAt': 0, 'remainingSeconds': 0, 'runId': 0, 'audioUrl': '', 'audioName': '', 'volume': 80, 'fontSize': 130, 'titleSize': 56, 'cardBg': '', 'cardBorder': '', 'shortcutAdd5':'', 'shortcutSub5':'', 'shortcutAdd10':'', 'shortcutSub10':'', 'shortcutAdd15':'', 'shortcutSub15':'', 'shortcutAdd30':'', 'shortcutSub30':''},
     'smokingGacha': {'fontFamily':'global', 'patterns': [], 'event': {'id':0,'type':'','active':False,'patternName':'','minutes':0,'senderName':'','choice':'','choiceReady':False,'createdAt':0}, 'queue': [], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'fullscreen-slot', 'spinSeconds':7, 'endSeconds':6, 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'shortcutPlus':'CTRL+ALT+5', 'shortcutMinus':'CTRL+ALT+SHIFT+5'},
 }
@@ -265,9 +267,69 @@ def clean_local_path(value):
 def normalize_state(data):
     data = data if isinstance(data, dict) else {}
     merged = {**copy.deepcopy(DEFAULT), **data}
+    valid_hex = lambda value: str(value or '').lower() if re.fullmatch(r'#[0-9a-fA-F]{6}', str(value or '')) else ''
+    raw_other = merged.get('otherGacha') if isinstance(merged.get('otherGacha'), dict) else {}
+    raw_other_event = raw_other.get('event') if isinstance(raw_other.get('event'), dict) else {}
+    other_patterns=[]
+    for index, item in enumerate(raw_other.get('patterns') or []):
+        if not isinstance(item, dict): continue
+        outcomes=[]
+        for outcome in (item.get('outcomes') or [])[:100]:
+            if not isinstance(outcome, dict): continue
+            label=str(outcome.get('label') or '')[:100]
+            probability=max(0,min(10000,safe_int(outcome.get('probability',0))))
+            if label and probability: outcomes.append({'label':label,'probability':probability})
+        raw_layout=item.get('layout') if isinstance(item.get('layout'),dict) else {}
+        layout={key:max(0,min(100,safe_int(raw_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',17),('senderX',50),('senderY',28),('stateX',50),('stateY',78),('resultX',50),('resultY',53))}
+        raw_scene_layouts=item.get('sceneLayouts') if isinstance(item.get('sceneLayouts'),dict) else {}
+        scene_layouts={}
+        for scene in ('spin','result','continue','end'):
+            source=raw_scene_layouts.get(scene) if isinstance(raw_scene_layouts.get(scene),dict) else {}
+            scene_layouts[scene]={key:max(0,min(100,safe_int(source.get(key,default),default))) for key,default in (('patternX',50),('patternY',17),('senderX',50),('senderY',28),('stateX',50),('stateY',78),('resultX',50),('resultY',53))}
+        raw_styles=item.get('sceneStyles') if isinstance(item.get('sceneStyles'),dict) else {}
+        scene_styles={}
+        for scene in ('spin','result','continue','end'):
+            src=raw_styles.get(scene) if isinstance(raw_styles.get(scene),dict) else {}
+            style={'fontFamily':src.get('fontFamily') if src.get('fontFamily') in ('global','yuGothic','meiryo','gothic','serif','mono') else 'global'}
+            for text_key,default_color,default_size in (('pattern','#ffffff',36),('sender','#ffe9a6',24),('state','#ffe08a',30),('result','#ffffff',100)):
+                item_style=src.get(text_key) if isinstance(src.get(text_key),dict) else {}
+                color=valid_hex(item_style.get('color'))
+                style[text_key]={'visible':item_style.get('visible') is not False,'color':color or default_color,'size':max(14,min(300,safe_int(item_style.get('size',default_size),default_size)))}
+            scene_styles[scene]=style
+        other_patterns.append({'id':str(item.get('id') or f'other-gacha-{index+1}')[:80], 'name':str(item.get('name') or f'その他ガチャ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120], 'mode':'continue' if item.get('mode')=='continue' else 'single', 'continuationRate':max(0,min(100,safe_int(item.get('continuationRate',70)))), 'spinSeconds':max(1,min(30,safe_int(item.get('spinSeconds',5)))), 'outcomes':outcomes, 'effectStyle':str(item.get('effectStyle') or 'slot')[:30], 'resultColor':valid_hex(item.get('resultColor')) or '#ffffff', 'resultSize':max(24,min(300,safe_int(item.get('resultSize',100)))), 'background':valid_hex(item.get('background')) or '#17151c', 'opacity':max(0,min(100,safe_int(item.get('opacity',90)))), 'layout':layout, 'sceneLayouts':scene_layouts, 'sceneStyles':scene_styles, 'animationUrl':str(item.get('animationUrl') or '')[:2000], 'animationName':str(item.get('animationName') or '')[:120], 'audioUrl':str(item.get('audioUrl') or '')[:2000], 'audioName':str(item.get('audioName') or '')[:120], 'audioVolume':max(0,min(100,safe_int(item.get('audioVolume',75)))), 'resultAudioUrl':str(item.get('resultAudioUrl') or '')[:2000], 'resultAudioName':str(item.get('resultAudioName') or '')[:120], 'resultAudioVolume':max(0,min(100,safe_int(item.get('resultAudioVolume',80)))), 'videoAudioEnabled':bool(item.get('videoAudioEnabled',True)), 'videoVolume':max(0,min(100,safe_int(item.get('videoVolume',75))))})
+    other_created=max(0,safe_float(raw_other_event.get('createdAt') or 0))
+    other_active=bool(raw_other_event.get('active',False)) and other_created>=SERVER_STARTED_AT
+    event_layout=raw_other_event.get('layout') if isinstance(raw_other_event.get('layout'),dict) else {}
+    event_layout={key:max(0,min(100,safe_int(event_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',17),('senderX',50),('senderY',28),('stateX',50),('stateY',78),('resultX',50),('resultY',53))}
+    raw_event_scenes=raw_other_event.get('sceneLayouts') if isinstance(raw_other_event.get('sceneLayouts'),dict) else {}
+    event_scene_layouts={}
+    for scene in ('spin','result','continue','end'):
+        source=raw_event_scenes.get(scene) if isinstance(raw_event_scenes.get(scene),dict) else {}
+        event_scene_layouts[scene]={key:max(0,min(100,safe_int(source.get(key,default),default))) for key,default in (('patternX',50),('patternY',17),('senderX',50),('senderY',28),('stateX',50),('stateY',78),('resultX',50),('resultY',53))}
+    raw_event_styles=raw_other_event.get('sceneStyles') if isinstance(raw_other_event.get('sceneStyles'),dict) else {}
+    event_scene_styles={}
+    for scene in ('spin','result','continue','end'):
+        src=raw_event_styles.get(scene) if isinstance(raw_event_styles.get(scene),dict) else {}
+        style={'fontFamily':src.get('fontFamily') if src.get('fontFamily') in ('global','yuGothic','meiryo','gothic','serif','mono') else 'global'}
+        for text_key,default_color,default_size in (('pattern','#ffffff',36),('sender','#ffe9a6',24),('state','#ffe08a',30),('result','#ffffff',100)):
+            item_style=src.get(text_key) if isinstance(src.get(text_key),dict) else {}
+            color=valid_hex(item_style.get('color'))
+            style[text_key]={'visible':item_style.get('visible') is not False,'color':color or default_color,'size':max(14,min(300,safe_int(item_style.get('size',default_size),default_size)))}
+        event_scene_styles[scene]=style
+    merged['otherGacha']={'patterns':other_patterns,'queue':[x for x in (raw_other.get('queue') or []) if isinstance(x,dict)][:100] if other_active else [], 'event':{'id':max(0,safe_int(raw_other_event.get('id') or 0)),'type':'other-gacha' if raw_other_event.get('type')=='other-gacha' else '', 'active':other_active, 'patternId':str(raw_other_event.get('patternId') or '')[:80], 'patternName':str(raw_other_event.get('patternName') or '')[:60], 'rounds':raw_other_event.get('rounds') if isinstance(raw_other_event.get('rounds'),list) else [], 'outcomes':[{'label':str(x.get('label') or '')[:100]} for x in (raw_other_event.get('outcomes') or []) if isinstance(x,dict)][:100], 'spinSeconds':max(1,min(30,safe_int(raw_other_event.get('spinSeconds',5)))), 'effectStyle':str(raw_other_event.get('effectStyle') or 'slot')[:30], 'resultColor':valid_hex(raw_other_event.get('resultColor')) or '#ffffff', 'resultSize':max(24,min(300,safe_int(raw_other_event.get('resultSize',100)))), 'background':valid_hex(raw_other_event.get('background')) or '#17151c', 'opacity':max(0,min(100,safe_int(raw_other_event.get('opacity',90)))), 'layout':event_layout, 'sceneLayouts':event_scene_layouts, 'sceneStyles':event_scene_styles, 'animationUrl':str(raw_other_event.get('animationUrl') or '')[:2000], 'audioUrl':str(raw_other_event.get('audioUrl') or '')[:2000], 'audioVolume':max(0,min(100,safe_int(raw_other_event.get('audioVolume',75)))), 'resultAudioUrl':str(raw_other_event.get('resultAudioUrl') or '')[:2000], 'resultAudioVolume':max(0,min(100,safe_int(raw_other_event.get('resultAudioVolume',80)))), 'videoAudioEnabled':bool(raw_other_event.get('videoAudioEnabled',True)), 'videoVolume':max(0,min(100,safe_int(raw_other_event.get('videoVolume',75)))), 'senderName':str(raw_other_event.get('senderName') or '')[:80], 'createdAt':other_created}}
+    raw_gift_media=merged.get('giftMedia') if isinstance(merged.get('giftMedia'),dict) else {}
+    raw_gm_event=raw_gift_media.get('event') if isinstance(raw_gift_media.get('event'),dict) else {}
+    gm_rules=[]
+    for index,item in enumerate(raw_gift_media.get('rules') or []):
+        if not isinstance(item,dict): continue
+        rid=str(item.get('id') or f'gift-media-{index+1}')[:80]
+        gm_rules.append({'id':rid,'name':str(item.get('name') or f'ギフト演出{index+1}')[:60],'enabled':item.get('enabled',True) is not False,'giftName':str(item.get('giftName') or '').strip()[:120], 'imageUrl':str(item.get('imageUrl') or '')[:2000], 'imageName':str(item.get('imageName') or '')[:120], 'videoUrl':str(item.get('videoUrl') or '')[:2000], 'videoName':str(item.get('videoName') or '')[:120], 'audioUrl':str(item.get('audioUrl') or '')[:2000], 'audioName':str(item.get('audioName') or '')[:120], 'audioVolume':max(0,min(100,safe_int(item.get('audioVolume',75)))), 'videoVolume':max(0,min(100,safe_int(item.get('videoVolume',75)))), 'width':max(80,min(3840,safe_int(item.get('width',800)))), 'height':max(60,min(2160,safe_int(item.get('height',450)))), 'duration':max(0,min(600,safe_int(item.get('duration',6))))})
+    gm_created=max(0,safe_float(raw_gm_event.get('createdAt') or 0))
+    gm_active=bool(raw_gm_event.get('active',False)) and gm_created>=SERVER_STARTED_AT
+    gm_event={'id':max(0,safe_int(raw_gm_event.get('id') or 0)),'type':'gift-media' if raw_gm_event.get('type')=='gift-media' else '', 'active':gm_active,'ruleId':str(raw_gm_event.get('ruleId') or '')[:80], 'ruleName':str(raw_gm_event.get('ruleName') or '')[:60], 'giftName':str(raw_gm_event.get('giftName') or '')[:120], 'senderName':str(raw_gm_event.get('senderName') or '')[:80], 'count':max(1,min(1000000,safe_int(raw_gm_event.get('count',1)))), 'imageUrl':str(raw_gm_event.get('imageUrl') or '')[:2000], 'videoUrl':str(raw_gm_event.get('videoUrl') or '')[:2000], 'audioUrl':str(raw_gm_event.get('audioUrl') or '')[:2000], 'audioVolume':max(0,min(100,safe_int(raw_gm_event.get('audioVolume',75)))), 'videoVolume':max(0,min(100,safe_int(raw_gm_event.get('videoVolume',75)))), 'width':max(80,min(3840,safe_int(raw_gm_event.get('width',800)))), 'height':max(60,min(2160,safe_int(raw_gm_event.get('height',450)))), 'duration':max(0,min(600,safe_int(raw_gm_event.get('duration',6)))), 'createdAt':gm_created}
+    merged['giftMedia']={'rules':gm_rules,'queue':[x for x in (raw_gift_media.get('queue') or []) if isinstance(x,dict)][:100] if gm_active else [],'event':gm_event}
     changed = False
     raw_card_defaults = merged.get('cardDefaults') if isinstance(merged.get('cardDefaults'), dict) else {}
-    valid_hex = lambda value: str(value or '').lower() if re.fullmatch(r'#[0-9a-fA-F]{6}', str(value or '')) else ''
     merged['cardDefaults'] = {'background': valid_hex(raw_card_defaults.get('background')), 'border': valid_hex(raw_card_defaults.get('border'))}
     merged['compCardBg'] = valid_hex(merged.get('compCardBg'))
     merged['compCardBorder'] = valid_hex(merged.get('compCardBorder'))
@@ -503,6 +565,50 @@ def normalize_state(data):
             if isinstance(outcome,dict):
                 outcomes.append({'value':max(-9999,min(9999,safe_int(outcome.get('value') or 0))),'probability':max(0,min(100000,safe_int(outcome.get('probability') or 0)))})
         pattern_opacity=safe_int(item.get('cardOpacity',raw_gacha.get('cardOpacity',94)))
+        raw_element_layout=item.get('elementLayout') if isinstance(item.get('elementLayout'),dict) else {}
+        element_layout={key:max(0,min(100,safe_int(raw_element_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',8),('senderX',50),('senderY',18),('resultX',50),('resultY',50),('stateX',50),('stateY',75),('totalX',50),('totalY',88))} if raw_element_layout else {}
+        preview_scenes=('start','normal-spin','preAlert1','preAlert2','preAlert3','result','continue','upper-entry','upper-spin','upper-continue','end')
+        preview_text_fields=('fontFamily','patternTextColor','patternTextSize','showPatternText','senderTextColor','senderTextSize','showSenderText','resultTextColor','resultTextSize','showResultText','stateTextColor','stateTextSize','showStateText','roundTotalTextColor','roundTotalTextSize','showTotalText','startTextColor','startTextSize','finalTotalTextColor','finalTotalTextSize','showChoiceText','choiceTextColor','choiceTextSize')
+        preview_color_fields={'patternTextColor','senderTextColor','resultTextColor','stateTextColor','roundTotalTextColor','startTextColor','finalTotalTextColor','choiceTextColor'}
+        preview_size_fields={'patternTextSize','senderTextSize','resultTextSize','stateTextSize','roundTotalTextSize','startTextSize','finalTotalTextSize','choiceTextSize'}
+        raw_preview_styles=item.get('previewSceneStyles') if isinstance(item.get('previewSceneStyles'),dict) else {}
+        preview_scene_styles={}
+        for scene in preview_scenes:
+            raw_style=raw_preview_styles.get(scene) if isinstance(raw_preview_styles.get(scene),dict) else {}
+            clean_style={}
+            for key in preview_text_fields:
+                if key=='fontFamily':
+                    if raw_style.get(key) in ('global','system','yuGothic','meiryo','gothic','serif','mono'): clean_style[key]=raw_style[key]
+                elif key in preview_color_fields:
+                    color=valid_hex(raw_style.get(key))
+                    if color: clean_style[key]=color
+                elif key in preview_size_fields:
+                    if key in raw_style: clean_style[key]=max(14,min(400,safe_int(raw_style.get(key),40)))
+                elif key in raw_style:
+                    clean_style[key]=raw_style.get(key) is not False
+            preview_scene_styles[scene]=clean_style
+        raw_preview_positions=item.get('previewScenePositions') if isinstance(item.get('previewScenePositions'),dict) else {}
+        preview_scene_positions={}
+        for scene in preview_scenes:
+            raw_positions=raw_preview_positions.get(scene) if isinstance(raw_preview_positions.get(scene),dict) else {}
+            clean_positions={}
+            for key in ('pattern','sender','result','state','total'):
+                point=raw_positions.get(key) if isinstance(raw_positions.get(key),dict) else None
+                if point is not None:
+                    clean_positions[key]={'x':max(0,min(100,safe_float(point.get('x',50),50))),'y':max(0,min(100,safe_float(point.get('y',50),50)))}
+            preview_scene_positions[scene]=clean_positions
+        raw_legacy_positions=item.get('previewPositions') if isinstance(item.get('previewPositions'),dict) else {}
+        preview_positions={}
+        for key in ('pattern','sender','result','state','total'):
+            point=raw_legacy_positions.get(key) if isinstance(raw_legacy_positions.get(key),dict) else None
+            if point is not None: preview_positions[key]={'x':max(0,min(100,safe_float(point.get('x',50),50))),'y':max(0,min(100,safe_float(point.get('y',50),50)))}
+        raw_alerts=item.get('preAlerts') if isinstance(item.get('preAlerts'),list) else []
+        if not raw_alerts:
+            raw_alerts=[{'enabled':item.get('preAlertEnabled',False),'onContinue':item.get('preAlertOnContinue',False),'onUpper':item.get('preAlertOnUpper',False),'minWin':item.get('preAlertMinWin',0),'timing':item.get('preAlertTiming','before-result'),'text':item.get('preAlertText','チャンス！'),'seconds':item.get('preAlertSeconds',1.2),'color':item.get('preAlertColor','#ffe05b'),'volume':item.get('preAlertVolume',75),'animationUrl':item.get('preAlertAnimationUrl',''),'animationName':item.get('preAlertAnimationName',''),'videoVolume':item.get('preAlertVideoVolume',75),'showText':True,'textSize':56}]
+        pre_alerts=[]
+        for alert_index in range(3):
+            alert=raw_alerts[alert_index] if alert_index<len(raw_alerts) and isinstance(raw_alerts[alert_index],dict) else {}
+            pre_alerts.append({'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('result-only','spin-start','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
         patterns.append({
             'id':str(item.get('id') or f'gacha-pattern-{index+1}'), 'name':str(item.get('name') or f'パターン{index+1}')[:60], 'giftName':str(item.get('giftName') or '').strip(),
             'minWin':min(low,high), 'maxWin':max(low,high), 'outcomeMode':'weighted' if item.get('outcomeMode')=='weighted' else 'range', 'outcomes':outcomes,
@@ -547,6 +653,8 @@ def normalize_state(data):
             'showResultText':item.get('showResultText',True) is not False, 'showStateText':item.get('showStateText',True) is not False,
             'showTotalText':item.get('showTotalText',True) is not False, 'showChoiceText':item.get('showChoiceText',True) is not False,
             'effectStyle':item.get('effectStyle',raw_gacha.get('effectStyle','card')) if item.get('effectStyle',raw_gacha.get('effectStyle','card')) in ('card','fullscreen-slot') else 'card',
+            'elementLayout':element_layout, 'previewSceneStyles':preview_scene_styles, 'previewScenePositions':preview_scene_positions, 'previewPositions':preview_positions,
+            'preAlerts':pre_alerts, 'preAlertEnabled':bool(item.get('preAlertEnabled',False)), 'preAlertOnContinue':bool(item.get('preAlertOnContinue',False)), 'preAlertOnUpper':bool(item.get('preAlertOnUpper',False)), 'preAlertMinWin':max(0,min(999999,safe_int(item.get('preAlertMinWin',0)))), 'preAlertTiming':item.get('preAlertTiming') if item.get('preAlertTiming') in ('result-only','spin-start','before-result') else 'before-result', 'preAlertText':str(item.get('preAlertText') or 'チャンス！')[:80], 'preAlertSeconds':max(0.2,min(5,safe_float(item.get('preAlertSeconds',1.2),1.2))), 'preAlertColor':valid_hex(item.get('preAlertColor')) or '#ffe05b', 'preAlertVolume':max(0,min(100,safe_int(item.get('preAlertVolume',75)))), 'preAlertAnimationUrl':str(item.get('preAlertAnimationUrl') or '')[:2000], 'preAlertAnimationName':str(item.get('preAlertAnimationName') or '')[:120], 'preAlertVideoVolume':max(0,min(100,safe_int(item.get('preAlertVideoVolume',75)))),
             'spinSeconds':max(3,min(30,safe_int(item.get('spinSeconds',raw_gacha.get('spinSeconds',5))))),
             'soundVolume':max(0,min(100,safe_int(item.get('soundVolume',raw_gacha.get('soundVolume',65))))),
             'slotNumberSize':max(40,min(400,safe_int(item.get('slotNumberSize',raw_gacha.get('slotNumberSize',130))))),
@@ -611,7 +719,7 @@ def normalize_state(data):
         'historyCardOpacity':max(0,min(100,safe_int(raw_gacha.get('historyCardOpacity',93),93))),
         'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:20],
         'queue':([x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100] if event_active else []),
-        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
+        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
@@ -712,6 +820,8 @@ def normalize_state(data):
     if merged.get('smokingTimer') != data.get('smokingTimer', DEFAULT['smokingTimer']):
         changed = True
     if merged.get('gacha') != data.get('gacha', DEFAULT['gacha']):
+        changed = True
+    if merged.get('otherGacha') != data.get('otherGacha', DEFAULT['otherGacha']):
         changed = True
     if merged.get('smokingGacha') != data.get('smokingGacha', DEFAULT['smokingGacha']):
         changed = True
@@ -835,7 +945,54 @@ def normalize_gift_name(value):
     value = unicodedata.normalize('NFKC', str(value or '')).casefold()
     return ''.join(value.split())
 
-def run_gacha_draw(data, pattern, gift_name='テスト', sender_name=''):
+def run_other_gacha_draw(data, pattern, sender_name='テスト'):
+    other=data['otherGacha']; rounds=[]
+    outcomes=pattern.get('outcomes') or []
+    if not outcomes: return False
+    for _ in range(50):
+        outcome=random.choices(outcomes,weights=[max(1,int(x.get('probability') or 1)) for x in outcomes],k=1)[0]
+        continued=pattern.get('mode')=='continue' and random.random()*100 < max(0,min(100,int(pattern.get('continuationRate',70))))
+        rounds.append({'label':str(outcome.get('label') or '')[:100], 'continued':continued})
+        if not continued: break
+    used=[int(other.get('event',{}).get('id') or 0)]+[int(x.get('id') or 0) for x in other.get('queue',[]) if isinstance(x,dict)]
+    event={'id':max(used,default=0)+1,'type':'other-gacha','active':False,'patternId':pattern['id'],'patternName':pattern['name'],'rounds':rounds,'outcomes':[{'label':x['label']} for x in outcomes],'spinSeconds':pattern.get('spinSeconds',5),'effectStyle':pattern.get('effectStyle','slot'),'resultColor':pattern.get('resultColor','#fff'),'resultSize':pattern.get('resultSize',100),'background':pattern.get('background','#17151c'),'opacity':pattern.get('opacity',90),'layout':copy.deepcopy(pattern.get('layout',{})),'sceneLayouts':copy.deepcopy(pattern.get('sceneLayouts',{})),'sceneStyles':copy.deepcopy(pattern.get('sceneStyles',{})),'animationUrl':pattern.get('animationUrl',''),'audioUrl':pattern.get('audioUrl',''),'audioVolume':pattern.get('audioVolume',75),'resultAudioUrl':pattern.get('resultAudioUrl',''),'resultAudioVolume':pattern.get('resultAudioVolume',80),'videoAudioEnabled':pattern.get('videoAudioEnabled',True),'videoVolume':pattern.get('videoVolume',75),'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    if other.get('event',{}).get('active'): other.setdefault('queue',[]).append(event)
+    else: event['active']=True;other['event']=event
+    return True
+
+def complete_other_gacha_event(event_id):
+    with STATE_LOCK:
+        try: data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception: data=copy.deepcopy(DEFAULT)
+        data,_=normalize_state(data);other=data['otherGacha'];event=other['event']
+        if int(event.get('id') or 0)!=event_id or not event.get('active'): return False
+        event['active']=False;queue=other.setdefault('queue',[])
+        if queue:
+            next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time();other['event']=next_event
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        return True
+
+def queue_gift_media_event(data, rule, gift_name, sender_name='', count=1):
+    media=data['giftMedia']; current=media.get('event') or {}; queued=media.setdefault('queue',[])
+    used=[safe_int(current.get('id') or 0)]+[safe_int(x.get('id') or 0) for x in queued if isinstance(x,dict)]
+    event={'id':max(used,default=0)+1,'type':'gift-media','active':False,'ruleId':rule['id'],'ruleName':rule.get('name','ギフト演出'),'giftName':str(gift_name or rule.get('giftName') or '')[:120],'senderName':str(sender_name or '')[:80],'count':max(1,safe_int(count,1)),'imageUrl':rule.get('imageUrl',''),'videoUrl':rule.get('videoUrl',''),'audioUrl':rule.get('audioUrl',''),'audioVolume':rule.get('audioVolume',75),'videoVolume':rule.get('videoVolume',75),'width':rule.get('width',800),'height':rule.get('height',450),'duration':rule.get('duration',6),'createdAt':time.time()}
+    if current.get('active'): queued.append(event)
+    else: event['active']=True;media['event']=event
+    return True
+
+def complete_gift_media_event(event_id):
+    with STATE_LOCK:
+        try: data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception: data=copy.deepcopy(DEFAULT)
+        data,_=normalize_state(data);media=data['giftMedia'];event=media['event']
+        if safe_int(event.get('id') or 0)!=event_id or not event.get('active'): return False
+        event['active']=False;pending=media.setdefault('queue',[])
+        if pending:
+            next_event=pending.pop(0);next_event['active']=True;next_event['createdAt']=time.time();media['event']=next_event
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        return True
+
+def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test=False):
     gacha=data['gacha']; win=data['winCounter']; rounds=[]; total=win['currentWin']
     mode=pattern.get('mode',gacha['mode']); rate=max(0,min(100,int(pattern.get('continuationRate',gacha['continuationRate']))))
     low,high=pattern['minWin'],pattern['maxWin']; sign=pattern.get('winSign','both')
@@ -861,7 +1018,7 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name=''):
         if not keep_going: break
         if enter_upper: phase='upper'
     used_ids=[int(gacha.get('event',{}).get('id') or 0)]+[int(x.get('id') or 0) for x in gacha.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
     if gacha.get('event',{}).get('active'):
         gacha.setdefault('queue',[]).append(event)
     else:
@@ -1031,6 +1188,8 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         gacha=data['gacha']; win=data['winCounter']
         pattern=next((p for p in gacha['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
+        other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
+        media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and normalize_gift_name(r['giftName'])==name and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
         gift_rule=next((x for x in win['giftRules'] if x['giftName'] and normalize_gift_name(x['giftName'])==name),None)
         # WIN adjustment gifts only change the counter, even if the same gift
         # name was also entered as a gacha trigger.
@@ -1041,6 +1200,12 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             matched=True
         if smoke_pattern:
             run_smoking_gacha_draw(data,smoke_pattern,sender_name)
+            matched=True
+        if other_pattern:
+            run_other_gacha_draw(data,other_pattern,sender_name)
+            matched=True
+        if media_rule:
+            queue_gift_media_event(data,media_rule,gift_name,sender_name,count)
             matched=True
         if gift_rule:
             delta=gift_rule['delta']*count
@@ -1547,7 +1712,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -1600,6 +1765,14 @@ class Handler(SimpleHTTPRequestHandler):
                         # A stale control-page save must not erase history that
                         # the overlay appended after the page's last refresh.
                         data['gacha']['history']=copy.deepcopy(live_gacha.get('history',[]))
+                    if isinstance(data.get('otherGacha'),dict):
+                        live_other=current.get('otherGacha',{})
+                        data['otherGacha']['event']=copy.deepcopy(live_other.get('event',{}))
+                        data['otherGacha']['queue']=copy.deepcopy(live_other.get('queue',[]))
+                    if isinstance(data.get('giftMedia'),dict):
+                        live_media=current.get('giftMedia',{})
+                        data['giftMedia']['event']=copy.deepcopy(live_media.get('event',{}))
+                        data['giftMedia']['queue']=copy.deepcopy(live_media.get('queue',[]))
                     if isinstance(data.get('smokingGacha'),dict):
                         data['smokingGacha']['event']=current.get('smokingGacha',{}).get('event',{})
                         data['smokingGacha']['queue']=current.get('smokingGacha',{}).get('queue',[])
@@ -1670,15 +1843,20 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_'}
+                stage_prefixes = {'upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
                 prefix = stage_prefixes.get(stage, 'gacha_audio_')
                 filename = (prefix + safe_id if safe_id else prefix.rstrip('_')) + '.' + ext
                 (ROOT / filename).write_bytes(raw)
                 state = read_state()
                 pattern = next((item for item in state['gacha']['patterns'] if item['id'] == pattern_id), None) if pattern_id else None
                 target = pattern if pattern is not None else state['gacha']
-                url_key = {'upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
-                name_key = {'upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
+                alert_match = re.fullmatch(r'preAlert([123])', stage)
+                if alert_match and pattern is not None:
+                    alert_index = int(alert_match.group(1)) - 1
+                    while len(pattern.setdefault('preAlerts', [])) < 3: pattern['preAlerts'].append({})
+                    target = pattern['preAlerts'][alert_index]
+                url_key = 'audioUrl' if alert_match and pattern is not None else {'upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
+                name_key = 'audioName' if alert_match and pattern is not None else {'upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
                 target[url_key] = '/' + filename + '?v=' + str(safe_int(time.time() * 1000))
                 target[name_key] = Path(str(data.get('name') or filename)).name[:120]
                 write_state(state)
@@ -1723,11 +1901,17 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'upperEntry':'gacha_upper_entry_animation_','upperAT':'gacha_upper_animation_','normalContinue':'gacha_continue_animation_','upperContinue':'gacha_upper_continue_animation_'}
+                stage_prefixes = {'upperEntry':'gacha_upper_entry_animation_','upperAT':'gacha_upper_animation_','normalContinue':'gacha_continue_animation_','upperContinue':'gacha_upper_continue_animation_','preAlert':'gacha_prealert_animation_','preAlert1':'gacha_prealert1_animation_','preAlert2':'gacha_prealert2_animation_','preAlert3':'gacha_prealert3_animation_'}
                 prefix = stage_prefixes.get(stage, 'gacha_animation_')
                 filename=(prefix + safe_id if safe_id else prefix.rstrip('_'))+'.'+ext
                 (ROOT/filename).write_bytes(raw)
-                state=read_state();pattern=next((item for item in state['gacha']['patterns'] if item['id']==pattern_id),None) if pattern_id else None;target=pattern if pattern is not None else state['gacha'];url_key={'upperEntry':'upperEntryAnimationUrl','upperAT':'upperAtAnimationUrl','normalContinue':'continueAnimationUrl','upperContinue':'upperContinueAnimationUrl'}.get(stage,'animationUrl');name_key={'upperEntry':'upperEntryAnimationName','upperAT':'upperAtAnimationName','normalContinue':'continueAnimationName','upperContinue':'upperContinueAnimationName'}.get(stage,'animationName');target[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));target[name_key]=Path(str(data.get('name') or filename)).name[:120];write_state(state)
+                state=read_state();pattern=next((item for item in state['gacha']['patterns'] if item['id']==pattern_id),None) if pattern_id else None;target=pattern if pattern is not None else state['gacha'];url_key={'upperEntry':'upperEntryAnimationUrl','upperAT':'upperAtAnimationUrl','normalContinue':'continueAnimationUrl','upperContinue':'upperContinueAnimationUrl','preAlert':'preAlertAnimationUrl'}.get(stage,'animationUrl');name_key={'upperEntry':'upperEntryAnimationName','upperAT':'upperAtAnimationName','normalContinue':'continueAnimationName','upperContinue':'upperContinueAnimationName','preAlert':'preAlertAnimationName'}.get(stage,'animationName')
+                alert_match=re.fullmatch(r'preAlert([123])',stage)
+                if alert_match and pattern is not None:
+                    alert_index=int(alert_match.group(1))-1
+                    while len(pattern.setdefault('preAlerts',[]))<3: pattern['preAlerts'].append({})
+                    alert=pattern['preAlerts'][alert_index];url_key='animationUrl';name_key='animationName';target=alert
+                target[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));target[name_key]=Path(str(data.get('name') or filename)).name[:120];write_state(state)
                 result={'ok':True,'gacha':read_state()['gacha']}
             elif self.path == '/api/gacha/test':
                 if self.client_address[0] not in ('127.0.0.1', '::1'):
@@ -1735,8 +1919,72 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['gacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern:
                     raise ValueError('テストするパターンを選べません')
-                run_gacha_draw(state,pattern,'テスト','テスト')
+                was_active=bool(state['gacha'].get('event',{}).get('active'))
+                run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
+                queued=len(state['gacha'].get('queue',[])) if was_active else 0
+                write_state(state);result={'ok':True,'queued':was_active,'queuePosition':queued}
+            elif self.path == '/api/gift-media/upload':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
+                if not rule: raise ValueError('保存先のギフトパターンが見つかりません')
+                kind=str(data.get('kind') or '')
+                if kind in ('image','video'):
+                    match=re.fullmatch(r'data:(image/(gif|png|jpeg|webp)|video/(mp4|webm));base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('GIF、PNG、JPG、WebP、MP4、WebM形式にしてください')
+                    mime=match.group(1)
+                    if (kind=='image' and not mime.startswith('image/')) or (kind=='video' and not mime.startswith('video/')): raise ValueError('選んだ素材の種類が設定欄と異なります')
+                    raw=base64.b64decode(match.group(4),validate=True)
+                    if not raw or len(raw)>30*1024*1024: raise ValueError('画像・動画は30MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(2) or match.group(3),match.group(2) or match.group(3))
+                elif kind=='audio':
+                    match=re.fullmatch(r'data:audio/(wav|x-wav|mpeg|mp3|ogg|mp4|m4a|aac|webm);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('MP3、WAV、OGG、M4A、AAC、WebM形式の音源を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('音源は15MB以下にしてください')
+                    ext={'mpeg':'mp3','mp4':'m4a','m4a':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1))
+                else: raise ValueError('素材の種類を確認してください')
+                safe_id=re.sub(r'[^A-Za-z0-9_-]','_',rule['id'])[:80];filename=f'gift_media_{safe_id}_{kind}.{ext}';(ROOT/filename).write_bytes(raw)
+                rule[kind+'Url']='/'+filename+'?v='+str(safe_int(time.time()*1000));rule[kind+'Name']=Path(str(data.get('name') or filename)).name[:120]
+                write_state(state);result={'ok':True,'giftMedia':read_state()['giftMedia']}
+            elif self.path == '/api/gift-media/test':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
+                if not rule: raise ValueError('テストするギフトパターンを選べません')
+                if not rule.get('enabled',True): raise ValueError('停止中のパターンはテストできません。再開してください')
+                if not (rule.get('imageUrl') or rule.get('videoUrl') or rule.get('audioUrl')): raise ValueError('先に画像・動画・音源のいずれかを登録してください')
+                queue_gift_media_event(state,rule,rule.get('giftName') or 'テストギフト','テスト',1);write_state(state);result={'ok':True}
+            elif self.path == '/api/gift-media/complete':
+                result={'ok':complete_gift_media_event(safe_int(data.get('eventId') or 0))}
+            elif self.path == '/api/other-gacha/test':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['otherGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('テストするその他ガチャを選べません')
+                if not pattern['enabled']: raise ValueError('停止中のパターンはテストできません。再開してからお試しください')
+                if not run_other_gacha_draw(state,pattern,'テスト'): raise ValueError('結果を1件以上登録してください')
                 write_state(state);result={'ok':True}
+            elif self.path == '/api/other-gacha-media':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['otherGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('保存先のその他ガチャパターンが見つかりません')
+                kind=str(data.get('type') or '')
+                if kind=='animation':
+                    match=re.fullmatch(r'data:(image/(gif|png|jpeg|webp)|video/(mp4|webm));base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('GIF、PNG、JPG、WebP、MP4、WebM形式にしてください')
+                    raw=base64.b64decode(match.group(4),validate=True)
+                    if not raw or len(raw)>30*1024*1024: raise ValueError('演出素材は30MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(2) or match.group(3),match.group(2) or match.group(3))
+                elif kind in ('audio','resultAudio'):
+                    match=re.fullmatch(r'data:audio/(wav|x-wav|mpeg|mp3|ogg|mp4|m4a|aac|webm);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('対応する音源形式を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('音源は15MB以下にしてください')
+                    ext={'mpeg':'mp3','mp4':'m4a','m4a':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1))
+                else: raise ValueError('素材の種類を確認してください')
+                safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:80];filename=f'other_gacha_{kind}_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw)
+                pattern[kind+'Url']='/'+filename+'?v='+str(safe_int(time.time()*1000));pattern[kind+'Name']=Path(str(data.get('name') or filename)).name[:120]
+                write_state(state);result={'ok':True,'otherGacha':read_state()['otherGacha']}
+            elif self.path == '/api/other-gacha/complete':
+                result={'ok':complete_other_gacha_event(int(data.get('eventId') or 0))}
             elif self.path in ('/api/smoking-gacha-animation','/api/smoking-gacha-audio','/api/smoking-gacha-result-audio'):
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();sg=state['smokingGacha'];pattern_id=str(data.get('patternId') or '')
@@ -1805,7 +2053,7 @@ def run_desktop_app(server):
     import tkinter as tk
     from tkinter import messagebox
 
-    control_url = 'http://127.0.0.1:8765/control.html'
+    control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
     overlay_url = 'http://127.0.0.1:8765/overlay.html?build=664'
     window = tk.Tk()
     window.title('Live Overlay Studio')
@@ -2012,14 +2260,14 @@ def main():
         server = LocalThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     except OSError:
         # A second launch should focus the already running app instead of failing.
-        webbrowser.open('http://127.0.0.1:8765/control.html')
+        webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')
         return
     if FROZEN_APP and os.name == 'nt':
         run_desktop_app(server)
         return
     if os.name == 'nt':
-        threading.Timer(1.5, lambda: webbrowser.open('http://127.0.0.1:8765/control.html')).start()
-    print('Live Overlay Studio running: http://127.0.0.1:8765/control.html')
+        threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
+    print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
     print('Overlay source: http://127.0.0.1:8765/overlay.html')
     server.serve_forever()
 
