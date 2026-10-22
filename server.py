@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.73'
+APP_VERSION = '0.65.75'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -608,7 +608,7 @@ def normalize_state(data):
         pre_alerts=[]
         for alert_index in range(3):
             alert=raw_alerts[alert_index] if alert_index<len(raw_alerts) and isinstance(raw_alerts[alert_index],dict) else {}
-            pre_alerts.append({'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('result-only','spin-start','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
+            pre_alerts.append({'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('result-only','spin-start','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'audioSeconds':max(0,min(600,safe_float(alert.get('audioSeconds',0),0))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
         patterns.append({
             'id':str(item.get('id') or f'gacha-pattern-{index+1}'), 'name':str(item.get('name') or f'パターン{index+1}')[:60], 'giftName':str(item.get('giftName') or '').strip(),
             'minWin':min(low,high), 'maxWin':max(low,high), 'outcomeMode':'weighted' if item.get('outcomeMode')=='weighted' else 'range', 'outcomes':outcomes,
@@ -631,7 +631,7 @@ def normalize_state(data):
             'startAnimationUrl':str(item.get('startAnimationUrl') or '')[:2000], 'startAnimationName':str(item.get('startAnimationName') or '')[:120],
             'startAudioUrl':str(item.get('startAudioUrl') or '')[:2000], 'startAudioName':str(item.get('startAudioName') or '')[:120],
             'startSeconds':max(1,min(30,safe_int(item.get('startSeconds',2),2))), 'startAudioVolume':max(0,min(100,safe_int(item.get('startAudioVolume',80),80))), 'startVideoAudioEnabled':bool(item.get('startVideoAudioEnabled',True)), 'startVideoVolume':max(0,min(100,safe_int(item.get('startVideoVolume',75),75))),
-            'hitOnNormalContinue':bool(item.get('hitOnNormalContinue',True)), 'hitOnUpperEntry':bool(item.get('hitOnUpperEntry',True)), 'hitOnUpperContinue':bool(item.get('hitOnUpperContinue',True)), 'hitOnSingleHit':bool(item.get('hitOnSingleHit',True)),
+            'hitOnNormalContinue':bool(item.get('hitOnNormalContinue',True)), 'hitOnUpperEntry':bool(item.get('hitOnUpperEntry',True)), 'hitOnUpperContinue':bool(item.get('hitOnUpperContinue',True)), 'hitOnSingleHit':bool(item.get('hitOnSingleHit',True)), 'hitConditionMode':'win' if item.get('hitConditionMode')=='win' else 'flow', 'hitWinMode':'at-least' if item.get('hitWinMode')=='at-least' else 'exact', 'hitWinValue':max(0,min(999999,safe_int(item.get('hitWinValue',100),100))),
             'hitAnimationUrl':str(item.get('hitAnimationUrl') or '')[:2000], 'hitAnimationName':str(item.get('hitAnimationName') or '')[:120],
             'hitAudioUrl':str(item.get('hitAudioUrl') or '')[:2000], 'hitAudioName':str(item.get('hitAudioName') or '')[:120],
             'hitSeconds':max(1,min(30,safe_int(item.get('hitSeconds',2),2))), 'hitAudioVolume':max(0,min(100,safe_int(item.get('hitAudioVolume',80),80))), 'hitVideoAudioEnabled':bool(item.get('hitVideoAudioEnabled',True)), 'hitVideoVolume':max(0,min(100,safe_int(item.get('hitVideoVolume',75),75))),
@@ -1930,10 +1930,17 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['gacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern:
                     raise ValueError('テストするパターンを選べません')
-                was_active=bool(state['gacha'].get('event',{}).get('active'))
+                current_event=state['gacha'].get('event',{})
+                was_active=bool(current_event.get('active'))
+                replaced_test=was_active and bool(current_event.get('isTest'))
+                if replaced_test:
+                    # A previous test can remain active if its overlay was closed. Replace it
+                    # instead of letting every new test wait behind an unplayed test.
+                    current_event['active']=False
+                    state['gacha']['queue']=[item for item in state['gacha'].get('queue',[]) if not (isinstance(item,dict) and item.get('isTest'))]
                 run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
-                queued=len(state['gacha'].get('queue',[])) if was_active else 0
-                write_state(state);result={'ok':True,'queued':was_active,'queuePosition':queued}
+                queued=len(state['gacha'].get('queue',[])) if was_active and not replaced_test else 0
+                write_state(state);result={'ok':True,'queued':was_active and not replaced_test,'replacedTest':replaced_test,'queuePosition':queued}
             elif self.path == '/api/gift-media/upload':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
