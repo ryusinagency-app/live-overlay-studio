@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.66'
+APP_VERSION = '0.65.70'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -48,7 +48,7 @@ def prepare_app_root():
     assets = [
         'control.html', 'overlay.html', 'overlay_comp.html',
         'overlay_counters.html', 'overlay_gacha.html', 'overlay_other_gacha.html',
-        'overlay_gacha_history.html', 'overlay_gift_history.html',
+        'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
         'overlay_smoking_gacha.html', 'overlay_timer.html',
         'overlay_win.html', 'README.txt', 'update_config.json', 'app_icon.ico'
@@ -631,6 +631,7 @@ def normalize_state(data):
             'startAnimationUrl':str(item.get('startAnimationUrl') or '')[:2000], 'startAnimationName':str(item.get('startAnimationName') or '')[:120],
             'startAudioUrl':str(item.get('startAudioUrl') or '')[:2000], 'startAudioName':str(item.get('startAudioName') or '')[:120],
             'startSeconds':max(1,min(30,safe_int(item.get('startSeconds',2),2))), 'startAudioVolume':max(0,min(100,safe_int(item.get('startAudioVolume',80),80))), 'startVideoAudioEnabled':bool(item.get('startVideoAudioEnabled',True)), 'startVideoVolume':max(0,min(100,safe_int(item.get('startVideoVolume',75),75))),
+            'hitOnNormalContinue':bool(item.get('hitOnNormalContinue',True)), 'hitOnUpperEntry':bool(item.get('hitOnUpperEntry',True)), 'hitOnUpperContinue':bool(item.get('hitOnUpperContinue',True)), 'hitOnSingleHit':bool(item.get('hitOnSingleHit',True)),
             'hitAnimationUrl':str(item.get('hitAnimationUrl') or '')[:2000], 'hitAnimationName':str(item.get('hitAnimationName') or '')[:120],
             'hitAudioUrl':str(item.get('hitAudioUrl') or '')[:2000], 'hitAudioName':str(item.get('hitAudioName') or '')[:120],
             'hitSeconds':max(1,min(30,safe_int(item.get('hitSeconds',2),2))), 'hitAudioVolume':max(0,min(100,safe_int(item.get('hitAudioVolume',80),80))), 'hitVideoAudioEnabled':bool(item.get('hitVideoAudioEnabled',True)), 'hitVideoVolume':max(0,min(100,safe_int(item.get('hitVideoVolume',75),75))),
@@ -726,7 +727,8 @@ def normalize_state(data):
         'historyCardBorder':valid_hex(raw_gacha.get('historyCardBorder')) or '#ffcf59',
         'historyTextColor':valid_hex(raw_gacha.get('historyTextColor')) or '#ffffff',
         'historyCardOpacity':max(0,min(100,safe_int(raw_gacha.get('historyCardOpacity',93),93))),
-        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:20],
+        'historyScrollDirection':raw_gacha.get('historyScrollDirection') if raw_gacha.get('historyScrollDirection') in ('vertical','horizontal') else 'vertical',
+        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,min(50,safe_int(item.get('continueCount') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
         'queue':([x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100] if event_active else []),
         'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
@@ -1093,8 +1095,8 @@ def complete_gacha_event(event_id):
             result=int(event.get('total') or 0)
             if event.get('winSign') == 'both':
                 result= -abs(result) if event.get('choice') == 'minus' else abs(result)
-            gacha.setdefault('history', []).insert(0, {'id':event_id,'senderName':str(event.get('senderName') or 'ゲスト')[:80],'patternName':str(event.get('patternName') or 'WINガチャ')[:60],'result':result,'createdAt':max(0,float(event.get('createdAt') or time.time()))})
-            gacha['history']=gacha['history'][:20]
+            gacha.setdefault('history', []).insert(0, {'id':event_id,'senderName':str(event.get('senderName') or 'ゲスト')[:80],'patternName':str(event.get('patternName') or 'WINガチャ')[:60],'result':result,'continueCount':sum(1 for item in event.get('rounds',[]) if isinstance(item,dict) and item.get('continued') is True),'createdAt':max(0,float(event.get('createdAt') or time.time()))})
+            gacha['history']=gacha['history'][:200]
         event['active']=False
         queue=gacha.setdefault('queue',[])
         if queue:
