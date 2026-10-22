@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.64'
+APP_VERSION = '0.65.65'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2054,7 +2054,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=664'
+    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=665'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
