@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.75'
+APP_VERSION = '0.65.77'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -568,17 +568,17 @@ def normalize_state(data):
         raw_element_layout=item.get('elementLayout') if isinstance(item.get('elementLayout'),dict) else {}
         element_layout={key:max(0,min(100,safe_int(raw_element_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',8),('senderX',50),('senderY',18),('resultX',50),('resultY',50),('stateX',50),('stateY',75),('totalX',50),('totalY',88))} if raw_element_layout else {}
         preview_scenes=('start','normal-spin','preAlert1','preAlert2','preAlert3','result','continue','upper-entry','upper-spin','upper-continue','end')
-        preview_text_fields=('fontFamily','patternTextColor','patternTextSize','showPatternText','senderTextColor','senderTextSize','showSenderText','resultTextColor','resultTextSize','showResultText','stateTextColor','stateTextSize','showStateText','roundTotalTextColor','roundTotalTextSize','showTotalText','startTextColor','startTextSize','finalTotalTextColor','finalTotalTextSize','showChoiceText','choiceTextColor','choiceTextSize')
-        preview_color_fields={'patternTextColor','senderTextColor','resultTextColor','stateTextColor','roundTotalTextColor','startTextColor','finalTotalTextColor','choiceTextColor'}
-        preview_size_fields={'patternTextSize','senderTextSize','resultTextSize','stateTextSize','roundTotalTextSize','startTextSize','finalTotalTextSize','choiceTextSize'}
+        preview_text_fields=('fontFamily','patternTextColor','patternTextSize','setCountTextColor','setCountTextSize','setCountFontFamily','showPatternText','senderTextColor','senderTextSize','showSenderText','resultTextColor','resultTextSize','showResultText','stateTextColor','stateTextSize','showStateText','roundTotalTextColor','roundTotalTextSize','showTotalText','startTextColor','startTextSize','finalTotalTextColor','finalTotalTextSize','showChoiceText','choiceTextColor','choiceTextSize')
+        preview_color_fields={'patternTextColor','setCountTextColor','senderTextColor','resultTextColor','stateTextColor','roundTotalTextColor','startTextColor','finalTotalTextColor','choiceTextColor'}
+        preview_size_fields={'patternTextSize','setCountTextSize','senderTextSize','resultTextSize','stateTextSize','roundTotalTextSize','startTextSize','finalTotalTextSize','choiceTextSize'}
         raw_preview_styles=item.get('previewSceneStyles') if isinstance(item.get('previewSceneStyles'),dict) else {}
         preview_scene_styles={}
         for scene in preview_scenes:
             raw_style=raw_preview_styles.get(scene) if isinstance(raw_preview_styles.get(scene),dict) else {}
             clean_style={}
             for key in preview_text_fields:
-                if key=='fontFamily':
-                    if raw_style.get(key) in ('global','system','yuGothic','meiryo','gothic','serif','mono'): clean_style[key]=raw_style[key]
+                if key in ('fontFamily','setCountFontFamily'):
+                    if raw_style.get(key) in ('global','system','native','yuGothic','meiryo','gothic','serif','mono'): clean_style[key]=raw_style[key]
                 elif key in preview_color_fields:
                     color=valid_hex(raw_style.get(key))
                     if color: clean_style[key]=color
@@ -658,6 +658,7 @@ def normalize_state(data):
             'finalTotalTextColor':valid_hex(item.get('finalTotalTextColor')) or '#ffffff', 'finalTotalTextSize':max(18,min(400,safe_int(item.get('finalTotalTextSize',48)))),
             'patternTextColor':valid_hex(item.get('patternTextColor')) or '#ffffff', 'patternTextSize':max(18,min(400,safe_int(item.get('patternTextSize',40)))),
             'senderTextColor':valid_hex(item.get('senderTextColor')) or '#ffe9a6', 'senderTextSize':max(14,min(400,safe_int(item.get('senderTextSize',32)))),
+            'setCountTextColor':valid_hex(item.get('setCountTextColor')) or '#ffffff', 'setCountTextSize':max(14,min(400,safe_int(item.get('setCountTextSize',32)))), 'setCountFontFamily':item.get('setCountFontFamily') if item.get('setCountFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global',
             'choiceTextColor':valid_hex(item.get('choiceTextColor')) or '#ffe9a6', 'choiceTextSize':max(14,min(400,safe_int(item.get('choiceTextSize',34)))),
             'showPatternText':item.get('showPatternText',True) is not False, 'showSenderText':item.get('showSenderText',True) is not False,
             'showResultText':item.get('showResultText',True) is not False, 'showStateText':item.get('showStateText',True) is not False,
@@ -728,6 +729,10 @@ def normalize_state(data):
         'historyTextColor':valid_hex(raw_gacha.get('historyTextColor')) or '#ffffff',
         'historyCardOpacity':max(0,min(100,safe_int(raw_gacha.get('historyCardOpacity',93),93))),
         'historyScrollDirection':raw_gacha.get('historyScrollDirection') if raw_gacha.get('historyScrollDirection') in ('vertical','horizontal') else 'vertical',
+        'continueRankLimit':max(1,min(10,safe_int(raw_gacha.get('continueRankLimit',10),10))), 'continueRankTextSize':max(14,min(96,safe_int(raw_gacha.get('continueRankTextSize',28),28))), 'continueRankScrollDirection':raw_gacha.get('continueRankScrollDirection') if raw_gacha.get('continueRankScrollDirection') in ('vertical','horizontal') else 'vertical',
+        'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
+        'continueRankLimit':max(1,min(10,safe_int(raw_gacha.get('continueRankLimit',10),10))), 'continueRankTextSize':max(14,min(96,safe_int(raw_gacha.get('continueRankTextSize',28),28))), 'continueRankScrollDirection':raw_gacha.get('continueRankScrollDirection') if raw_gacha.get('continueRankScrollDirection') in ('vertical','horizontal') else 'vertical',
+        'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
         'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,min(50,safe_int(item.get('continueCount') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
         'queue':([x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100] if event_active else []),
         'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
