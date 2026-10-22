@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.77'
+APP_VERSION = '0.65.79'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -592,14 +592,14 @@ def normalize_state(data):
         for scene in preview_scenes:
             raw_positions=raw_preview_positions.get(scene) if isinstance(raw_preview_positions.get(scene),dict) else {}
             clean_positions={}
-            for key in ('pattern','sender','result','state','total'):
+            for key in ('pattern','sender','setCount','result','state','total'):
                 point=raw_positions.get(key) if isinstance(raw_positions.get(key),dict) else None
                 if point is not None:
                     clean_positions[key]={'x':max(0,min(100,safe_float(point.get('x',50),50))),'y':max(0,min(100,safe_float(point.get('y',50),50)))}
             preview_scene_positions[scene]=clean_positions
         raw_legacy_positions=item.get('previewPositions') if isinstance(item.get('previewPositions'),dict) else {}
         preview_positions={}
-        for key in ('pattern','sender','result','state','total'):
+        for key in ('pattern','sender','setCount','result','state','total'):
             point=raw_legacy_positions.get(key) if isinstance(raw_legacy_positions.get(key),dict) else None
             if point is not None: preview_positions[key]={'x':max(0,min(100,safe_float(point.get('x',50),50))),'y':max(0,min(100,safe_float(point.get('y',50),50)))}
         raw_alerts=item.get('preAlerts') if isinstance(item.get('preAlerts'),list) else []
@@ -1937,15 +1937,11 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError('テストするパターンを選べません')
                 current_event=state['gacha'].get('event',{})
                 was_active=bool(current_event.get('active'))
-                replaced_test=was_active and bool(current_event.get('isTest'))
-                if replaced_test:
-                    # A previous test can remain active if its overlay was closed. Replace it
-                    # instead of letting every new test wait behind an unplayed test.
-                    current_event['active']=False
-                    state['gacha']['queue']=[item for item in state['gacha'].get('queue',[]) if not (isinstance(item,dict) and item.get('isTest'))]
+                # Tests use the same FIFO queue as real gift-triggered spins. Never
+                # replace an active test: that can make consecutive tests overlap.
                 run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
-                queued=len(state['gacha'].get('queue',[])) if was_active and not replaced_test else 0
-                write_state(state);result={'ok':True,'queued':was_active and not replaced_test,'replacedTest':replaced_test,'queuePosition':queued}
+                queue_position=len(state['gacha'].get('queue',[])) if was_active else 0
+                write_state(state);result={'ok':True,'queued':was_active,'queuePosition':queue_position}
             elif self.path == '/api/gift-media/upload':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
@@ -2077,7 +2073,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=665'
+    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=679'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
