@@ -18,10 +18,33 @@ import subprocess
 import hashlib
 import tempfile
 import urllib.request
+import socket
 
-APP_VERSION = '0.66.02'
+APP_VERSION = '0.66.03'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
+
+def get_lan_ip():
+    """Return this PC's IPv4 LAN address for LIVE Studio browser sources."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(('8.8.8.8', 80))
+        address = probe.getsockname()[0]
+        if address and not address.startswith('127.'):
+            return address
+    except OSError:
+        pass
+    finally:
+        probe.close()
+    try:
+        address = socket.gethostbyname(socket.gethostname())
+        if address and not address.startswith('127.'):
+            return address
+    except OSError:
+        pass
+    return '127.0.0.1'
+
+LAN_IP = get_lan_ip()
 
 def prepare_app_root():
     if not FROZEN_APP:
@@ -1859,6 +1882,9 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
+        if self.path == '/api/network':
+            body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/'}, ensure_ascii=False).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/state':
             body = json.dumps(read_state(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
@@ -2255,7 +2281,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=6602'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6603'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2456,9 +2482,10 @@ def main():
         GTA_WATCH_THREAD = threading.Thread(target=gta_log_watcher, daemon=True)
         GTA_WATCH_THREAD.start()
     try:
-        # Every page is used only by this PC, so listening on localhost avoids
-        # firewall prompts and accidental access from other devices.
-        server = LocalThreadingHTTPServer(('127.0.0.1', 8765), Handler)
+        # LIVE Studio may isolate browser sources from the Windows loopback
+        # interface. Listen on the PC network interface as well so its browser
+        # source can reach the same local overlay through the LAN IPv4 address.
+        server = LocalThreadingHTTPServer(('0.0.0.0', 8765), Handler)
     except OSError:
         # A second launch should focus the already running app instead of failing.
         webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')
@@ -2469,7 +2496,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print('Overlay source: http://127.0.0.1:8765/overlay.html?build=6602')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6603')
     server.serve_forever()
 
 if __name__ == '__main__':
