@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.91'
+APP_VERSION = '0.65.94'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -48,7 +48,8 @@ def prepare_app_root():
     assets = [
         'control.html', 'overlay.html', 'overlay_comp.html',
         'overlay_counters.html', 'overlay_gacha.html', 'overlay_other_gacha.html',
-        'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gift_history.html',
+        'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gacha_set_ranking.html',
+        'overlay_gacha_win_ranking.html', 'overlay_gacha_rankings.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
         'overlay_smoking_gacha.html', 'overlay_timer.html',
         'overlay_win.html', 'README.txt', 'update_config.json', 'app_icon.ico'
@@ -744,6 +745,7 @@ def normalize_state(data):
     active_profile_id = str(data.get('activeWinProfileId') or '')[:80]
     profiles = []
     seen_profile_ids = set()
+    profiles_missing_other = set()
     for index, item in enumerate(raw_profiles[:50]):
         if not isinstance(item, dict):
             continue
@@ -751,23 +753,47 @@ def normalize_state(data):
         if profile_id in seen_profile_ids:
             profile_id = f'{profile_id}-{index + 1}'
         seen_profile_ids.add(profile_id)
+        if not isinstance(item.get('otherGacha'), dict):
+            profiles_missing_other.add(profile_id)
         profiles.append({
             'id': profile_id,
             'name': str(item.get('name') or f'プロファイル{index + 1}')[:40],
             'enabled': item.get('enabled', True) is not False,
             'winCounter': item.get('winCounter') if isinstance(item.get('winCounter'), dict) else {},
             'gacha': item.get('gacha') if isinstance(item.get('gacha'), dict) else {},
+            'otherGacha': item.get('otherGacha') if isinstance(item.get('otherGacha'), dict) else {},
         })
     if not profiles:
-        profiles = [{'id':'win-profile-default','name':'標準','enabled':True,'winCounter':copy.deepcopy(merged['winCounter']),'gacha':copy.deepcopy(merged['gacha'])}]
+        profiles = [{'id':'win-profile-default','name':'標準','enabled':True,'winCounter':copy.deepcopy(merged['winCounter']),'gacha':copy.deepcopy(merged['gacha']),'otherGacha':copy.deepcopy(merged['otherGacha'])}]
         active_profile_id = profiles[0]['id']
     active_profile = next((item for item in profiles if item['id'] == active_profile_id and item['enabled']), None)
     if active_profile is None:
         active_profile = next((item for item in profiles if item['enabled']), profiles[0])
         active_profile['enabled'] = True
         active_profile_id = active_profile['id']
+    # Only the selected/active profile is running. Migrate legacy global Other Gacha
+    # settings into the active profile once, then restore that profile's own settings.
+    for profile in profiles:
+        profile['enabled'] = profile['id'] == active_profile_id
+    if active_profile_id in profiles_missing_other:
+        # One-time migration: the old app stored Other Gacha globally.
+        active_profile['otherGacha'] = copy.deepcopy(merged['otherGacha'])
+    else:
+        merged['otherGacha'] = copy.deepcopy(active_profile.get('otherGacha') or {})
+        # Do not revive an animation or queued gift from an earlier server session.
+        profile_other = merged['otherGacha']
+        if not isinstance(profile_other, dict):
+            profile_other = {}
+        profile_event = profile_other.get('event') if isinstance(profile_other.get('event'), dict) else {}
+        profile_event_created = max(0, safe_float(profile_event.get('createdAt') or 0))
+        profile_event_active = bool(profile_event.get('active', False)) and profile_event_created >= SERVER_STARTED_AT
+        profile_event['active'] = profile_event_active
+        profile_other['event'] = profile_event
+        profile_other['queue'] = [x for x in (profile_other.get('queue') or []) if isinstance(x, dict)][:100] if profile_event_active else []
+        merged['otherGacha'] = profile_other
     active_profile['winCounter'] = copy.deepcopy(merged['winCounter'])
     active_profile['gacha'] = copy.deepcopy(merged['gacha'])
+    active_profile['otherGacha'] = copy.deepcopy(merged['otherGacha'])
     merged['winProfiles'] = profiles
     merged['activeWinProfileId'] = active_profile_id
     merged['tiktokUsername'] = str(merged.get('tiktokUsername') or '').strip().lstrip('@')
@@ -835,6 +861,8 @@ def normalize_state(data):
     if merged.get('timer') != data.get('timer', DEFAULT['timer']):
         changed = True
     if merged.get('smokingTimer') != data.get('smokingTimer', DEFAULT['smokingTimer']):
+        changed = True
+    if merged.get('winProfiles') != data.get('winProfiles') or merged.get('activeWinProfileId') != data.get('activeWinProfileId'):
         changed = True
     if merged.get('gacha') != data.get('gacha', DEFAULT['gacha']):
         changed = True
@@ -1107,6 +1135,25 @@ def complete_gacha_event(event_id):
         queue=gacha.setdefault('queue',[])
         if queue:
             next_event=queue.pop(0); next_event['active']=True; next_event['createdAt']=time.time()
+            gacha['event']=next_event
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        return True
+
+def skip_gacha_event(event_id):
+    """Release a stuck active draw without applying it to WIN or history."""
+    with STATE_LOCK:
+        try:
+            data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception:
+            data=copy.deepcopy(DEFAULT)
+        data,_=normalize_state(data)
+        gacha=data['gacha'];event=gacha['event']
+        if int(event.get('id') or 0)!=event_id or not event.get('active'):
+            return False
+        event['active']=False
+        queue=gacha.setdefault('queue',[])
+        if queue:
+            next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time()
             gacha['event']=next_event
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
@@ -1729,7 +1776,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2047,6 +2094,10 @@ class Handler(SimpleHTTPRequestHandler):
                 result={'ok':mark_gacha_choice_ready(int(data.get('eventId') or 0))}
             elif self.path == '/api/gacha/complete':
                 result={'ok':complete_gacha_event(int(data.get('eventId') or 0))}
+            elif self.path == '/api/gacha/skip-stuck':
+                if self.client_address[0] not in ('127.0.0.1','::1'):
+                    self.send_error(403); return
+                result={'ok':skip_gacha_event(int(data.get('eventId') or 0))}
             elif self.path == '/api/tiktok/connect':
                 result = start_tiktok_gift_listener(read_state().get('tiktokUsername', ''))
                 if result.get('status') == 'error':
