@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.05'
+APP_VERSION = '0.66.06'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1014,6 +1014,21 @@ def normalize_gift_name(value):
     value = unicodedata.normalize('NFKC', str(value or '')).casefold()
     return ''.join(value.split())
 
+def sync_active_profile_other_gacha(data):
+    """Keep server-side Other Gacha changes in the active profile snapshot.
+
+    Other Gacha belongs to each game profile.  Upload/test/complete requests
+    mutate the live top-level value directly, so copy that value into the
+    active profile before normalize_state restores the profile snapshot.
+    """
+    active_id = str(data.get('activeWinProfileId') or '')
+    profiles = data.get('winProfiles') if isinstance(data.get('winProfiles'), list) else []
+    active = next((item for item in profiles if isinstance(item, dict) and str(item.get('id') or '') == active_id), None)
+    if active is None:
+        active = next((item for item in profiles if isinstance(item, dict) and item.get('enabled', True)), None)
+    if active is not None:
+        active['otherGacha'] = copy.deepcopy(data.get('otherGacha') or {})
+
 def run_other_gacha_draw(data, pattern, sender_name='テスト'):
     other=data['otherGacha']; rounds=[]
     outcomes=pattern.get('outcomes') or []
@@ -1027,6 +1042,7 @@ def run_other_gacha_draw(data, pattern, sender_name='テスト'):
     event={'id':max(used,default=0)+1,'type':'other-gacha','active':False,'patternId':pattern['id'],'patternName':pattern['name'],'rounds':rounds,'outcomes':[{'label':x['label']} for x in outcomes],'spinSeconds':pattern.get('spinSeconds',5),'effectStyle':pattern.get('effectStyle','slot'),'resultColor':pattern.get('resultColor','#fff'),'resultSize':pattern.get('resultSize',100),'background':pattern.get('background','#17151c'),'opacity':pattern.get('opacity',90),'layout':copy.deepcopy(pattern.get('layout',{})),'sceneLayouts':copy.deepcopy(pattern.get('sceneLayouts',{})),'sceneStyles':copy.deepcopy(pattern.get('sceneStyles',{})),'animationUrl':pattern.get('animationUrl',''),'audioUrl':pattern.get('audioUrl',''),'audioVolume':pattern.get('audioVolume',75),'resultAudioUrl':pattern.get('resultAudioUrl',''),'resultAudioVolume':pattern.get('resultAudioVolume',80),'videoAudioEnabled':pattern.get('videoAudioEnabled',True),'videoVolume':pattern.get('videoVolume',75),'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
     if other.get('event',{}).get('active'): other.setdefault('queue',[]).append(event)
     else: event['active']=True;other['event']=event
+    sync_active_profile_other_gacha(data)
     return True
 
 def complete_other_gacha_event(event_id):
@@ -1038,6 +1054,7 @@ def complete_other_gacha_event(event_id):
         event['active']=False;queue=other.setdefault('queue',[])
         if queue:
             next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time();other['event']=next_event
+        sync_active_profile_other_gacha(data)
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
@@ -2181,6 +2198,7 @@ class Handler(SimpleHTTPRequestHandler):
                 else: raise ValueError('素材の種類を確認してください')
                 safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:80];filename=f'other_gacha_{kind}_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw)
                 pattern[kind+'Url']='/'+filename+'?v='+str(safe_int(time.time()*1000));pattern[kind+'Name']=Path(str(data.get('name') or filename)).name[:120]
+                sync_active_profile_other_gacha(state)
                 write_state(state);result={'ok':True,'otherGacha':read_state()['otherGacha']}
             elif self.path == '/api/other-gacha/complete':
                 result={'ok':complete_other_gacha_event(int(data.get('eventId') or 0))}
@@ -2281,7 +2299,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6605'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6606'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2496,7 +2514,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6605')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6606')
     server.serve_forever()
 
 if __name__ == '__main__':
