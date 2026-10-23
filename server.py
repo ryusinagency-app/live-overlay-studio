@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.79'
+APP_VERSION = '0.65.91'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -568,9 +568,9 @@ def normalize_state(data):
         raw_element_layout=item.get('elementLayout') if isinstance(item.get('elementLayout'),dict) else {}
         element_layout={key:max(0,min(100,safe_int(raw_element_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',8),('senderX',50),('senderY',18),('resultX',50),('resultY',50),('stateX',50),('stateY',75),('totalX',50),('totalY',88))} if raw_element_layout else {}
         preview_scenes=('start','normal-spin','preAlert1','preAlert2','preAlert3','result','continue','upper-entry','upper-spin','upper-continue','end')
-        preview_text_fields=('fontFamily','patternTextColor','patternTextSize','setCountTextColor','setCountTextSize','setCountFontFamily','showPatternText','senderTextColor','senderTextSize','showSenderText','resultTextColor','resultTextSize','showResultText','stateTextColor','stateTextSize','showStateText','roundTotalTextColor','roundTotalTextSize','showTotalText','startTextColor','startTextSize','finalTotalTextColor','finalTotalTextSize','showChoiceText','choiceTextColor','choiceTextSize')
-        preview_color_fields={'patternTextColor','setCountTextColor','senderTextColor','resultTextColor','stateTextColor','roundTotalTextColor','startTextColor','finalTotalTextColor','choiceTextColor'}
-        preview_size_fields={'patternTextSize','setCountTextSize','senderTextSize','resultTextSize','stateTextSize','roundTotalTextSize','startTextSize','finalTotalTextSize','choiceTextSize'}
+        preview_text_fields=('fontFamily','patternTextColor','patternTextSize','setCountTextColor','setCountTextSize','setCountFontFamily','showPatternText','senderTextColor','senderTextSize','showSenderText','spinNumberTextColor','spinNumberTextSize','showSpinNumberText','resultTextColor','resultTextSize','showResultText','stateTextColor','stateTextSize','showStateText','spinStatusTextColor','spinStatusTextSize','showSpinStatusText','roundTotalTextColor','roundTotalTextSize','showRoundTotalText','startTextColor','startTextSize','showStartText','finalTotalTextColor','finalTotalTextSize','showFinalTotalText','showChoiceText','choiceTextColor','choiceTextSize')
+        preview_color_fields={'patternTextColor','setCountTextColor','senderTextColor','spinNumberTextColor','resultTextColor','stateTextColor','spinStatusTextColor','roundTotalTextColor','startTextColor','finalTotalTextColor','choiceTextColor'}
+        preview_size_fields={'patternTextSize','setCountTextSize','senderTextSize','spinNumberTextSize','resultTextSize','stateTextSize','spinStatusTextSize','roundTotalTextSize','startTextSize','finalTotalTextSize','choiceTextSize'}
         raw_preview_styles=item.get('previewSceneStyles') if isinstance(item.get('previewSceneStyles'),dict) else {}
         preview_scene_styles={}
         for scene in preview_scenes:
@@ -652,17 +652,18 @@ def normalize_state(data):
             'upperContinueAudioVolume':max(0,min(100,safe_int(item.get('upperContinueAudioVolume',80)))),
             'upperContinueVideoAudioEnabled':bool(item.get('upperContinueVideoAudioEnabled',True)),
             'upperContinueVideoVolume':max(0,min(100,safe_int(item.get('upperContinueVideoVolume',80)))),
-            'startTextColor':valid_hex(item.get('startTextColor')) or '#ffffff', 'startTextSize':max(16,min(400,safe_int(item.get('startTextSize',48)))),
-            'resultTextColor':valid_hex(item.get('resultTextColor')) or '#ffffff', 'resultTextSize':max(30,min(400,safe_int(item.get('resultTextSize',130)))),
+            'spinNumberTextColor':valid_hex(item.get('spinNumberTextColor')) or valid_hex(item.get('slotNumberColor')) or '#ffffff', 'spinNumberTextSize':max(14,min(400,safe_int(item.get('spinNumberTextSize',item.get('slotNumberSize',130))))),
+            'startTextColor':valid_hex(item.get('startTextColor')) or '#ffffff', 'startTextSize':max(14,min(400,safe_int(item.get('startTextSize',48)))),
+            'resultTextColor':valid_hex(item.get('resultTextColor')) or '#ffffff', 'resultTextSize':max(14,min(400,safe_int(item.get('resultTextSize',130)))),
             'roundTotalTextColor':valid_hex(item.get('roundTotalTextColor')) or '#ffffff', 'roundTotalTextSize':max(14,min(400,safe_int(item.get('roundTotalTextSize',32)))),
-            'finalTotalTextColor':valid_hex(item.get('finalTotalTextColor')) or '#ffffff', 'finalTotalTextSize':max(18,min(400,safe_int(item.get('finalTotalTextSize',48)))),
+            'finalTotalTextColor':valid_hex(item.get('finalTotalTextColor')) or '#ffffff', 'finalTotalTextSize':max(14,min(400,safe_int(item.get('finalTotalTextSize',48)))),
             'patternTextColor':valid_hex(item.get('patternTextColor')) or '#ffffff', 'patternTextSize':max(18,min(400,safe_int(item.get('patternTextSize',40)))),
             'senderTextColor':valid_hex(item.get('senderTextColor')) or '#ffe9a6', 'senderTextSize':max(14,min(400,safe_int(item.get('senderTextSize',32)))),
-            'setCountTextColor':valid_hex(item.get('setCountTextColor')) or '#ffffff', 'setCountTextSize':max(14,min(400,safe_int(item.get('setCountTextSize',32)))), 'setCountFontFamily':item.get('setCountFontFamily') if item.get('setCountFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global',
+            'setCountTextColor':valid_hex(item.get('setCountTextColor')) or '#ffffff', 'setCountTextSize':max(14,min(400,safe_int(item.get('setCountTextSize',32)))), 'setCountFontFamily':item.get('setCountFontFamily') if item.get('setCountFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global', 'showSetCountAlways':item.get('showSetCountAlways',True) is not False,
             'choiceTextColor':valid_hex(item.get('choiceTextColor')) or '#ffe9a6', 'choiceTextSize':max(14,min(400,safe_int(item.get('choiceTextSize',34)))),
             'showPatternText':item.get('showPatternText',True) is not False, 'showSenderText':item.get('showSenderText',True) is not False,
-            'showResultText':item.get('showResultText',True) is not False, 'showStateText':item.get('showStateText',True) is not False,
-            'showTotalText':item.get('showTotalText',True) is not False, 'showChoiceText':item.get('showChoiceText',True) is not False,
+            'showSpinNumberText':item.get('showSpinNumberText',True) is not False, 'showResultText':item.get('showResultText',True) is not False, 'showStateText':item.get('showStateText',True) is not False, 'showSpinStatusText':item.get('showSpinStatusText',True) is not False,
+            'showStartText':item.get('showStartText',item.get('showTotalText',True)) is not False, 'showRoundTotalText':item.get('showRoundTotalText',item.get('showTotalText',True)) is not False, 'showFinalTotalText':item.get('showFinalTotalText',item.get('showTotalText',True)) is not False, 'showTotalText':True, 'showChoiceText':item.get('showChoiceText',True) is not False,
             'effectStyle':item.get('effectStyle',raw_gacha.get('effectStyle','card')) if item.get('effectStyle',raw_gacha.get('effectStyle','card')) in ('card','fullscreen-slot') else 'card',
             'elementLayout':element_layout, 'previewSceneStyles':preview_scene_styles, 'previewScenePositions':preview_scene_positions, 'previewPositions':preview_positions,
             'preAlerts':pre_alerts, 'preAlertEnabled':bool(item.get('preAlertEnabled',False)), 'preAlertOnContinue':bool(item.get('preAlertOnContinue',False)), 'preAlertOnUpper':bool(item.get('preAlertOnUpper',False)), 'preAlertMinWin':max(0,min(999999,safe_int(item.get('preAlertMinWin',0)))), 'preAlertTiming':item.get('preAlertTiming') if item.get('preAlertTiming') in ('result-only','spin-start','before-result') else 'before-result', 'preAlertText':str(item.get('preAlertText') or 'チャンス！')[:80], 'preAlertSeconds':max(0.2,min(5,safe_float(item.get('preAlertSeconds',1.2),1.2))), 'preAlertColor':valid_hex(item.get('preAlertColor')) or '#ffe05b', 'preAlertVolume':max(0,min(100,safe_int(item.get('preAlertVolume',75)))), 'preAlertAnimationUrl':str(item.get('preAlertAnimationUrl') or '')[:2000], 'preAlertAnimationName':str(item.get('preAlertAnimationName') or '')[:120], 'preAlertVideoVolume':max(0,min(100,safe_int(item.get('preAlertVideoVolume',75)))),
@@ -680,7 +681,7 @@ def normalize_state(data):
             'videoAudioEnabled':bool(item.get('videoAudioEnabled',raw_gacha.get('videoAudioEnabled',True))), 'videoVolume':max(0,min(100,safe_int(item.get('videoVolume',raw_gacha.get('videoVolume',75))))),
             'cardBg':valid_hex(item.get('cardBg')) or valid_hex(raw_gacha.get('cardBg')) or '#17151c', 'cardBorder':valid_hex(item.get('cardBorder')) or valid_hex(raw_gacha.get('cardBorder')) or '#ffcf59',
             'cardTextColor':valid_hex(item.get('cardTextColor')) or valid_hex(raw_gacha.get('cardTextColor')) or '#ffffff', 'cardOpacity':max(0,min(100,pattern_opacity if pattern_opacity>=0 else 94)),
-            'stateTextColor':valid_hex(item.get('stateTextColor')) or valid_hex(item.get('cardTextColor')) or '#ffe9a6', 'stateTextSize':max(14,min(400,safe_int(item.get('stateTextSize',30)))),
+            'stateTextColor':valid_hex(item.get('stateTextColor')) or valid_hex(item.get('cardTextColor')) or '#ffe9a6', 'stateTextSize':max(14,min(400,safe_int(item.get('stateTextSize',30)))), 'spinStatusTextColor':valid_hex(item.get('spinStatusTextColor')) or '#ffe9a6', 'spinStatusTextSize':max(14,min(400,safe_int(item.get('spinStatusTextSize',28)))),
             'fontFamily':('global' if item.get('fontFamily') in (None,'system') else item.get('fontFamily')) if item.get('fontFamily') in (None,'global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global',
             'textGlowEnabled':bool(item.get('textGlowEnabled',merged.get('textGlowEnabled',False))), 'textGlowColor':valid_hex(item.get('textGlowColor')) or valid_hex(merged.get('textGlowColor')) or '#e52b3c', 'textGlowStrength':max(0,min(40,safe_int(item.get('textGlowStrength',merged.get('textGlowStrength',12))))),
             'endSeconds':max(1,min(600,safe_int(item.get('endSeconds',raw_gacha.get('endSeconds',6))))), 'endAudioVolume':max(0,min(100,safe_int(item.get('endAudioVolume',raw_gacha.get('endAudioVolume',75))))),
@@ -2073,7 +2074,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=679'
+    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=680'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
