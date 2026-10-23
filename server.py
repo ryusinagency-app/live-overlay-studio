@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.06'
+APP_VERSION = '0.66.07'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -694,6 +694,7 @@ def normalize_state(data):
             'preAlerts':pre_alerts, 'preAlertEnabled':bool(item.get('preAlertEnabled',False)), 'preAlertOnContinue':bool(item.get('preAlertOnContinue',False)), 'preAlertOnUpper':bool(item.get('preAlertOnUpper',False)), 'preAlertMinWin':max(0,min(999999,safe_int(item.get('preAlertMinWin',0)))), 'preAlertTiming':item.get('preAlertTiming') if item.get('preAlertTiming') in ('result-only','spin-start','before-result') else 'before-result', 'preAlertText':str(item.get('preAlertText') or 'チャンス！')[:80], 'preAlertSeconds':max(0.2,min(5,safe_float(item.get('preAlertSeconds',1.2),1.2))), 'preAlertColor':valid_hex(item.get('preAlertColor')) or '#ffe05b', 'preAlertVolume':max(0,min(100,safe_int(item.get('preAlertVolume',75)))), 'preAlertAnimationUrl':str(item.get('preAlertAnimationUrl') or '')[:2000], 'preAlertAnimationName':str(item.get('preAlertAnimationName') or '')[:120], 'preAlertVideoVolume':max(0,min(100,safe_int(item.get('preAlertVideoVolume',75)))),
             'spinSeconds':max(3,min(30,safe_int(item.get('spinSeconds',raw_gacha.get('spinSeconds',5))))),
             'soundVolume':max(0,min(100,safe_int(item.get('soundVolume',raw_gacha.get('soundVolume',65))))),
+            'spinSoundUrl':str(item.get('spinSoundUrl') or '')[:2000], 'spinSoundName':str(item.get('spinSoundName') or '')[:120],
             'slotNumberSize':max(40,min(400,safe_int(item.get('slotNumberSize',raw_gacha.get('slotNumberSize',130))))),
             'slotNumberColor':valid_hex(item.get('slotNumberColor')) or valid_hex(raw_gacha.get('slotNumberColor')) or '#ffffff',
             'slotX':max(5,min(95,safe_int(item.get('slotX',raw_gacha.get('slotX',50))))), 'slotY':max(10,min(90,safe_int(item.get('slotY',raw_gacha.get('slotY',50))))),
@@ -759,7 +760,7 @@ def normalize_state(data):
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
         'continueRankLimit':max(1,min(10,safe_int(raw_gacha.get('continueRankLimit',10),10))), 'continueRankTextSize':max(14,min(96,safe_int(raw_gacha.get('continueRankTextSize',28),28))), 'continueRankScrollDirection':raw_gacha.get('continueRankScrollDirection') if raw_gacha.get('continueRankScrollDirection') in ('vertical','horizontal') else 'vertical',
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
-        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,min(50,safe_int(item.get('continueCount') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
+        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,safe_int(item.get('continueCount') or 0)),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
         'queue':[x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100],
         'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'effectStyle':'fullscreen-slot' if raw_event.get('effectStyle')=='fullscreen-slot' else 'card', 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
@@ -1091,7 +1092,12 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
     upper_enter_rate=max(0,min(100,int(pattern.get('upperAtEntryRate',5))))
     upper_rate=max(0,min(100,int(pattern.get('upperAtContinuationRate',80))))
     phase='normal'
-    for _ in range(50):
+    # No fixed SET ceiling: keep drawing until the continuation lottery fails.
+    # A true 100% rate can never finish, so only that case gets an emergency
+    # guard to keep the app and LIVE Studio responsive.
+    set_count=0
+    while True:
+        set_count+=1
         weighted=[(abs(item['value']),item['probability']) for item in pattern.get('outcomes',[]) if int(item.get('probability') or 0)>0] if pattern.get('outcomeMode')=='weighted' else []
         delta=random.choices([item[0] for item in weighted],weights=[item[1] for item in weighted],k=1)[0] if weighted else random.randint(low,high)
         if sign=='minus': delta=-abs(delta)
@@ -1099,6 +1105,8 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
         total=max(-999999,min(999999,total+delta)); earned=max(-999999,min(999999,earned+delta))
         active_rate=upper_rate if phase=='upper' else rate
         keep_going=(mode=='continue' and random.random()*100 < active_rate)
+        if active_rate>=100 and set_count>=1000:
+            keep_going=False
         enter_upper=bool(keep_going and phase=='normal' and upper_enabled and random.random()*100 < upper_enter_rate)
         rounds.append({'delta':delta,'total':earned,'currentWin':total,'continued':keep_going,'phase':phase,'upperEntered':enter_upper})
         if not keep_going: break
@@ -2056,7 +2064,7 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'start':'gacha_start_audio_','hit':'gacha_hit_audio_','miss':'gacha_miss_audio_','upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
+                stage_prefixes = {'spinEffect':'gacha_spin_effect_','start':'gacha_start_audio_','hit':'gacha_hit_audio_','miss':'gacha_miss_audio_','upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
                 prefix = stage_prefixes.get(stage, 'gacha_audio_')
                 filename = (prefix + safe_id if safe_id else prefix.rstrip('_')) + '.' + ext
                 (ROOT / filename).write_bytes(raw)
@@ -2068,8 +2076,8 @@ class Handler(SimpleHTTPRequestHandler):
                     alert_index = int(alert_match.group(1)) - 1
                     while len(pattern.setdefault('preAlerts', [])) < 3: pattern['preAlerts'].append({})
                     target = pattern['preAlerts'][alert_index]
-                url_key = 'audioUrl' if alert_match and pattern is not None else {'start':'startAudioUrl','hit':'hitAudioUrl','miss':'missAudioUrl','upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
-                name_key = 'audioName' if alert_match and pattern is not None else {'start':'startAudioName','hit':'hitAudioName','miss':'missAudioName','upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
+                url_key = 'audioUrl' if alert_match and pattern is not None else {'spinEffect':'spinSoundUrl','start':'startAudioUrl','hit':'hitAudioUrl','miss':'missAudioUrl','upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
+                name_key = 'audioName' if alert_match and pattern is not None else {'spinEffect':'spinSoundName','start':'startAudioName','hit':'hitAudioName','miss':'missAudioName','upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
                 target[url_key] = '/' + filename + '?v=' + str(safe_int(time.time() * 1000))
                 target[name_key] = Path(str(data.get('name') or filename)).name[:120]
                 write_state(state)
@@ -2299,7 +2307,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6606'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6607'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2514,7 +2522,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6606')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6607')
     server.serve_forever()
 
 if __name__ == '__main__':
