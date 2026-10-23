@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.03'
+APP_VERSION = '0.66.05'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2281,7 +2281,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6603'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6605'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2496,7 +2496,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6603')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6605')
     server.serve_forever()
 
 if __name__ == '__main__':

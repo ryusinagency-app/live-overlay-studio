@@ -7,6 +7,7 @@
 /* TikTok LIVE Studio compatibility safety net.  This block deliberately uses
    older JavaScript syntax.  It runs only if the full player cannot start. */
 window.__gachaMainStarted=false;
+window.__gachaPollReady=false;
 (function(){
   var legacyLastId=0,legacyTimer=null,legacyPoll=null;
   function byId(id){return document.getElementById(id)}
@@ -25,10 +26,12 @@ window.__gachaMainStarted=false;
     round()
   }
   function poll(){request('GET','/api/state?t='+Date.now(),null,function(s){var g=s.gacha||{},ev=g.event||{};if(ev.active&&ev.type==='gacha'&&ev.id&&ev.id!==legacyLastId){legacyLastId=ev.id;var patterns=g.patterns||[],pattern=null,i;for(i=0;i<patterns.length;i++){if(String(patterns[i].id)===String(ev.patternId)){pattern=patterns[i];break}}legacyPlay(ev,pattern||g)}})}
-  setTimeout(function(){if(!window.__gachaMainStarted){poll();legacyPoll=setInterval(poll,400)}},1200)
+  setTimeout(function(){if(!window.__gachaPollReady){poll();legacyPoll=setInterval(poll,400)}},1800)
 })();
 </script><script>
-window.__gachaMainStarted=true;
+/* Mark the full player ready only after all setup below has completed.
+   If LIVE Studio stops while evaluating this script, the compatibility
+   player above must remain available. */
 function fontStack(key,globalKey='system'){const stacks={system:'system-ui,"Yu Gothic",Meiryo,sans-serif',yuGothic:'"Yu Gothic","游ゴシック",sans-serif',meiryo:'Meiryo,"メイリオ",sans-serif',gothic:'"Arial Black",Impact,sans-serif',serif:'"Yu Mincho","游明朝",serif',mono:'ui-monospace,Consolas,monospace'};return key&&key!=='global'?stacks[key]||stacks.system:stacks[globalKey]||stacks.system}
 
 function setOverlayFont(key){const stacks={system:'system-ui,"Yu Gothic",Meiryo,sans-serif',yuGothic:'"Yu Gothic","游ゴシック",sans-serif',meiryo:'Meiryo,"メイリオ",sans-serif',gothic:'"Arial Black",Impact,sans-serif',serif:'"Yu Mincho","游明朝",serif',mono:'ui-monospace,Consolas,monospace'};document.documentElement.style.setProperty("--overlay-font",stacks[key]||stacks.system)}
@@ -51,7 +54,7 @@ function recoverOverlayVideo(){const v=$('customVideo');if(mediaSuspended||!acti
 setInterval(recoverOverlayVideo,1200);
 async function sound(freq=700,volume=65,duration=.07){if(volume<=0)return;try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')await audioCtx.resume();const osc=audioCtx.createOscillator(),gain=audioCtx.createGain(),now=audioCtx.currentTime;osc.type='triangle';osc.frequency.setValueAtTime(freq,now);gain.gain.setValueAtTime(Math.min(.28,volume/100*.22),now);gain.gain.exponentialRampToValueAtTime(.001,now+duration);osc.connect(gain);gain.connect(audioCtx.destination);osc.start(now);osc.stop(now+duration)}catch(e){}}
 function revealSound(delta,volume){if(volume<=0)return;const notes=delta<0?[260,190]:[660,880,1180];notes.forEach((f,i)=>setTimeout(()=>sound(f,volume,.22),i*115))}
-async function resultSound(g,delta,volume){if((g&&g.resultAudioUrl)){try{const a=new Audio(g.resultAudioUrl);a.volume=Math.max(0,Math.min(1,(+(valueOr(g.resultAudioVolume,80)))/100));const ended=new Promise(resolve=>a.addEventListener('ended',resolve,{once:true}));await a.play();await Promise.race([ended,wait(10000).then(()=>{a.pause();a.currentTime=0})])}catch(e){revealSound(delta,volume)}}else{revealSound(delta,volume);await wait(500)}}
+async function resultSound(g,delta,volume){if((g&&g.resultAudioUrl)){let a=null,failed=false;await new Promise(resolve=>{let done=false,timer=null;const finish=()=>{if(done)return;done=true;clearTimeout(timer);if(a){a.removeEventListener('ended',finish);a.removeEventListener('error',fail);a.removeEventListener('abort',fail);try{a.pause();a.currentTime=0}catch(e){}}resolve()};const fail=()=>{failed=true;finish()};try{a=new Audio(g.resultAudioUrl);a.volume=Math.max(0,Math.min(1,(+(valueOr(g.resultAudioVolume,80)))/100));a.addEventListener('ended',finish,{once:true});a.addEventListener('error',fail,{once:true});a.addEventListener('abort',fail,{once:true});timer=setTimeout(finish,10000);const started=a.play();if(started&&typeof started.catch==='function')started.catch(fail)}catch(e){fail()}});if(failed)revealSound(delta,volume)}else{revealSound(delta,volume);await wait(500)}}
 const layoutOverride=new URLSearchParams(location.search).get('layout');
 function matchesOverlayLayout(pattern,event){if(!layoutOverride)return true;const effectStyle=(event&&event.effectStyle)||(pattern&&pattern.effectStyle)||'card';const patternLayout=effectStyle==='fullscreen-slot'?'fullscreen':'card';return layoutOverride===patternLayout}
 async function applyRound(eventId,roundIndex){try{const r=await fetch('/api/gacha/apply-round',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId,roundIndex})});return r.ok}catch(e){return false}}
@@ -130,5 +133,6 @@ window.addEventListener('resize',()=>requestAnimationFrame(clampPreviewTextPosit
 window.addEventListener('message',event=>{if(event.origin!==location.origin)return;const d=event.data||{};if(!new URLSearchParams(location.search).has('preview'))return;if(d.type==='gacha-preview-play'){livePreviewG=d.g||{};activeTextSettings=livePreviewG;const ev={...(d.event||{}),preview:true};playToken++;play(ev,playToken,d.animationUrl||livePreviewG.animationUrl||'',livePreviewG);return}if(d.type==='gacha-preview-scene'){if(d.action==='stop'){playToken++;stopOverlayPlayback();return}playToken++;showPreviewScene(d);return}if(d.type==='gacha-preview-update'){showPreviewScene({...d,scene:activePreviewScene,action:'show'});return}});
 for(const key of ['pattern','sender','setCount','result','state','total']){$(key).addEventListener('pointerdown',event=>{if(!new URLSearchParams(location.search).has('preview')||!new URLSearchParams(location.search).has('edit')||!livePreviewG)return;const card=$('card'),el=$(key);if(getComputedStyle(el).display==='none')return;event.preventDefault();const cardRect=card.getBoundingClientRect(),elRect=el.getBoundingClientRect(),centerX=elRect.left+elRect.width/2,centerY=elRect.top+elRect.height/2,offsetX=event.clientX-centerX,offsetY=event.clientY-centerY;el.setPointerCapture&&el.setPointerCapture(event.pointerId);const position=(ev)=>{const rect=card.getBoundingClientRect(),box=el.getBoundingClientRect(),pad=10;let x=(ev.clientX-offsetX-rect.left)/rect.width*100,y=(ev.clientY-offsetY-rect.top)/rect.height*100,minX=(box.width/2+pad)/rect.width*100,maxX=100-minX,minY=(box.height/2+pad)/rect.height*100,maxY=100-minY;if(minX>maxX)minX=maxX=50;if(minY>maxY)minY=maxY=50;x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));el.style.setProperty('--edit-x',x+'%');el.style.setProperty('--edit-y',y+'%');parent.postMessage({type:'gacha-element-layout',patternId:livePreviewG.id,scene:activePreviewScene,key,x,y},location.origin)};const move=ev=>position(ev);const done=ev=>{if((ev&&ev.pointerId)!==undefined&&ev.pointerId!==event.pointerId)return;position(ev||event);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',done);el.removeEventListener('pointercancel',done)};el.addEventListener('pointermove',move);el.addEventListener('pointerup',done);el.addEventListener('pointercancel',done)})}
 
+window.__gachaMainStarted=true;window.__gachaPollReady=true;
 if(!new URLSearchParams(location.search).has("preview")){update();setInterval(update,250)}
 </script></body></html>
