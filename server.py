@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.98'
+APP_VERSION = '0.65.99'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1407,6 +1407,8 @@ def start_global_hotkeys():
         actions_lock = threading.Lock()
         action_queue = queue.Queue()
         pressed = set()
+        last_triggered = {}
+        trigger_lock = threading.Lock()
         def modifiers_down():
             mods = 0
             if get_async(VK_CONTROL) & KEY_FLAGS: mods |= 0x0002
@@ -1475,9 +1477,41 @@ def start_global_hotkeys():
                     print(f'Global shortcut action error: {error}')
                 finally:
                     action_queue.task_done()
+        def trigger_action(binding, action):
+            # The low-level hook and the polling fallback can see the same
+            # physical key press. Keep one action per press while still
+            # allowing a deliberate second press shortly afterwards.
+            now = time.monotonic()
+            with trigger_lock:
+                if now - last_triggered.get(binding, 0) < .22:
+                    return
+                last_triggered[binding] = now
+            action_queue.put_nowait(action)
+        def polling_worker():
+            # Some full-screen games do not deliver low-level hook events to
+            # a background app. GetAsyncKeyState provides a second path that
+            # continues to work while GTA has focus.
+            down = set()
+            while True:
+                try:
+                    with actions_lock:
+                        bindings = list(action_map.items())
+                    mods = modifiers_down()
+                    current = set()
+                    for binding, action in bindings:
+                        required_mods, key = binding
+                        if mods == required_mods and get_async(key) & KEY_FLAGS:
+                            current.add(binding)
+                            if binding not in down:
+                                trigger_action(binding, action)
+                    down = current
+                except Exception as error:
+                    print(f'Global shortcut polling error: {error}')
+                time.sleep(.02)
         refresh_actions()
         threading.Thread(target=refresh_worker, daemon=True).start()
         threading.Thread(target=action_worker, daemon=True).start()
+        threading.Thread(target=polling_worker, daemon=True).start()
         @HOOKPROC
         def keyboard_proc(n_code, w_param, l_param):
             if n_code >= 0:
@@ -1487,10 +1521,11 @@ def start_global_hotkeys():
                         pressed.discard(key)
                     elif w_param in (WM_KEYDOWN, WM_SYSKEYDOWN) and key not in pressed:
                         pressed.add(key)
+                        binding = (modifiers_down(), key)
                         with actions_lock:
-                            action = action_map.get((modifiers_down(), key))
+                            action = action_map.get(binding)
                         if action:
-                            action_queue.put_nowait(action)
+                            trigger_action(binding, action)
                 except Exception as error:
                     print(f'Global shortcut error: {error}')
             return call_next(None, n_code, w_param, l_param)
@@ -1498,12 +1533,12 @@ def start_global_hotkeys():
         if not hook:
             error = ctypes.get_last_error()
             with HOTKEY_STATUS_LOCK:
-                HOTKEY_STATUS.update(active=False, message=f'ショートカット監視を開始できません（Windowsエラー {error}）')
-            print(f'Global shortcut hook could not start (Windows error {error}). Try running start.bat with the same privilege level as GTA.')
+                HOTKEY_STATUS.update(active=True, message=f'ゲーム対応ショートカット監視中（直接監視／Windowsエラー {error}）')
+            print(f'Global shortcut hook could not start (Windows error {error}); direct key polling remains active.')
             return
         with HOTKEY_STATUS_LOCK:
-            HOTKEY_STATUS.update(active=True, message='グローバルショートカット監視中')
-        print('Global keyboard shortcuts are active.')
+            HOTKEY_STATUS.update(active=True, message='ゲーム対応グローバルショートカット監視中（二重監視）')
+        print('Global keyboard shortcuts are active (hook + direct polling).')
         msg = wintypes.MSG()
         while True:
             user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
