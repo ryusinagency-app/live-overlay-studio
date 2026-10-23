@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.94'
+APP_VERSION = '0.65.96'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -736,8 +736,8 @@ def normalize_state(data):
         'continueRankLimit':max(1,min(10,safe_int(raw_gacha.get('continueRankLimit',10),10))), 'continueRankTextSize':max(14,min(96,safe_int(raw_gacha.get('continueRankTextSize',28),28))), 'continueRankScrollDirection':raw_gacha.get('continueRankScrollDirection') if raw_gacha.get('continueRankScrollDirection') in ('vertical','horizontal') else 'vertical',
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
         'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,min(50,safe_int(item.get('continueCount') or 0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
-        'queue':([x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100] if event_active else []),
-        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
+        'queue':[x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100],
+        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'effectStyle':'fullscreen-slot' if raw_event.get('effectStyle')=='fullscreen-slot' else 'card', 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
@@ -1063,9 +1063,14 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
         if not keep_going: break
         if enter_upper: phase='upper'
     used_ids=[int(gacha.get('event',{}).get('id') or 0)]+[int(x.get('id') or 0) for x in gacha.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'effectStyle':'fullscreen-slot' if pattern.get('effectStyle')=='fullscreen-slot' else 'card','rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    queue=gacha.setdefault('queue',[])
     if gacha.get('event',{}).get('active'):
-        gacha.setdefault('queue',[]).append(event)
+        queue.append(event)
+    elif queue:
+        next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time()
+        gacha['event']=next_event
+        queue.append(event)
     else:
         event['active']=True
         gacha['event']=event
@@ -1148,10 +1153,13 @@ def skip_gacha_event(event_id):
             data=copy.deepcopy(DEFAULT)
         data,_=normalize_state(data)
         gacha=data['gacha'];event=gacha['event']
-        if int(event.get('id') or 0)!=event_id or not event.get('active'):
-            return False
-        event['active']=False
         queue=gacha.setdefault('queue',[])
+        if event.get('active'):
+            if int(event.get('id') or 0)!=event_id:
+                return False
+            event['active']=False
+        elif not queue:
+            return False
         if queue:
             next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time()
             gacha['event']=next_event
