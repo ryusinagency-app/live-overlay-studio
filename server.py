@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.66.01'
+APP_VERSION = '0.66.02'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2255,10 +2255,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    # TikTok LIVE Studio can reject the numeric loopback host even though
-    # Chrome accepts it.  Keep the control page on 127.0.0.1, but copy
-    # localhost URLs for browser-source overlays.
-    overlay_url = 'http://localhost:8765/overlay.html?build=6601'
+    overlay_url = 'http://127.0.0.1:8765/overlay.html?build=6602'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2472,7 +2469,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print('Overlay source: http://localhost:8765/overlay.html?build=6601')
+    print('Overlay source: http://127.0.0.1:8765/overlay.html?build=6602')
     server.serve_forever()
 
 if __name__ == '__main__':
