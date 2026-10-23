@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.99'
+APP_VERSION = '0.66.00'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -170,7 +170,7 @@ TIKTOK_GIFT_ENABLED = False
 TIKTOK_GIFT_CATALOG = []
 TIKTOK_GIFT_CATALOG_LOCK = threading.Lock()
 SERVER_STARTED_AT = time.time()
-HOTKEY_STATUS = {'active': False, 'message': 'ショートカット監視を起動しています', 'bindings': 0}
+HOTKEY_STATUS = {'active': False, 'message': 'ショートカット監視を起動しています', 'bindings': 0, 'registered': 0, 'registrationFailures': 0, 'lastInputAt': 0}
 HOTKEY_STATUS_LOCK = threading.Lock()
 MINECRAFT_WATCH_STATUS = {'status': 'stopped', 'message': 'Minecraftログ連携はオフです', 'lastEventAt': 0, 'winsReceived': 0}
 MINECRAFT_WATCH_LOCK = threading.Lock()
@@ -1384,9 +1384,13 @@ def start_global_hotkeys():
         user32 = ctypes.WinDLL('user32', use_last_error=True)
         kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
         WH_KEYBOARD_LL = 13
+        WM_HOTKEY = 0x0312
         WM_KEYDOWN, WM_SYSKEYDOWN = 0x0100, 0x0104
         WM_KEYUP, WM_SYSKEYUP = 0x0101, 0x0105
         KEY_FLAGS = 0x8000
+        KEY_PRESSED = 0x0001
+        MOD_NOREPEAT = 0x4000
+        PM_REMOVE = 0x0001
         VK_CONTROL, VK_SHIFT, VK_MENU = 0x11, 0x10, 0x12
         VK_LWIN, VK_RWIN = 0x5B, 0x5C
         class KBDLLHOOKSTRUCT(ctypes.Structure):
@@ -1400,6 +1404,15 @@ def start_global_hotkeys():
         call_next.restype = ctypes.c_ssize_t
         user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
         user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        register_hot_key = user32.RegisterHotKey
+        register_hot_key.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+        register_hot_key.restype = wintypes.BOOL
+        unregister_hot_key = user32.UnregisterHotKey
+        unregister_hot_key.argtypes = [wintypes.HWND, ctypes.c_int]
+        unregister_hot_key.restype = wintypes.BOOL
+        peek_message = user32.PeekMessageW
+        peek_message.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT, wintypes.UINT]
+        peek_message.restype = wintypes.BOOL
         get_module_handle = kernel32.GetModuleHandleW
         get_module_handle.argtypes = [wintypes.LPCWSTR]
         get_module_handle.restype = ctypes.c_void_p
@@ -1486,6 +1499,8 @@ def start_global_hotkeys():
                 if now - last_triggered.get(binding, 0) < .22:
                     return
                 last_triggered[binding] = now
+            with HOTKEY_STATUS_LOCK:
+                HOTKEY_STATUS['lastInputAt'] = time.time()
             action_queue.put_nowait(action)
         def polling_worker():
             # Some full-screen games do not deliver low-level hook events to
@@ -1500,18 +1515,65 @@ def start_global_hotkeys():
                     current = set()
                     for binding, action in bindings:
                         required_mods, key = binding
-                        if mods == required_mods and get_async(key) & KEY_FLAGS:
+                        key_state = get_async(key)
+                        if mods == required_mods and key_state & (KEY_FLAGS | KEY_PRESSED):
                             current.add(binding)
                             if binding not in down:
                                 trigger_action(binding, action)
                     down = current
+                    with HOTKEY_STATUS_LOCK:
+                        HOTKEY_STATUS['pollingAlive'] = True
                 except Exception as error:
                     print(f'Global shortcut polling error: {error}')
                 time.sleep(.02)
+        def registered_hotkey_worker():
+            # RegisterHotKey is handled by Windows itself and is less likely to
+            # be swallowed by a full-screen game. Hook and polling stay active
+            # as fallbacks for combinations Windows refuses to register.
+            registered = {}
+            registered_bindings = set()
+            msg = wintypes.MSG()
+            peek_message(ctypes.byref(msg), None, 0, 0, PM_REMOVE)
+            while True:
+                try:
+                    with actions_lock:
+                        snapshot = dict(action_map)
+                    wanted = set(snapshot)
+                    if wanted != registered_bindings:
+                        for hotkey_id in list(registered):
+                            unregister_hot_key(None, hotkey_id)
+                        registered.clear()
+                        failures = 0
+                        for hotkey_id, binding in enumerate(sorted(wanted), 1):
+                            modifiers, key = binding
+                            if register_hot_key(None, hotkey_id, modifiers | MOD_NOREPEAT, key):
+                                registered[hotkey_id] = (binding, snapshot[binding])
+                            else:
+                                failures += 1
+                        registered_bindings = wanted
+                        with HOTKEY_STATUS_LOCK:
+                            HOTKEY_STATUS['registered'] = len(registered)
+                            HOTKEY_STATUS['registrationFailures'] = failures
+                    else:
+                        for hotkey_id, (binding, _) in list(registered.items()):
+                            if binding in snapshot:
+                                registered[hotkey_id] = (binding, snapshot[binding])
+                    while peek_message(ctypes.byref(msg), None, WM_HOTKEY, WM_HOTKEY, PM_REMOVE):
+                        item = registered.get(int(msg.wParam))
+                        if item:
+                            trigger_action(item[0], item[1])
+                    with HOTKEY_STATUS_LOCK:
+                        HOTKEY_STATUS['registeredMonitorAlive'] = True
+                except Exception as error:
+                    with HOTKEY_STATUS_LOCK:
+                        HOTKEY_STATUS['registeredMonitorAlive'] = False
+                    print(f'Windows registered shortcut error: {error}')
+                time.sleep(.03)
         refresh_actions()
         threading.Thread(target=refresh_worker, daemon=True).start()
         threading.Thread(target=action_worker, daemon=True).start()
         threading.Thread(target=polling_worker, daemon=True).start()
+        threading.Thread(target=registered_hotkey_worker, daemon=True).start()
         @HOOKPROC
         def keyboard_proc(n_code, w_param, l_param):
             if n_code >= 0:
@@ -1533,12 +1595,12 @@ def start_global_hotkeys():
         if not hook:
             error = ctypes.get_last_error()
             with HOTKEY_STATUS_LOCK:
-                HOTKEY_STATUS.update(active=True, message=f'ゲーム対応ショートカット監視中（直接監視／Windowsエラー {error}）')
-            print(f'Global shortcut hook could not start (Windows error {error}); direct key polling remains active.')
+                HOTKEY_STATUS.update(active=True, message=f'ゲーム対応ショートカット監視中（システム登録＋直接監視／Windowsエラー {error}）')
+            print(f'Global shortcut hook could not start (Windows error {error}); registered hotkeys and direct polling remain active.')
             return
         with HOTKEY_STATUS_LOCK:
-            HOTKEY_STATUS.update(active=True, message='ゲーム対応グローバルショートカット監視中（二重監視）')
-        print('Global keyboard shortcuts are active (hook + direct polling).')
+            HOTKEY_STATUS.update(active=True, message='ゲーム対応グローバルショートカット監視中（三重監視）', hookAlive=True)
+        print('Global keyboard shortcuts are active (registered hotkeys + hook + direct polling).')
         msg = wintypes.MSG()
         while True:
             user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
