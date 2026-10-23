@@ -19,7 +19,7 @@ import hashlib
 import tempfile
 import urllib.request
 
-APP_VERSION = '0.65.96'
+APP_VERSION = '0.65.98'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -629,6 +629,7 @@ def normalize_state(data):
             'upperEntryVideoAudioEnabled':bool(item.get('upperEntryVideoAudioEnabled',True)),
             'upperEntryVideoVolume':max(0,min(100,safe_int(item.get('upperEntryVideoVolume',80)))),
             'upperEntrySeconds':max(1,min(30,safe_int(item.get('upperEntrySeconds',3),3))),
+            'startEffectEnabled':item.get('startEffectEnabled',True) is not False,
             'startAnimationUrl':str(item.get('startAnimationUrl') or '')[:2000], 'startAnimationName':str(item.get('startAnimationName') or '')[:120],
             'startAudioUrl':str(item.get('startAudioUrl') or '')[:2000], 'startAudioName':str(item.get('startAudioName') or '')[:120],
             'startSeconds':max(1,min(30,safe_int(item.get('startSeconds',2),2))), 'startAudioVolume':max(0,min(100,safe_int(item.get('startAudioVolume',80),80))), 'startVideoAudioEnabled':bool(item.get('startVideoAudioEnabled',True)), 'startVideoVolume':max(0,min(100,safe_int(item.get('startVideoVolume',75),75))),
@@ -1784,7 +1785,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2106,6 +2107,30 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.client_address[0] not in ('127.0.0.1','::1'):
                     self.send_error(403); return
                 result={'ok':skip_gacha_event(int(data.get('eventId') or 0))}
+            elif self.path == '/api/gacha-media-clear':
+                if self.client_address[0] not in ('127.0.0.1','::1'):
+                    self.send_error(403); return
+                pattern_id=str(data.get('patternId') or '')
+                stage=str(data.get('stage') or '')
+                kind=str(data.get('kind') or '')
+                media_keys={
+                    ('start','animation'):('startAnimationUrl','startAnimationName'),
+                    ('start','audio'):('startAudioUrl','startAudioName'),
+                    ('hit','animation'):('hitAnimationUrl','hitAnimationName'),
+                    ('hit','audio'):('hitAudioUrl','hitAudioName'),
+                    ('miss','animation'):('missAnimationUrl','missAnimationName'),
+                    ('miss','audio'):('missAudioUrl','missAudioName'),
+                }
+                keys=media_keys.get((stage,kind))
+                if not keys:
+                    raise ValueError('解除する演出素材を特定できません')
+                state=read_state()
+                pattern=next((item for item in state['gacha']['patterns'] if item['id']==pattern_id),None)
+                if pattern is None:
+                    raise ValueError('解除するガチャパターンが見つかりません')
+                pattern[keys[0]]='';pattern[keys[1]]=''
+                write_state(state)
+                result={'ok':True,'gacha':read_state()['gacha']}
             elif self.path == '/api/tiktok/connect':
                 result = start_tiktok_gift_listener(read_state().get('tiktokUsername', ''))
                 if result.get('status') == 'error':
