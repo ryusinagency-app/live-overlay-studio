@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.28'
+APP_VERSION = '0.66.29'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
