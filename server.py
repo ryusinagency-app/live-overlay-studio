@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.27'
+APP_VERSION = '0.66.28'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -812,7 +812,7 @@ def normalize_state(data):
             source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
             text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         media={}
-        for stage in ('spin','reach','cz','hit','at','upper','lt','end','preAlert1','preAlert2','preAlert3'):
+        for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3'):
             for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
@@ -839,6 +839,7 @@ def normalize_state(data):
         pachinko_patterns.append({
             'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
             'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
+            'reachMissChance':max(0,min(100,safe_float(item.get('reachMissChance',15),15))),
             'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
             'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
             'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))), 'timeShortSpinSeconds':max(.05,min(30,safe_float(item.get('timeShortSpinSeconds',.8),.8))), 'reachEnabled':item.get('reachEnabled',True) is not False,
@@ -2449,7 +2450,7 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
                 stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
-                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','spinBeep','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','stop','spinBeep','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
                 url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
                 if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
                 elif kind=='animation':
