@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.34'
+APP_VERSION = '0.66.35'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -675,7 +675,7 @@ def normalize_state(data):
             'upperAtEnabled':bool(item.get('upperAtEnabled',False)),
             'upperAtEntryRate':max(0,min(100,safe_int(item.get('upperAtEntryRate',5)))),
             'upperAtContinuationRate':max(0,min(100,safe_int(item.get('upperAtContinuationRate',80)))),
-            'upperSpinSeconds':max(1,min(30,safe_float(item.get('upperSpinSeconds',item.get('spinSeconds',raw_gacha.get('spinSeconds',5))),5))),
+            'upperSpinSeconds':max(.2,min(30,safe_float(item.get('upperSpinSeconds',item.get('spinSeconds',raw_gacha.get('spinSeconds',5))),5))),
             'upperOutcomeMode':'weighted' if item.get('upperOutcomeMode')=='weighted' else 'range',
             'upperMinWin':max(-9999,min(9999,safe_int(item.get('upperMinWin',item.get('minWin',1)),1))),
             'upperMaxWin':max(-9999,min(9999,safe_int(item.get('upperMaxWin',item.get('maxWin',10)),10))),
@@ -734,7 +734,7 @@ def normalize_state(data):
             'effectStyle':item.get('effectStyle',raw_gacha.get('effectStyle','card')) if item.get('effectStyle',raw_gacha.get('effectStyle','card')) in ('card','fullscreen-slot') else 'card',
             'elementLayout':element_layout, 'previewSceneStyles':preview_scene_styles, 'previewScenePositions':preview_scene_positions, 'previewPositions':preview_positions,
             'preAlerts':pre_alerts, 'preAlertEnabled':bool(item.get('preAlertEnabled',False)), 'preAlertOnContinue':bool(item.get('preAlertOnContinue',False)), 'preAlertOnUpper':bool(item.get('preAlertOnUpper',False)), 'preAlertMinWin':max(0,min(999999,safe_int(item.get('preAlertMinWin',0)))), 'preAlertTiming':item.get('preAlertTiming') if item.get('preAlertTiming') in ('result-only','spin-start','before-result') else 'before-result', 'preAlertText':str(item.get('preAlertText') or 'チャンス！')[:80], 'preAlertSeconds':max(0.2,min(5,safe_float(item.get('preAlertSeconds',1.2),1.2))), 'preAlertColor':valid_hex(item.get('preAlertColor')) or '#ffe05b', 'preAlertVolume':max(0,min(100,safe_int(item.get('preAlertVolume',75)))), 'preAlertAnimationUrl':str(item.get('preAlertAnimationUrl') or '')[:2000], 'preAlertAnimationName':str(item.get('preAlertAnimationName') or '')[:120], 'preAlertVideoVolume':max(0,min(100,safe_int(item.get('preAlertVideoVolume',75)))),
-            'spinSeconds':max(3,min(30,safe_int(item.get('spinSeconds',raw_gacha.get('spinSeconds',5))))),
+            'spinSeconds':max(.2,min(30,safe_float(item.get('spinSeconds',raw_gacha.get('spinSeconds',5)),5))),
             'soundVolume':max(0,min(100,safe_int(item.get('soundVolume',raw_gacha.get('soundVolume',65))))),
             'standardBeepEnabled':item.get('standardBeepEnabled',True) is not False,
             'standardResultSoundEnabled':item.get('standardResultSoundEnabled',True) is not False,
@@ -768,7 +768,7 @@ def normalize_state(data):
     merged['gacha'] = {
         'mode':'single' if raw_gacha.get('mode') == 'single' else 'continue',
         'continuationRate':max(0,min(100,safe_int(raw_gacha.get('continuationRate',70)))),
-        'spinSeconds':max(3,min(30,safe_int(raw_gacha.get('spinSeconds',5)))),
+        'spinSeconds':max(.2,min(30,safe_float(raw_gacha.get('spinSeconds',5),5))),
         'soundVolume':max(0,min(100,safe_int(raw_gacha.get('soundVolume',65)))),
         'shortcutChoicePlus':str(raw_gacha.get('shortcutChoicePlus') or 'CTRL+ALT+8').upper(),
         'shortcutChoiceMinus':str(raw_gacha.get('shortcutChoiceMinus') or 'CTRL+ALT+9').upper(),
@@ -2137,7 +2137,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
         if self.path == '/api/network':
-            body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/'}, ensure_ascii=False).encode('utf-8')
+            body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/state':
             body = json.dumps(read_state(), ensure_ascii=False).encode('utf-8')
