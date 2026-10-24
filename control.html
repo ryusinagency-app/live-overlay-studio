@@ -348,7 +348,7 @@ margin-right:-4px}}</style>
 <div class="cardSizeGrid"><div class="field"><label>演出レイアウト</label><select id="smokingGachaEffectStyle"><option value="fullscreen-slot">画面いっぱい</option><option value="card">カード内</option></select></div><div class="field"><label>数字が回る時間</label><input id="smokingGachaSpinSeconds" type="range" min="3" max="30"><span id="smokingGachaSpinSecondsLabel" class="note"></span></div><div class="field"><label>数字サイズ</label><input id="smokingGachaSlotNumberSize" type="range" min="40" max="220"><span id="smokingGachaSlotNumberSizeLabel" class="note"></span></div><div class="field"><label>数字色</label><input id="smokingGachaSlotNumberColor" type="color"></div><div class="field"><label>数字の横位置</label><input id="smokingGachaSlotX" type="range" min="5" max="95"><span id="smokingGachaSlotXLabel" class="note"></span></div><div class="field"><label>数字の縦位置</label><input id="smokingGachaSlotY" type="range" min="10" max="90"><span id="smokingGachaSlotYLabel" class="note"></span></div><div class="field"><label>止まり方</label><select id="smokingGachaSpinStyle"><option value="dramatic">後半ゆっくり（ドキドキ）</option><option value="ease-out">なめらかに減速</option><option value="steady">一定に近い</option></select></div></div>
 <div class="field"><label>共通演出動画（30MB以下）</label><input id="smokingGachaAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span id="smokingGachaAnimationName" class="note"></span></div>
 <div class="field"><label>通常ATの抽選中に別途流す音源（15MB以下）</label><input id="smokingGachaAudioFile" type="file" accept="audio/*"><span id="smokingGachaAudioName" class="note"></span><label>禁煙ガチャ抽選中音源の音量（%）</label><input id="smokingGachaAudioVolume" type="range" min="0" max="100"><span id="smokingGachaAudioVolumeLabel" class="note"></span><div class="missionTop"><button id="testSmokingGachaAudio" class="secondary" type="button">試聴</button><button id="clearSmokingGachaAudio" class="secondary" type="button">解除</button></div></div>
-<div class="field"><label class="toggle"><input class="patternResultSoundEnabled" type="checkbox">WIN結果音を鳴らす（OFFで標準音・任意音源とも無音）</label><span class="note">標準の「パパポン」音は、音源を選ぶとその音源に置き換わります。合計WIN・±確定時にも適用します。演出動画自体の音声は別設定です。</span><label>当選結果を表示する時間（秒）</label><input class="patternResultDisplaySeconds" type="number" min="0.5" max="30" step="0.1"><span class="note">AT付きでも当選画像・テキストを表示してから継続・上位AT演出へ進みます。</span><label>WIN結果表示時に流す音源（15MB以下）</label><input id="smokingGachaResultAudioFile" type="file" accept="audio/*"><span id="smokingGachaResultAudioName" class="note"></span><label>禁煙ガチャ結果音源の音量（%）</label><input id="smokingGachaResultAudioVolume" type="range" min="0" max="100"><span id="smokingGachaResultAudioVolumeLabel" class="note"></span><div class="missionTop"><button id="testSmokingGachaResultAudio" class="secondary" type="button">試聴</button><button id="clearSmokingGachaResultAudio" class="secondary" type="button">解除</button></div></div>
+<div class="field"><label>WIN結果表示時に流す音源（15MB以下）</label><input id="smokingGachaResultAudioFile" type="file" accept="audio/*"><span id="smokingGachaResultAudioName" class="note"></span><label>禁煙ガチャ結果音源の音量（%）</label><input id="smokingGachaResultAudioVolume" type="range" min="0" max="100"><span id="smokingGachaResultAudioVolumeLabel" class="note"></span><div class="missionTop"><button id="testSmokingGachaResultAudio" class="secondary" type="button">試聴</button><button id="clearSmokingGachaResultAudio" class="secondary" type="button">解除</button></div></div>
 <div class="field"><label>結果画面表示（秒）</label><input id="smokingGachaEndSeconds" type="number" min="1" max="600"></div>
 <h3>抽選パターン</h3><div id="smokingGachaPatterns"></div><button id="addSmokingGachaPattern" class="secondary" type="button">＋ 禁煙ガチャ追加</button>
 <p class="note">数字ごとの確率は比率で抽選されます。合計100%でなくても自動調整します。テスト抽選では実際のタイマーは変わりません。</p>
@@ -681,6 +681,7 @@ padding:4px">
 </main>
 <script>
 let state={};
+let controlReady=false;
 let timer=null;
 let dirty=false;
 let saving=false;
@@ -835,7 +836,7 @@ $('duplicateWinProfile').onclick=async()=>{if(winGachaBusy()){$('winProfileStatu
 $('toggleWinProfile').onclick=async()=>{const profile=selectedWinProfile();if(!profile)return;if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は変更できません';return}clearTimeout(timer);timer=null;if(!profile.enabled){const current=activeWinProfile();if(current){collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();current.enabled=false}loadWinProfile(profile);renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を再開しました。ほかのプロファイルは停止中です';save();return}if(profile.id!==state.activeWinProfileId){$('winProfileStatus').textContent='停止・再開できるのは選択中のプロファイルです';return}if(state.winProfiles.length<=1){$('winProfileStatus').textContent='プロファイルが1つだけのため停止できません';return}collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();profile.enabled=false;const next=state.winProfiles.find(item=>item.id!==profile.id);if(!next){profile.enabled=true;$('winProfileStatus').textContent='切り替え先のプロファイルがありません';return}loadWinProfile(next);selectedWinProfileId=next.id;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を停止し、「'+(next.name||'名称なし')+'」だけを稼働させました';save()};
 $('deleteWinProfile').onclick=async()=>{if(state.winProfiles.length<=1){$('winProfileStatus').textContent='最後のプロファイルは削除できません';return}if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は削除できません';return}const profile=selectedWinProfile();if(!profile)return;const wasActive=profile.id===state.activeWinProfileId;if(wasActive){clearTimeout(timer);timer=null;collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist()}state.winProfiles=state.winProfiles.filter(item=>item.id!==profile.id);if(wasActive){const next=state.winProfiles[0];loadWinProfile(next);selectedWinProfileId=next.id;renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings()}else selectedWinProfileId=state.activeWinProfileId;renderWinProfiles();save()}
 }
-async function persist(){collect();
+async function persist(){if(!controlReady){$('status').textContent='設定の読み込みが完了していないため、保存を停止しています。';return}collect();
 collectOtherGacha();
 saveActiveWinProfileSnapshot();
 const version=editVersion;
@@ -846,7 +847,7 @@ if(editVersion===version){dirty=false;currentWinEdited=false;}
 $('status').textContent='保存しました';broadcastPreviewSettings();
 setTimeout(()=>$('status').textContent='',1700)}catch(e){dirty=true;
 $('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください'}finally{saving=false;
-if(dirty&&editVersion!==version)save()}}function save(){editVersion++;
+if(dirty&&editVersion!==version)save()}}function save(){if(!controlReady)return;editVersion++;
 dirty=true;
 clearTimeout(timer);
 timer=setTimeout(()=>{timer=null;
@@ -1454,7 +1455,7 @@ el.innerHTML=`<div class="gachaPatternHead"><span class="gachaPatternIndex">ガ�
 <details class="patternSettingsGroup"><summary>通常ATの演出動画・音源</summary>
 <div class="audioSettingGrid"><div class="field"><label>通常ATの演出用画像・動画（30MB以下）</label><input class="patternAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternAnimationName"></span><button class="secondary clearPatternAnimation" type="button">画像・動画を解除</button></div><div class="field"><label class="toggle"><input class="patternVideoAudioEnabled" type="checkbox">動画内蔵音声を再生</label><label>通常AT動画内蔵音声の音量（%）</label><input class="patternVideoVolume" type="number" min="0" max="100"><span class="note patternVideoVolumeLabel"></span></div></div>
 <div class="field"><label>通常ATの抽選中に別途流す音源（15MB以下）</label><input class="patternAudioFile" type="file" accept="audio/*"><span class="note patternAudioName"></span><div class="missionTop"><button class="secondary testPatternAudio" type="button">抽選中音源を試聴</button><button class="secondary clearPatternAudio" type="button">音源を解除</button></div><label>通常AT抽選中の追加音源の音量（%）</label><input class="patternAudioVolume" type="number" min="0" max="100"><span class="note patternAudioVolumeLabel"></span></div>
-<div class="field"><label>WIN結果表示時に流す音源（15MB以下）</label><input class="patternResultAudioFile" type="file" accept="audio/*"><span class="note patternResultAudioName"></span><div class="missionTop"><button class="secondary testPatternResultAudio" type="button">結果音を試聴</button><button class="secondary clearPatternResultAudio" type="button">結果音を解除</button></div><label>WIN結果音源の音量（%）</label><input class="patternResultAudioVolume" type="number" min="0" max="100"><span class="note patternResultAudioVolumeLabel"></span></div>
+<div class="field"><label class="toggle"><input class="patternResultSoundEnabled" type="checkbox">WIN結果音を鳴らす（OFFで標準音・任意音源とも無音）</label><span class="note">標準の「パパポン」音は、音源を選ぶとその音源に置き換わります。合計WIN・±確定時にも適用します。演出動画自体の音声は別設定です。</span><label>当選結果を表示する時間（秒）</label><input class="patternResultDisplaySeconds" type="number" min="0.5" max="30" step="0.1"><span class="note">AT付きでも当選画像・テキストを表示してから継続・上位AT演出へ進みます。</span><label>WIN結果表示時に流す音源（15MB以下）</label><input class="patternResultAudioFile" type="file" accept="audio/*"><span class="note patternResultAudioName"></span><div class="missionTop"><button class="secondary testPatternResultAudio" type="button">結果音を試聴</button><button class="secondary clearPatternResultAudio" type="button">結果音を解除</button></div><label>WIN結果音源の音量（%）</label><input class="patternResultAudioVolume" type="number" min="0" max="100"><span class="note patternResultAudioVolumeLabel"></span></div>
 </details><details class="patternSettingsGroup"><summary>カード背景・文字の色</summary><div class="cardSizeGrid"><div class="field"><label>カード背景色</label><input class="patternCardBg" type="color"></div><div class="field"><label>カード枠色</label><input class="patternCardBorder" type="color"></div><div class="field"><label>カード文字色</label><input class="patternCardTextColor" type="color"></div><div class="field"><label>カード背景の透過度</label><input class="patternCardOpacity" type="range" min="0" max="100"><span class="note patternCardOpacityLabel"></span></div></div>
 </details><details class="patternSettingsGroup"><summary>終了画面・終了時の音</summary><h4>終了画面・終了時の音</h4><div class="cardSizeGrid"><div class="field"><label>終了画面の表示時間（秒）</label><input class="patternEndSeconds" type="number" min="1" max="600"></div><div class="field"><label>終了時に別途流す音源の音量（%）</label><input class="patternEndAudioVolume" type="number" min="0" max="100"><span class="note patternEndAudioVolumeLabel"></span></div></div>
 <div class="field"><label>終了演出素材（30MB以下）</label><input class="patternEndAnimationFile" type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm"><span class="note patternEndAnimationName"></span><button class="secondary clearPatternEndAnimation" type="button">終了素材を解除</button></div>
@@ -1636,7 +1637,7 @@ function setupSettingsNavigation(){
  choose(localStorage.getItem('live-overlay-settings-category')||'all');
  document.querySelectorAll('input[type="color"],input[type="range"]').forEach(input=>input.addEventListener('input',()=>{input.classList.add('colorChanged');setTimeout(()=>input.classList.remove('colorChanged'),700)}));
 }
-async function init(){state=await get()||{};
+async function init(){const loaded=await get();if(!loaded||typeof loaded!=='object'||!loaded.gacha||!Array.isArray(loaded.gacha.patterns))throw new Error('保存済み設定を取得できませんでした');state=loaded;
 state.counters=(state.counters||[]).map(c=>({goal:40,showGoal:true,...c}));
 state.giftRules=state.giftRules||[];
  state.winCounter=state.winCounter||{currentWin:state.gacha?.currentWin||0,goalWin:state.gacha?.goalWin||10,shortcutAdd:state.gacha?.shortcutAdd||'CTRL+ALT+7',shortcutSub:state.gacha?.shortcutSub||'CTRL+ALT+SHIFT+7',giftRules:state.gacha?.winGiftRules||[]};
@@ -1863,7 +1864,7 @@ const collectGachaBeforeSetCountAlways=collectGacha;
 collectGacha=function(){collectGachaBeforeSetCountAlways();document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=state.gacha?.patterns?.[i];if(p)p.showSetCountAlways=el.querySelector('.patternShowSetCountAlways')?.checked===true})};
 const renderGachaSettingsBeforeSetCountAlways=renderGachaSettings;
 renderGachaSettings=function(){renderGachaSettingsBeforeSetCountAlways();document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=state.gacha?.patterns?.[i]||{};const input=el.querySelector('.patternShowSetCountAlways');if(input)input.checked=p.showSetCountAlways!==false})};
-init().then(applyGachaTextSizeLimits);
+init().then(()=>{applyGachaTextSizeLimits();controlReady=true}).catch(error=>{controlReady=false;clearTimeout(timer);timer=null;$('status').textContent='設定の表示中にエラーが発生しました。データ保護のため保存を停止しています。画面を再読み込みしてください。';console.error('Control initialization failed',error)});
 
 /* v0.65.74: result-based hit/miss conditions */
 const collectGachaBeforeHitAmount=collectGacha;collectGacha=function(){collectGachaBeforeHitAmount();document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=state.gacha?.patterns?.[i];if(!p)return;p.hitConditionMode=el.querySelector('.patternHitConditionMode')?.value==='win'?'win':'flow';p.hitWinMode=el.querySelector('.patternHitWinMode')?.value==='at-least'?'at-least':'exact';p.hitWinValue=Math.max(0,Math.min(999999,parseInt(el.querySelector('.patternHitWinValue')?.value||'0',10)||0))})};
@@ -1881,6 +1882,6 @@ async function refreshGachaLiveState(){try{const fresh=await get(),live=fresh?.g
 setInterval(refreshGachaLiveState,500);
 
 </script>
-<script src="v6608.js?build=6632"></script>
+<script src="v6608.js?build=6633"></script>
 </body>
 </html>

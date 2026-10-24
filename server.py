@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.32'
+APP_VERSION = '0.66.33'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -68,6 +68,14 @@ def prepare_app_root():
     local_base = Path(os.environ.get('LOCALAPPDATA') or Path.home())
     app_root = local_base / 'LiveOverlayStudio'
     app_root.mkdir(parents=True, exist_ok=True)
+    # Preserve the existing file before this release normalizes saved settings.
+    saved_state = app_root / 'state.json'
+    recovery_backup = app_root / f'state_before_{APP_VERSION}.json'
+    if saved_state.exists() and not recovery_backup.exists():
+        try:
+            shutil.copy2(saved_state, recovery_backup)
+        except OSError as error:
+            print(f'Could not back up settings before update: {error}')
     assets = [
         'control.html', 'overlay.html', 'overlay_comp.html',
         'overlay_counters.html', 'overlay_gacha.html', 'overlay_other_gacha.html',
