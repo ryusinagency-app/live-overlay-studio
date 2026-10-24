@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.07'
+APP_VERSION = '0.66.19'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -58,7 +58,7 @@ def prepare_app_root():
         if not source_state.exists() and installed_state.exists():
             try:
                 shutil.copy2(installed_state, source_state)
-                media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
+                media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
                 for item in installed_root.iterdir():
                     if item.is_file() and item.name.startswith(media_prefixes):
                         shutil.copy2(item, source_root / item.name)
@@ -74,8 +74,8 @@ def prepare_app_root():
         'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gacha_set_ranking.html',
         'overlay_gacha_win_ranking.html', 'overlay_gacha_rankings.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
-        'overlay_smoking_gacha.html', 'overlay_timer.html',
-        'overlay_win.html', 'README.txt', 'update_config.json', 'app_icon.ico'
+        'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html',
+        'overlay_win.html', 'v6608.js', 'README.txt', 'update_config.json', 'app_icon.ico'
     ]
     for name in assets:
         source = SOURCE_ROOT / name
@@ -172,13 +172,14 @@ DEFAULT = {
         {'id': 'mission-1', 'title': 'ギフトミッション', 'giftValue': 0, 'giftGoal': 10, 'unit': '個', 'achievements': 0, 'dailyLimit': 10, 'lastDate': '', 'showAchievements': True, 'noticeUntil': 0, 'textScale': 100, 'shortcutAdd': 'CTRL+ALT+0', 'shortcutSub': 'CTRL+ALT+SHIFT+0'}
     ],
     'giftRules': [],
-    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
+    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'scrollDirection':'vertical', 'scrollStyle':'page', 'scrollSpeed':40, 'loop':True, 'newestFirst':True, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
     'tiktokUsername': '',
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
-    'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True},
+    'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True, 'soundEnabled': False, 'addSoundUrl': '', 'addSoundName': '', 'addSoundVolume': 75, 'subSoundUrl': '', 'subSoundName': '', 'subSoundVolume': 75, 'goalSoundUrl': '', 'goalSoundName': '', 'goalSoundVolume': 75, 'soundVolume': 75},
     'minecraftBridge': {'enabled': False, 'logPath': '', 'marker': 'bedrock_win'},
     'gtaBridge': {'enabled': False, 'logPath': '', 'marker': 'Sent WebSocket message: {"type":"win"', 'winAmount': 1, 'loseEnabled': True, 'loseMarker': 'Sent WebSocket message: {"type":"lose"', 'loseAmount': 1},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
+    'pachinkoGacha': {'patterns': [], 'queue': [], 'history': [], 'event': {'id':0,'type':'','active':False,'patternId':'','patternName':'','senderName':'','spins':0,'hitSpin':0,'route':'','rounds':[],'total':0,'createdAt':0}},
     'otherGacha': {'patterns':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'patternId':'','patternName':'','rounds':[],'senderName':'','createdAt':0}},
     'giftMedia': {'rules':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'ruleId':'','giftName':'','senderName':'','count':1,'imageUrl':'','videoUrl':'','audioUrl':'','audioVolume':75,'videoVolume':75,'width':800,'height':450,'duration':6,'createdAt':0}},
     'smokingTimer': {'endAt': 0, 'remainingSeconds': 0, 'runId': 0, 'audioUrl': '', 'audioName': '', 'volume': 80, 'fontSize': 130, 'titleSize': 56, 'cardBg': '', 'cardBorder': '', 'shortcutAdd5':'', 'shortcutSub5':'', 'shortcutAdd10':'', 'shortcutSub10':'', 'shortcutAdd15':'', 'shortcutSub15':'', 'shortcutAdd30':'', 'shortcutSub30':''},
@@ -280,6 +281,13 @@ def safe_float(value, default=0.0):
         return float(value)
     except (TypeError, ValueError, OverflowError):
         return default
+
+def safe_hex(value):
+    text = str(value or '').lower()
+    return text if re.fullmatch(r'#[0-9a-f]{6}', text) else ''
+
+def valid_hex(value):
+    return safe_hex(value)
 
 def clean_local_path(value):
     """Accept paths copied from Windows Explorer, which may include quotes."""
@@ -531,6 +539,10 @@ def normalize_state(data):
         'rows': max(1, min(5, safe_int(raw_wall.get('rows', 2)))),
         'pageSeconds': max(2, min(60, safe_int(raw_wall.get('pageSeconds', 8)))),
         'scrollDirection': raw_wall.get('scrollDirection') if raw_wall.get('scrollDirection') in ('horizontal','vertical') else 'vertical',
+        'scrollStyle': raw_wall.get('scrollStyle') if raw_wall.get('scrollStyle') in ('page','continuous','single','fade','slide','static') else 'page',
+        'scrollSpeed': max(5, min(300, safe_int(raw_wall.get('scrollSpeed', 40), 40))),
+        'loop': raw_wall.get('loop', True) is not False,
+        'newestFirst': raw_wall.get('newestFirst', True) is not False,
         'history': gift_history[:200],
         'displayHistory': [item for item in gift_history if item['id'] in ({x.get('id') for x in (raw_wall.get('displayHistory') or []) if isinstance(x,dict)} if 'displayHistory' in raw_wall else {x['id'] for x in gift_history})][:200],
         'fontFamily':raw_wall.get('fontFamily') if raw_wall.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global',
@@ -554,7 +566,8 @@ def normalize_state(data):
     for index,item in enumerate(raw_win.get('giftRules') or []):
         if isinstance(item,dict):
             win_gift_rules.append({'id':str(item.get('id') or f'win-gift-{index+1}'),'giftName':str(item.get('giftName') or '').strip(),'delta':max(-9999,min(9999,safe_int(item.get('delta') or 0)))})
-    merged['winCounter']={'fontFamily':raw_win.get('fontFamily') if raw_win.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global','title':str(raw_win.get('title','現在'))[:60],'currentWin':max(-999999,min(999999,safe_int(raw_win.get('currentWin') or 0))),'goalWin':max(1,min(999999,safe_int(raw_win.get('goalWin') or 10))),'shortcutAdd':str(raw_win.get('shortcutAdd') or '').upper(),'shortcutSub':str(raw_win.get('shortcutSub') or '').upper(),'giftRules':win_gift_rules,'cardBg':valid_hex(raw_win.get('cardBg')),'cardBorder':valid_hex(raw_win.get('cardBorder')),'cardTextColor':valid_hex(raw_win.get('cardTextColor')),'cardOpacity':max(-1,min(100,safe_int(raw_win.get('cardOpacity',-1)))),'positiveTextColor':valid_hex(raw_win.get('positiveTextColor')),'negativeTextColor':valid_hex(raw_win.get('negativeTextColor')) or '#ff4055','goalTextColor':valid_hex(raw_win.get('goalTextColor')),'titleSize':max(12,min(120,safe_int(raw_win.get('titleSize',30),30))),'valueSize':max(20,min(180,safe_int(raw_win.get('valueSize',76),76))),'imageUrl':str(raw_win.get('imageUrl') or '')[:240],'imageName':str(raw_win.get('imageName') or '')[:120],'imageSize':max(20,min(240,safe_int(raw_win.get('imageSize') or 64))),'imageEnabled':raw_win.get('imageEnabled',True) is not False}
+    legacy_win_sound_volume=max(0,min(100,safe_int(raw_win.get('soundVolume',75),75)))
+    merged['winCounter']={'fontFamily':raw_win.get('fontFamily') if raw_win.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global','title':str(raw_win.get('title','現在'))[:60],'currentWin':max(-999999,min(999999,safe_int(raw_win.get('currentWin') or 0))),'goalWin':max(1,min(999999,safe_int(raw_win.get('goalWin') or 10))),'shortcutAdd':str(raw_win.get('shortcutAdd') or '').upper(),'shortcutSub':str(raw_win.get('shortcutSub') or '').upper(),'giftRules':win_gift_rules,'cardBg':valid_hex(raw_win.get('cardBg')),'cardBorder':valid_hex(raw_win.get('cardBorder')),'cardTextColor':valid_hex(raw_win.get('cardTextColor')),'cardOpacity':max(-1,min(100,safe_int(raw_win.get('cardOpacity',-1)))),'positiveTextColor':valid_hex(raw_win.get('positiveTextColor')),'negativeTextColor':valid_hex(raw_win.get('negativeTextColor')) or '#ff4055','goalTextColor':valid_hex(raw_win.get('goalTextColor')),'titleSize':max(12,min(120,safe_int(raw_win.get('titleSize',30),30))),'valueSize':max(20,min(180,safe_int(raw_win.get('valueSize',76),76))),'imageUrl':str(raw_win.get('imageUrl') or '')[:240],'imageName':str(raw_win.get('imageName') or '')[:120],'imageSize':max(20,min(240,safe_int(raw_win.get('imageSize') or 64))),'imageEnabled':raw_win.get('imageEnabled',True) is not False,'soundEnabled':bool(raw_win.get('soundEnabled',False)),'addSoundUrl':str(raw_win.get('addSoundUrl') or '')[:2000],'addSoundName':str(raw_win.get('addSoundName') or '')[:120],'addSoundVolume':max(0,min(100,safe_int(raw_win.get('addSoundVolume',legacy_win_sound_volume),legacy_win_sound_volume))),'subSoundUrl':str(raw_win.get('subSoundUrl') or '')[:2000],'subSoundName':str(raw_win.get('subSoundName') or '')[:120],'subSoundVolume':max(0,min(100,safe_int(raw_win.get('subSoundVolume',legacy_win_sound_volume),legacy_win_sound_volume))),'goalSoundUrl':str(raw_win.get('goalSoundUrl') or '')[:2000],'goalSoundName':str(raw_win.get('goalSoundName') or '')[:120],'goalSoundVolume':max(0,min(100,safe_int(raw_win.get('goalSoundVolume',legacy_win_sound_volume),legacy_win_sound_volume))),'soundVolume':legacy_win_sound_volume}
     raw_bridge = merged.get('minecraftBridge') if isinstance(merged.get('minecraftBridge'), dict) else {}
     marker = str(raw_bridge.get('marker') or 'bedrock_win').strip()[:80]
     if not marker:
@@ -582,12 +595,25 @@ def normalize_state(data):
     for index, item in enumerate(raw_gacha.get('patterns') or []):
         if not isinstance(item, dict):
             continue
+        raw_text_roles=item.get('textRoles') if isinstance(item.get('textRoles'),dict) else {}
+        text_roles={}
+        for role in ('pattern','sender','start','startQuestion','spinState','spinStatus','spinNumber','resultState','continueState','upperEntryState','resultWin','roundTotal','setCount','choiceResult','choice','endResult','endState','finalTotal'):
+            source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('continueState','upperEntryState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
+            text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         low = max(-9999, min(9999, safe_int(item.get('minWin') or 0)))
         high = max(-9999, min(9999, safe_int(item.get('maxWin') or 0)))
         outcomes=[]
         for outcome in item.get('outcomes',[])[:50] if isinstance(item.get('outcomes',[]),list) else []:
             if isinstance(outcome,dict):
-                outcomes.append({'value':max(-9999,min(9999,safe_int(outcome.get('value') or 0))),'probability':max(0,min(100000,safe_int(outcome.get('probability') or 0)))})
+                outcomes.append({'value':max(-9999,min(9999,safe_int(outcome.get('value') or 0))),'probability':max(0,min(100000,safe_int(outcome.get('probability') or 0))),'spinImageUrl':str(outcome.get('spinImageUrl') or '')[:2000],'spinImageName':str(outcome.get('spinImageName') or '')[:120],'spinImageSize':max(40,min(1200,safe_int(outcome.get('spinImageSize',item.get('spinNumberImageSize',760)),760))),'spinTextEnabled':outcome.get('spinTextEnabled',True) is not False,'spinText':str(outcome.get('spinText') or '')[:120],'spinTextColor':valid_hex(outcome.get('spinTextColor')) or '#ffffff','spinTextSize':max(0,min(600,safe_int(outcome.get('spinTextSize',0),0))),'spinFontFamily':outcome.get('spinFontFamily') if outcome.get('spinFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','resultImageUrl':str(outcome.get('resultImageUrl') or '')[:2000],'resultImageName':str(outcome.get('resultImageName') or '')[:120],'resultImageSize':max(40,min(1200,safe_int(outcome.get('resultImageSize',760),760))),'resultTextEnabled':outcome.get('resultTextEnabled',True) is not False,'resultText':str(outcome.get('resultText') or '')[:120],'resultTextColor':valid_hex(outcome.get('resultTextColor')) or '#ffffff','resultTextSize':max(0,min(600,safe_int(outcome.get('resultTextSize',0),0))),'resultFontFamily':outcome.get('resultFontFamily') if outcome.get('resultFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global'})
+                if not valid_hex(outcome.get('spinTextColor')): outcomes[-1]['spinTextColor']=''
+                if not valid_hex(outcome.get('resultTextColor')): outcomes[-1]['resultTextColor']=''
+        upper_outcomes=[]
+        for outcome in item.get('upperOutcomes',[])[:50] if isinstance(item.get('upperOutcomes',[]),list) else []:
+            if isinstance(outcome,dict):
+                upper_outcomes.append({'value':max(-9999,min(9999,safe_int(outcome.get('value') or 0))),'probability':max(0,min(100000,safe_int(outcome.get('probability') or 0))),'spinImageUrl':str(outcome.get('spinImageUrl') or '')[:2000],'spinImageName':str(outcome.get('spinImageName') or '')[:120],'spinImageSize':max(40,min(1200,safe_int(outcome.get('spinImageSize',item.get('spinNumberImageSize',760)),760))),'spinTextEnabled':outcome.get('spinTextEnabled',True) is not False,'spinText':str(outcome.get('spinText') or '')[:120],'spinTextColor':valid_hex(outcome.get('spinTextColor')) or '#ffffff','spinTextSize':max(0,min(600,safe_int(outcome.get('spinTextSize',0),0))),'spinFontFamily':outcome.get('spinFontFamily') if outcome.get('spinFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','resultImageUrl':str(outcome.get('resultImageUrl') or '')[:2000],'resultImageName':str(outcome.get('resultImageName') or '')[:120],'resultImageSize':max(40,min(1200,safe_int(outcome.get('resultImageSize',760),760))),'resultTextEnabled':outcome.get('resultTextEnabled',True) is not False,'resultText':str(outcome.get('resultText') or '')[:120],'resultTextColor':valid_hex(outcome.get('resultTextColor')) or '#ffffff','resultTextSize':max(0,min(600,safe_int(outcome.get('resultTextSize',0),0))),'resultFontFamily':outcome.get('resultFontFamily') if outcome.get('resultFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global'})
+                if not valid_hex(outcome.get('spinTextColor')): upper_outcomes[-1]['spinTextColor']=''
+                if not valid_hex(outcome.get('resultTextColor')): upper_outcomes[-1]['resultTextColor']=''
         pattern_opacity=safe_int(item.get('cardOpacity',raw_gacha.get('cardOpacity',94)))
         raw_element_layout=item.get('elementLayout') if isinstance(item.get('elementLayout'),dict) else {}
         element_layout={key:max(0,min(100,safe_int(raw_element_layout.get(key,default),default))) for key,default in (('patternX',50),('patternY',8),('senderX',50),('senderY',18),('resultX',50),('resultY',50),('stateX',50),('stateY',75),('totalX',50),('totalY',88))} if raw_element_layout else {}
@@ -634,13 +660,18 @@ def normalize_state(data):
             alert=raw_alerts[alert_index] if alert_index<len(raw_alerts) and isinstance(raw_alerts[alert_index],dict) else {}
             pre_alerts.append({'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('result-only','spin-start','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'audioSeconds':max(0,min(600,safe_float(alert.get('audioSeconds',0),0))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
         patterns.append({
-            'id':str(item.get('id') or f'gacha-pattern-{index+1}'), 'name':str(item.get('name') or f'パターン{index+1}')[:60], 'giftName':str(item.get('giftName') or '').strip(),
+            'id':str(item.get('id') or f'gacha-pattern-{index+1}'), 'name':str(item.get('name') or f'パターン{index+1}')[:60], 'giftName':str(item.get('giftName') or '').strip(), 'textRoles':text_roles,
             'minWin':min(low,high), 'maxWin':max(low,high), 'outcomeMode':'weighted' if item.get('outcomeMode')=='weighted' else 'range', 'outcomes':outcomes,
             'winSign':item.get('winSign') if item.get('winSign') in ('plus','minus','both') else 'both', 'mode':'single' if item.get('mode',raw_gacha.get('mode','continue'))=='single' else 'continue',
             'continuationRate':max(0,min(100,safe_int(item.get('continuationRate',raw_gacha.get('continuationRate',70))))),
             'upperAtEnabled':bool(item.get('upperAtEnabled',False)),
             'upperAtEntryRate':max(0,min(100,safe_int(item.get('upperAtEntryRate',5)))),
             'upperAtContinuationRate':max(0,min(100,safe_int(item.get('upperAtContinuationRate',80)))),
+            'upperSpinSeconds':max(1,min(30,safe_float(item.get('upperSpinSeconds',item.get('spinSeconds',raw_gacha.get('spinSeconds',5))),5))),
+            'upperOutcomeMode':'weighted' if item.get('upperOutcomeMode')=='weighted' else 'range',
+            'upperMinWin':max(-9999,min(9999,safe_int(item.get('upperMinWin',item.get('minWin',1)),1))),
+            'upperMaxWin':max(-9999,min(9999,safe_int(item.get('upperMaxWin',item.get('maxWin',10)),10))),
+            'upperOutcomes':upper_outcomes,
             'upperAtAnimationUrl':str(item.get('upperAtAnimationUrl') or '')[:2000], 'upperAtAnimationName':str(item.get('upperAtAnimationName') or '')[:120],
             'upperAtAudioUrl':str(item.get('upperAtAudioUrl') or '')[:2000], 'upperAtAudioName':str(item.get('upperAtAudioName') or '')[:120],
             'upperAtAudioVolume':max(0,min(100,safe_int(item.get('upperAtAudioVolume',75)))),
@@ -653,6 +684,9 @@ def normalize_state(data):
             'upperEntryVideoVolume':max(0,min(100,safe_int(item.get('upperEntryVideoVolume',80)))),
             'upperEntrySeconds':max(1,min(30,safe_int(item.get('upperEntrySeconds',3),3))),
             'startEffectEnabled':item.get('startEffectEnabled',True) is not False,
+            'startDefaultSoundEnabled':item.get('startDefaultSoundEnabled',True) is not False,
+            'startDefaultSoundUrl':str(item.get('startDefaultSoundUrl') or '')[:2000], 'startDefaultSoundName':str(item.get('startDefaultSoundName') or '')[:120],
+            'startDefaultSoundVolume':max(0,min(100,safe_int(item.get('startDefaultSoundVolume',item.get('soundVolume',80)),80))),
             'startAnimationUrl':str(item.get('startAnimationUrl') or '')[:2000], 'startAnimationName':str(item.get('startAnimationName') or '')[:120],
             'startAudioUrl':str(item.get('startAudioUrl') or '')[:2000], 'startAudioName':str(item.get('startAudioName') or '')[:120],
             'startSeconds':max(1,min(30,safe_int(item.get('startSeconds',2),2))), 'startAudioVolume':max(0,min(100,safe_int(item.get('startAudioVolume',80),80))), 'startVideoAudioEnabled':bool(item.get('startVideoAudioEnabled',True)), 'startVideoVolume':max(0,min(100,safe_int(item.get('startVideoVolume',75),75))),
@@ -694,7 +728,11 @@ def normalize_state(data):
             'preAlerts':pre_alerts, 'preAlertEnabled':bool(item.get('preAlertEnabled',False)), 'preAlertOnContinue':bool(item.get('preAlertOnContinue',False)), 'preAlertOnUpper':bool(item.get('preAlertOnUpper',False)), 'preAlertMinWin':max(0,min(999999,safe_int(item.get('preAlertMinWin',0)))), 'preAlertTiming':item.get('preAlertTiming') if item.get('preAlertTiming') in ('result-only','spin-start','before-result') else 'before-result', 'preAlertText':str(item.get('preAlertText') or 'チャンス！')[:80], 'preAlertSeconds':max(0.2,min(5,safe_float(item.get('preAlertSeconds',1.2),1.2))), 'preAlertColor':valid_hex(item.get('preAlertColor')) or '#ffe05b', 'preAlertVolume':max(0,min(100,safe_int(item.get('preAlertVolume',75)))), 'preAlertAnimationUrl':str(item.get('preAlertAnimationUrl') or '')[:2000], 'preAlertAnimationName':str(item.get('preAlertAnimationName') or '')[:120], 'preAlertVideoVolume':max(0,min(100,safe_int(item.get('preAlertVideoVolume',75)))),
             'spinSeconds':max(3,min(30,safe_int(item.get('spinSeconds',raw_gacha.get('spinSeconds',5))))),
             'soundVolume':max(0,min(100,safe_int(item.get('soundVolume',raw_gacha.get('soundVolume',65))))),
+            'standardBeepEnabled':item.get('standardBeepEnabled',True) is not False,
+            'standardResultSoundEnabled':item.get('standardResultSoundEnabled',True) is not False,
             'spinSoundUrl':str(item.get('spinSoundUrl') or '')[:2000], 'spinSoundName':str(item.get('spinSoundName') or '')[:120],
+            'secondaryAudioUrl':str(item.get('secondaryAudioUrl') or '')[:2000], 'secondaryAudioName':str(item.get('secondaryAudioName') or '')[:120], 'secondaryAudioVolume':max(0,min(100,safe_int(item.get('secondaryAudioVolume',75),75))), 'secondaryAudioLoop':bool(item.get('secondaryAudioLoop',False)), 'secondaryAudioDelay':max(0,min(30,safe_float(item.get('secondaryAudioDelay',0),0))),
+            'spinCandidateMode':'custom' if item.get('spinCandidateMode')=='custom' else 'outcomes', 'spinCandidates':[max(-9999,min(9999,safe_int(x))) for x in (item.get('spinCandidates') or [])[:100] if str(x).strip().lstrip('-').isdigit()], 'spinNumberImageSize':max(40,min(1200,safe_int(item.get('spinNumberImageSize',760),760))),
             'slotNumberSize':max(40,min(400,safe_int(item.get('slotNumberSize',raw_gacha.get('slotNumberSize',130))))),
             'slotNumberColor':valid_hex(item.get('slotNumberColor')) or valid_hex(raw_gacha.get('slotNumberColor')) or '#ffffff',
             'slotX':max(5,min(95,safe_int(item.get('slotX',raw_gacha.get('slotX',50))))), 'slotY':max(10,min(90,safe_int(item.get('slotY',raw_gacha.get('slotY',50))))),
@@ -762,8 +800,38 @@ def normalize_state(data):
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
         'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,safe_int(item.get('continueCount') or 0)),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
         'queue':[x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100],
-        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'effectStyle':'fullscreen-slot' if raw_event.get('effectStyle')=='fullscreen-slot' else 'card', 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
+        'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'effectStyle':'fullscreen-slot' if raw_event.get('effectStyle')=='fullscreen-slot' else 'card', 'textRoles':copy.deepcopy(raw_event.get('textRoles')) if isinstance(raw_event.get('textRoles'),dict) else {}, 'outcomes':copy.deepcopy(raw_event.get('outcomes')) if isinstance(raw_event.get('outcomes'),list) else [], 'upperOutcomes':copy.deepcopy(raw_event.get('upperOutcomes')) if isinstance(raw_event.get('upperOutcomes'),list) else [], 'spinNumberImageSize':max(40,min(1200,safe_int(raw_event.get('spinNumberImageSize',760),760))), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
+    raw_pachinko = merged.get('pachinkoGacha') if isinstance(merged.get('pachinkoGacha'),dict) else {}
+    pachinko_patterns=[]
+    for index,item in enumerate((raw_pachinko.get('patterns') or [])[:50]):
+        if not isinstance(item,dict): continue
+        raw_text_roles=item.get('textRoles') if isinstance(item.get('textRoles'),dict) else {}
+        text_roles={}
+        for role in ('pattern','sender','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total'):
+            source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
+            text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
+        media={}
+        for stage in ('spin','reach','cz','hit','at','upper','lt','end'):
+            for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
+                key=stage+kind
+                media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
+            media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
+            media[stage+'Seconds']=max(.2,min(120,safe_float(item.get(stage+'Seconds',3),3)))
+        pachinko_patterns.append({
+            'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
+            'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
+            'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
+            'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))),
+            'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atContinuationRate':max(0,min(100,safe_int(item.get('atContinuationRate',80),80))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
+            'upperEnabled':bool(item.get('upperEnabled',False)), 'upperEntryRate':max(0,min(100,safe_int(item.get('upperEntryRate',10),10))), 'upperContinuationRate':max(0,min(100,safe_int(item.get('upperContinuationRate',90),90))), 'upperMinWin':max(0,min(999999,safe_int(item.get('upperMinWin',20),20))), 'upperMaxWin':max(0,min(999999,safe_int(item.get('upperMaxWin',50),50))),
+            'luckyTriggerEnabled':bool(item.get('luckyTriggerEnabled',False)), 'luckyTriggerRate':max(0,min(100,safe_int(item.get('luckyTriggerRate',5),5))), 'luckyTriggerContinuationRate':max(0,min(100,safe_int(item.get('luckyTriggerContinuationRate',95),95))), 'luckyTriggerMinWin':max(0,min(999999,safe_int(item.get('luckyTriggerMinWin',50),50))), 'luckyTriggerMaxWin':max(0,min(999999,safe_int(item.get('luckyTriggerMaxWin',100),100))),
+            'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, **media
+        })
+    raw_p_event=raw_pachinko.get('event') if isinstance(raw_pachinko.get('event'),dict) else {}
+    p_created=max(0,safe_float(raw_p_event.get('createdAt') or 0));p_active=bool(raw_p_event.get('active',False)) and p_created>=SERVER_STARTED_AT
+    merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'route':str(raw_p_event.get('route') or '')[:30],'rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
+
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
     raw_profiles = data.get('winProfiles') if isinstance(data.get('winProfiles'), list) else []
@@ -1059,6 +1127,57 @@ def complete_other_gacha_event(event_id):
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
+def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False):
+    machine=data['pachinkoGacha'];spins=max(1,int(pattern.get('spinsPerGift',10)));den=max(1,int(pattern.get('hitDenominator',199)));num=max(1,min(den,int(pattern.get('hitNumerator',1))))
+    hit_spin=0
+    for spin in range(1,spins+1):
+        if random.randint(1,den)<=num: hit_spin=spin;break
+    route='miss';rounds=[];total=0
+    if hit_spin:
+        route='hit';total=max(0,int(pattern.get('baseWin',10)))
+        cz_success=True
+        if pattern.get('czEnabled'):
+            cz_success=random.random()*100<float(pattern.get('czRate',50));route='cz-success' if cz_success else 'cz-fail'
+        if cz_success and pattern.get('atEnabled') and random.random()*100<float(pattern.get('atEntryRate',50)):
+            route='at';phase='at';guard=0
+            while guard<1000:
+                guard+=1
+                if phase=='at': lo,hi=sorted((int(pattern.get('atMinWin',5)),int(pattern.get('atMaxWin',20))));rate=float(pattern.get('atContinuationRate',80))
+                elif phase=='upper': lo,hi=sorted((int(pattern.get('upperMinWin',20)),int(pattern.get('upperMaxWin',50))));rate=float(pattern.get('upperContinuationRate',90))
+                else: lo,hi=sorted((int(pattern.get('luckyTriggerMinWin',50)),int(pattern.get('luckyTriggerMaxWin',100))));rate=float(pattern.get('luckyTriggerContinuationRate',95))
+                win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win);continued=random.random()*100<rate
+                next_phase=phase
+                if continued and phase=='at' and pattern.get('upperEnabled') and random.random()*100<float(pattern.get('upperEntryRate',10)): next_phase='upper'
+                if continued and phase in ('at','upper') and pattern.get('luckyTriggerEnabled') and random.random()*100<float(pattern.get('luckyTriggerRate',5)): next_phase='lt'
+                rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':next_phase})
+                if not continued: break
+                phase=next_phase
+        elif pattern.get('timeShortEnabled'):
+            route='time-short';short_spins=max(0,int(pattern.get('timeShortSpins',50)));short_den=max(1,int(pattern.get('timeShortHitDenominator',99)))
+            for spin in range(1,short_spins+1):
+                if random.randint(1,short_den)==1:
+                    route='time-short-hit';total=min(999999,total+max(0,int(pattern.get('baseWin',10))));break
+    ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
+    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'route':route,'rounds':rounds,'total':total,'createdAt':time.time()}
+    if machine.get('event',{}).get('active'): machine.setdefault('queue',[]).append(event)
+    else: event['active']=True;machine['event']=event
+    return True
+
+def complete_pachinko_event(event_id):
+    with STATE_LOCK:
+        try: data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception: data=copy.deepcopy(DEFAULT)
+        data,_=normalize_state(data);machine=data['pachinkoGacha'];event=machine['event']
+        if safe_int(event.get('id') or 0)!=safe_int(event_id) or not event.get('active'): return False
+        if not event.get('isTest'):
+            data['winCounter']['currentWin']=max(-999999,min(999999,data['winCounter']['currentWin']+safe_int(event.get('total') or 0)))
+            machine.setdefault('history',[]).insert(0,{'id':event['id'],'senderName':event.get('senderName',''),'patternName':event.get('patternName',''),'route':event.get('route',''),'total':safe_int(event.get('total') or 0),'createdAt':time.time()})
+            machine['history']=machine['history'][:200]
+        event['active']=False;queue=machine.setdefault('queue',[])
+        if queue:
+            nxt=queue.pop(0);nxt['active']=True;nxt['createdAt']=time.time();machine['event']=nxt
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');return True
+
 def queue_gift_media_event(data, rule, gift_name, sender_name='', count=1):
     media=data['giftMedia']; current=media.get('event') or {}; queued=media.setdefault('queue',[])
     used=[safe_int(current.get('id') or 0)]+[safe_int(x.get('id') or 0) for x in queued if isinstance(x,dict)]
@@ -1098,8 +1217,23 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
     set_count=0
     while True:
         set_count+=1
-        weighted=[(abs(item['value']),item['probability']) for item in pattern.get('outcomes',[]) if int(item.get('probability') or 0)>0] if pattern.get('outcomeMode')=='weighted' else []
-        delta=random.choices([item[0] for item in weighted],weights=[item[1] for item in weighted],k=1)[0] if weighted else random.randint(low,high)
+        is_upper=phase=='upper'
+        outcome_source=pattern.get('upperOutcomes',[]) if is_upper and pattern.get('upperOutcomeMode')=='weighted' else pattern.get('outcomes',[])
+        outcome_mode=pattern.get('upperOutcomeMode') if is_upper else pattern.get('outcomeMode')
+        fixed_outcomes=[item for item in outcome_source if isinstance(item,dict)] if outcome_mode=='weighted' else []
+        weighted=[item for item in fixed_outcomes if int(item.get('probability') or 0)>0]
+        # Fixed-number mode must never fall back to the min/max range. If every
+        # probability is temporarily zero, draw equally from the configured
+        # fixed values; if no value exists, safely return 0 WIN.
+        fixed_pool=weighted or fixed_outcomes
+        picked=(random.choices(weighted,weights=[item['probability'] for item in weighted],k=1)[0] if weighted else random.choice(fixed_pool) if fixed_pool else {'value':0}) if outcome_mode=='weighted' else None
+        if outcome_mode=='weighted':
+            delta=abs(int(picked.get('value') or 0))
+        elif is_upper:
+            upper_low,upper_high=sorted((abs(int(pattern.get('upperMinWin',magnitude_low))),abs(int(pattern.get('upperMaxWin',magnitude_high)))))
+            delta=random.randint(upper_low,upper_high)
+        else:
+            delta=random.randint(low,high)
         if sign=='minus': delta=-abs(delta)
         elif sign in ('plus','both'): delta=abs(delta)
         total=max(-999999,min(999999,total+delta)); earned=max(-999999,min(999999,earned+delta))
@@ -1108,11 +1242,21 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
         if active_rate>=100 and set_count>=1000:
             keep_going=False
         enter_upper=bool(keep_going and phase=='normal' and upper_enabled and random.random()*100 < upper_enter_rate)
-        rounds.append({'delta':delta,'total':earned,'currentWin':total,'continued':keep_going,'phase':phase,'upperEntered':enter_upper})
+        configured_candidates=pattern.get('spinCandidates') if pattern.get('spinCandidateMode')=='custom' else []
+        if outcome_mode=='weighted':
+            candidate_items=weighted or fixed_outcomes
+            source_candidates=list(dict.fromkeys(abs(int(item.get('value') or 0)) for item in candidate_items))
+        else:
+            candidate_low,candidate_high=(upper_low,upper_high) if is_upper else (magnitude_low,magnitude_high)
+            source_candidates=list(range(candidate_low,candidate_high+1))[:100]
+        spin_candidates=configured_candidates or source_candidates or [abs(delta)]
+        rounds.append({'delta':delta,'total':earned,'currentWin':total,'continued':keep_going,'phase':phase,'upperEntered':enter_upper,'spinSeconds':float(pattern.get('upperSpinSeconds',pattern.get('spinSeconds',5))) if is_upper else float(pattern.get('spinSeconds',5)),'spinCandidates':spin_candidates[:100],'spinImageUrl':str((picked or {}).get('spinImageUrl') or ''),'spinImageSize':max(40,min(1200,safe_int((picked or {}).get('spinImageSize',pattern.get('spinNumberImageSize',760)),760))),'spinTextEnabled':(picked or {}).get('spinTextEnabled',True) is not False,'spinText':str((picked or {}).get('spinText') or ''),'spinTextColor':valid_hex((picked or {}).get('spinTextColor')) or '#ffffff','spinTextSize':max(0,min(600,safe_int((picked or {}).get('spinTextSize',0),0))),'spinFontFamily':(picked or {}).get('spinFontFamily') if (picked or {}).get('spinFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','resultImageUrl':str((picked or {}).get('resultImageUrl') or ''),'resultImageSize':max(40,min(1200,safe_int((picked or {}).get('resultImageSize',760),760))),'resultTextEnabled':(picked or {}).get('resultTextEnabled',True) is not False,'resultText':str((picked or {}).get('resultText') or ''),'resultTextColor':valid_hex((picked or {}).get('resultTextColor')) or '#ffffff','resultTextSize':max(0,min(600,safe_int((picked or {}).get('resultTextSize',0),0))),'resultFontFamily':(picked or {}).get('resultFontFamily') if (picked or {}).get('resultFontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global'})
+        if not valid_hex((picked or {}).get('spinTextColor')): rounds[-1]['spinTextColor']=''
+        if not valid_hex((picked or {}).get('resultTextColor')): rounds[-1]['resultTextColor']=''
         if not keep_going: break
         if enter_upper: phase='upper'
     used_ids=[int(gacha.get('event',{}).get('id') or 0)]+[int(x.get('id') or 0) for x in gacha.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'effectStyle':'fullscreen-slot' if pattern.get('effectStyle')=='fullscreen-slot' else 'card','rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'effectStyle':'fullscreen-slot' if pattern.get('effectStyle')=='fullscreen-slot' else 'card','textRoles':copy.deepcopy(pattern.get('textRoles') or {}),'outcomes':copy.deepcopy(pattern.get('outcomes') or []),'upperOutcomes':copy.deepcopy(pattern.get('upperOutcomes') or []),'spinNumberImageSize':max(40,min(1200,safe_int(pattern.get('spinNumberImageSize',760),760))),'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
     queue=gacha.setdefault('queue',[])
     if gacha.get('event',{}).get('active'):
         queue.append(event)
@@ -1179,7 +1323,7 @@ def complete_gacha_event(event_id):
         data,_=normalize_state(data); gacha=data['gacha']; event=gacha['event']
         if int(event.get('id') or 0)!=event_id or not event.get('active'):
             return False
-        if event.get('type') == 'gacha' and not any(int(item.get('id') or 0)==event_id for item in gacha.get('history', [])):
+        if event.get('type') == 'gacha' and not event.get('isTest') and not any(int(item.get('id') or 0)==event_id for item in gacha.get('history', [])):
             result=int(event.get('total') or 0)
             if event.get('winSign') == 'both':
                 result= -abs(result) if event.get('choice') == 'minus' else abs(result)
@@ -1221,7 +1365,9 @@ def choose_gacha_sign_in_state(data, choice):
         return False
     choice='minus' if choice=='minus' else 'plus'; amount=abs(int(event.get('total') or 0))
     delta=-amount if choice=='minus' else amount
-    win=data['winCounter']; win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
+    win=data['winCounter']
+    if not event.get('isTest'):
+        win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
     event['choice']=choice; event['currentWin']=win['currentWin']
     return True
 
@@ -1265,7 +1411,9 @@ def apply_gacha_round(event_id, round_index):
         if event.get('winSign')=='both':
             return False
         delta=int(rounds[round_index].get('delta') or 0)
-        win=data['winCounter']; win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
+        win=data['winCounter']
+        if not event.get('isTest'):
+            win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
         applied.append(round_index); event['currentWin']=win['currentWin']
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
@@ -1310,6 +1458,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         pattern=next((p for p in gacha['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
+        pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and normalize_gift_name(r['giftName'])==name and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
         gift_rule=next((x for x in win['giftRules'] if x['giftName'] and normalize_gift_name(x['giftName'])==name),None)
         # WIN adjustment gifts only change the counter, even if the same gift
@@ -1324,6 +1473,9 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             matched=True
         if other_pattern:
             run_other_gacha_draw(data,other_pattern,sender_name)
+            matched=True
+        if pachinko_pattern:
+            run_pachinko_draw(data,pachinko_pattern,sender_name)
             matched=True
         if media_rule:
             queue_gift_media_event(data,media_rule,gift_name,sender_name,count)
@@ -1933,7 +2085,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/complete', '/api/pachinko/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -1990,6 +2142,11 @@ class Handler(SimpleHTTPRequestHandler):
                         live_other=current.get('otherGacha',{})
                         data['otherGacha']['event']=copy.deepcopy(live_other.get('event',{}))
                         data['otherGacha']['queue']=copy.deepcopy(live_other.get('queue',[]))
+                    if isinstance(data.get('pachinkoGacha'),dict):
+                        live_pachinko=current.get('pachinkoGacha',{})
+                        data['pachinkoGacha']['event']=copy.deepcopy(live_pachinko.get('event',{}))
+                        data['pachinkoGacha']['queue']=copy.deepcopy(live_pachinko.get('queue',[]))
+                        data['pachinkoGacha']['history']=copy.deepcopy(live_pachinko.get('history',[]))
                     if isinstance(data.get('giftMedia'),dict):
                         live_media=current.get('giftMedia',{})
                         data['giftMedia']['event']=copy.deepcopy(live_media.get('event',{}))
@@ -2051,6 +2208,21 @@ class Handler(SimpleHTTPRequestHandler):
                     state['winCounter']['imageEnabled'] = True
                 write_state(state)
                 result = {'ok': True, 'winCounter': read_state()['winCounter']}
+            elif self.path == '/api/win-sound':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                kind=str(data.get('kind') or '')
+                if kind not in ('add','sub','goal'): raise ValueError('音源の種類を確認してください')
+                state=read_state();url_key=kind+'SoundUrl';name_key=kind+'SoundName'
+                if bool(data.get('clear')):
+                    state['winCounter'][url_key]='';state['winCounter'][name_key]=''
+                else:
+                    match=re.fullmatch(r'data:audio/(wav|x-wav|mpeg|mp3|ogg|mp4|m4a|aac|webm);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('MP3、WAV、OGG、M4A、AAC、WebM形式の音源を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('音源は15MB以下にしてください')
+                    ext={'mpeg':'mp3','mp4':'m4a','m4a':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1));filename=f'win_counter_{kind}.{ext}';(ROOT/filename).write_bytes(raw)
+                    state['winCounter'][url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));state['winCounter'][name_key]=Path(str(data.get('name') or filename)).name[:120];state['winCounter']['soundEnabled']=True
+                write_state(state);result={'ok':True,'winCounter':read_state()['winCounter']}
             elif self.path == '/api/gacha-audio':
                 if self.client_address[0] not in ('127.0.0.1', '::1'):
                     self.send_error(403); return
@@ -2064,7 +2236,7 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern_id = str(data.get('patternId') or '')
                 safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', pattern_id)[:80]
                 stage = str(data.get('stage') or 'normal')
-                stage_prefixes = {'spinEffect':'gacha_spin_effect_','start':'gacha_start_audio_','hit':'gacha_hit_audio_','miss':'gacha_miss_audio_','upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
+                stage_prefixes = {'spinEffect':'gacha_spin_effect_','secondary':'gacha_secondary_audio_','startCue':'gacha_start_cue_','start':'gacha_start_audio_','hit':'gacha_hit_audio_','miss':'gacha_miss_audio_','upperEntry':'gacha_upper_entry_audio_','upperAT':'gacha_upper_audio_','normalContinue':'gacha_continue_audio_','upperContinue':'gacha_upper_continue_audio_','preAlert1':'gacha_prealert1_audio_','preAlert2':'gacha_prealert2_audio_','preAlert3':'gacha_prealert3_audio_'}
                 prefix = stage_prefixes.get(stage, 'gacha_audio_')
                 filename = (prefix + safe_id if safe_id else prefix.rstrip('_')) + '.' + ext
                 (ROOT / filename).write_bytes(raw)
@@ -2076,8 +2248,8 @@ class Handler(SimpleHTTPRequestHandler):
                     alert_index = int(alert_match.group(1)) - 1
                     while len(pattern.setdefault('preAlerts', [])) < 3: pattern['preAlerts'].append({})
                     target = pattern['preAlerts'][alert_index]
-                url_key = 'audioUrl' if alert_match and pattern is not None else {'spinEffect':'spinSoundUrl','start':'startAudioUrl','hit':'hitAudioUrl','miss':'missAudioUrl','upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
-                name_key = 'audioName' if alert_match and pattern is not None else {'spinEffect':'spinSoundName','start':'startAudioName','hit':'hitAudioName','miss':'missAudioName','upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
+                url_key = 'audioUrl' if alert_match and pattern is not None else {'spinEffect':'spinSoundUrl','secondary':'secondaryAudioUrl','startCue':'startDefaultSoundUrl','start':'startAudioUrl','hit':'hitAudioUrl','miss':'missAudioUrl','upperEntry':'upperEntryAudioUrl','upperAT':'upperAtAudioUrl','normalContinue':'continueAudioUrl','upperContinue':'upperContinueAudioUrl'}.get(stage, 'audioUrl')
+                name_key = 'audioName' if alert_match and pattern is not None else {'spinEffect':'spinSoundName','secondary':'secondaryAudioName','startCue':'startDefaultSoundName','start':'startAudioName','hit':'hitAudioName','miss':'missAudioName','upperEntry':'upperEntryAudioName','upperAT':'upperAtAudioName','normalContinue':'continueAudioName','upperContinue':'upperContinueAudioName'}.get(stage, 'audioName')
                 target[url_key] = '/' + filename + '?v=' + str(safe_int(time.time() * 1000))
                 target[name_key] = Path(str(data.get('name') or filename)).name[:120]
                 write_state(state)
@@ -2134,6 +2306,22 @@ class Handler(SimpleHTTPRequestHandler):
                     alert=pattern['preAlerts'][alert_index];url_key='animationUrl';name_key='animationName';target=alert
                 target[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));target[name_key]=Path(str(data.get('name') or filename)).name[:120];write_state(state)
                 result={'ok':True,'gacha':read_state()['gacha']}
+            elif self.path == '/api/gacha-outcome-media':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['gacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('保存先のWINガチャが見つかりません')
+                upper=bool(data.get('upper'));items=pattern.get('upperOutcomes' if upper else 'outcomes') or [];index=safe_int(data.get('index'),-1);role=str(data.get('role') or '')
+                if index<0 or index>=len(items) or role not in ('spin','result'): raise ValueError('数字素材の保存先を確認してください')
+                item=items[index];url_key=role+'ImageUrl';name_key=role+'ImageName'
+                if bool(data.get('clear')): item[url_key]='';item[name_key]=''
+                else:
+                    match=re.fullmatch(r'data:image/(gif|png|jpeg|webp);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('PNG、JPG、WebP、GIF形式の画像を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('数字画像は15MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(1),match.group(1));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];filename=f'gacha_{"upper_" if upper else ""}{role}_number_{safe_id}_{index}.{ext}';(ROOT/filename).write_bytes(raw)
+                    item[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));item[name_key]=Path(str(data.get('name') or filename)).name[:120]
+                write_state(state);result={'ok':True,'gacha':read_state()['gacha']}
             elif self.path == '/api/gacha/test':
                 if self.client_address[0] not in ('127.0.0.1', '::1'):
                     self.send_error(403); return
@@ -2147,6 +2335,51 @@ class Handler(SimpleHTTPRequestHandler):
                 run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
                 queue_position=len(state['gacha'].get('queue',[])) if was_active else 0
                 write_state(state);result={'ok':True,'queued':was_active,'queuePosition':queue_position}
+            elif self.path == '/api/text-role-image':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                scope=str(data.get('scope') or '');pattern_id=str(data.get('patternId') or '');role=str(data.get('role') or '')
+                allowed={'gacha':('pattern','sender','start','startQuestion','spinState','spinStatus','spinNumber','resultState','continueState','upperEntryState','resultWin','roundTotal','setCount','choiceResult','choice','endResult','endState','finalTotal'),'pachinko':('pattern','sender','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total')}
+                if scope not in allowed or role not in allowed[scope]: raise ValueError('文字画像の設定先を確認してください')
+                state=read_state();collection=state['gacha']['patterns'] if scope=='gacha' else state['pachinkoGacha']['patterns'];pattern=next((x for x in collection if x['id']==pattern_id),None)
+                if not pattern: raise ValueError('設定先のガチャパターンが見つかりません')
+                target=pattern.setdefault('textRoles',{}).setdefault(role,{})
+                if bool(data.get('clear')): target['imageUrl']='';target['imageName']='';target['mode']='text'
+                else:
+                    match=re.fullmatch(r'data:image/(gif|png|jpeg|webp);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('GIF、PNG、JPG、WebP形式の画像を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('文字画像は15MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(1),match.group(1));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern_id)[:60];filename=f'{scope}_text_{safe_id}_{role}.{ext}';(ROOT/filename).write_bytes(raw);target['imageUrl']='/'+filename+'?v='+str(safe_int(time.time()*1000));target['imageName']=Path(str(data.get('name') or filename)).name[:120];target['mode']='image'
+                write_state(state);fresh=read_state();result={'ok':True,'gacha':fresh['gacha'],'pachinkoGacha':fresh['pachinkoGacha']}
+            elif self.path == '/api/pachinko/test':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('テストするパチンコガチャが見つかりません')
+                if not pattern.get('enabled',True): raise ValueError('停止中のパターンです')
+                run_pachinko_draw(state,pattern,'テスト',is_test=True);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
+            elif self.path == '/api/pachinko/complete':
+                result={'ok':complete_pachinko_event(safe_int(data.get('eventId') or 0))}
+            elif self.path == '/api/pachinko/media':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
+                stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
+                if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
+                elif kind=='animation':
+                    match=re.fullmatch(r'data:(image/(gif|png|jpeg|webp)|video/(mp4|webm));base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('GIF、PNG、JPG、WebP、MP4、WebM形式にしてください')
+                    raw=base64.b64decode(match.group(4),validate=True)
+                    if not raw or len(raw)>30*1024*1024: raise ValueError('演出素材は30MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(2) or match.group(3),match.group(2) or match.group(3));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];filename=f'pachinko_{stage}_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw);pattern[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));pattern[name_key]=Path(str(data.get('name') or filename)).name[:120]
+                else:
+                    match=re.fullmatch(r'data:audio/(wav|x-wav|mpeg|mp3|ogg|mp4|m4a|aac|webm);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('対応する音源形式を選択してください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('音源は15MB以下にしてください')
+                    ext={'mpeg':'mp3','mp4':'m4a','m4a':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];filename=f'pachinko_{stage}_audio_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw);pattern[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));pattern[name_key]=Path(str(data.get('name') or filename)).name[:120]
+                write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
             elif self.path == '/api/gift-media/upload':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
@@ -2265,6 +2498,7 @@ class Handler(SimpleHTTPRequestHandler):
                 media_keys={
                     ('start','animation'):('startAnimationUrl','startAnimationName'),
                     ('start','audio'):('startAudioUrl','startAudioName'),
+                    ('startCue','audio'):('startDefaultSoundUrl','startDefaultSoundName'),
                     ('hit','animation'):('hitAnimationUrl','hitAnimationName'),
                     ('hit','audio'):('hitAudioUrl','hitAudioName'),
                     ('miss','animation'):('missAnimationUrl','missAnimationName'),
@@ -2307,7 +2541,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6607'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6619'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2522,7 +2756,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6607')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6619')
     server.serve_forever()
 
 if __name__ == '__main__':

@@ -39,13 +39,19 @@ if errorlevel 1 (
   --add-data "overlay_gacha.html;." ^
   --add-data "overlay_other_gacha.html;." ^
   --add-data "overlay_gacha_history.html;." ^
+  --add-data "overlay_gacha_ranking.html;." ^
+  --add-data "overlay_gacha_set_ranking.html;." ^
+  --add-data "overlay_gacha_win_ranking.html;." ^
+  --add-data "overlay_gacha_rankings.html;." ^
   --add-data "overlay_gift_history.html;." ^
   --add-data "overlay_gift_media.html;." ^
+  --add-data "overlay_pachinko.html;." ^
   --add-data "overlay_missions.html;." ^
   --add-data "overlay_smoking.html;." ^
   --add-data "overlay_smoking_gacha.html;." ^
   --add-data "overlay_timer.html;." ^
   --add-data "overlay_win.html;." ^
+  --add-data "v6608.js;." ^
   --add-data "README.txt;." ^
   --add-data "update_config.json;." ^
   --add-data "app_icon.ico;." ^
