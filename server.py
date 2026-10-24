@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.31'
+APP_VERSION = '0.66.32'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -730,6 +730,8 @@ def normalize_state(data):
             'soundVolume':max(0,min(100,safe_int(item.get('soundVolume',raw_gacha.get('soundVolume',65))))),
             'standardBeepEnabled':item.get('standardBeepEnabled',True) is not False,
             'standardResultSoundEnabled':item.get('standardResultSoundEnabled',True) is not False,
+            'resultSoundEnabled':item.get('resultSoundEnabled',True) is not False,
+            'resultDisplaySeconds':max(0.5,min(30,safe_float(item.get('resultDisplaySeconds',2),2))),
             'spinSoundUrl':str(item.get('spinSoundUrl') or '')[:2000], 'spinSoundName':str(item.get('spinSoundName') or '')[:120],
             'secondaryAudioUrl':str(item.get('secondaryAudioUrl') or '')[:2000], 'secondaryAudioName':str(item.get('secondaryAudioName') or '')[:120], 'secondaryAudioVolume':max(0,min(100,safe_int(item.get('secondaryAudioVolume',75),75))), 'secondaryAudioLoop':bool(item.get('secondaryAudioLoop',False)), 'secondaryAudioDelay':max(0,min(30,safe_float(item.get('secondaryAudioDelay',0),0))),
             'spinCandidateMode':'custom' if item.get('spinCandidateMode')=='custom' else 'outcomes', 'spinCandidates':[max(-9999,min(9999,safe_int(x))) for x in (item.get('spinCandidates') or [])[:100] if str(x).strip().lstrip('-').isdigit()], 'spinNumberImageSize':max(40,min(1200,safe_int(item.get('spinNumberImageSize',760),760))),
