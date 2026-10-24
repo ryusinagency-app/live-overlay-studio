@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.26'
+APP_VERSION = '0.66.27'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -839,6 +839,7 @@ def normalize_state(data):
         pachinko_patterns.append({
             'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
             'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
+            'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
             'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
             'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))), 'timeShortSpinSeconds':max(.05,min(30,safe_float(item.get('timeShortSpinSeconds',.8),.8))), 'reachEnabled':item.get('reachEnabled',True) is not False,
             'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atSpins':at_spins, 'atHitNumerator':max(0,min(at_den,safe_int(item.get('atHitNumerator',at_default_num),at_default_num))), 'atHitDenominator':at_den, 'atSpinSeconds':max(.05,min(30,safe_float(item.get('atSpinSeconds',.8),.8))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
