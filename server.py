@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.19'
+APP_VERSION = '0.66.23'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -808,29 +808,47 @@ def normalize_state(data):
         if not isinstance(item,dict): continue
         raw_text_roles=item.get('textRoles') if isinstance(item.get('textRoles'),dict) else {}
         text_roles={}
-        for role in ('pattern','sender','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total'):
+        for role in ('pattern','sender','preAlertState','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total'):
             source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
             text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         media={}
-        for stage in ('spin','reach','cz','hit','at','upper','lt','end'):
+        for stage in ('spin','reach','cz','hit','at','upper','lt','end','preAlert1','preAlert2','preAlert3'):
             for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
             media[stage+'Seconds']=max(.2,min(120,safe_float(item.get(stage+'Seconds',3),3)))
+        at_spins=max(1,min(10000,safe_int(item.get('atSpins',10),10)))
+        at_den=max(1,min(1000000,safe_int(item.get('atHitDenominator',1000),1000)))
+        at_legacy_rate=max(0,min(100,safe_int(item.get('atContinuationRate',80),80)))/100
+        at_default_num=round((1-(1-at_legacy_rate)**(1/at_spins))*at_den)
+        upper_spins=max(1,min(10000,safe_int(item.get('upperSpins',10),10)))
+        upper_den=max(1,min(1000000,safe_int(item.get('upperHitDenominator',1000),1000)))
+        upper_legacy_rate=max(0,min(100,safe_int(item.get('upperContinuationRate',90),90)))/100
+        upper_default_num=round((1-(1-upper_legacy_rate)**(1/upper_spins))*upper_den)
+        raw_prealerts=item.get('preAlerts') if isinstance(item.get('preAlerts'),list) else []
+        prealerts=[]
+        for alert_index in range(3):
+            alert=raw_prealerts[alert_index] if alert_index<len(raw_prealerts) and isinstance(raw_prealerts[alert_index],dict) else {}
+            prealerts.append({'enabled':bool(alert.get('enabled',False)),'condition':alert.get('condition') if alert.get('condition') in ('any','hit','miss','cz-success','cz-fail','at','upper','lt') else 'any','chance':max(0,min(100,safe_int(alert.get('chance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'textSeconds':max(.2,min(120,safe_float(alert.get('textSeconds',1.2),1.2))),'mediaSeconds':max(0,min(120,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','audioSeconds':max(0,min(120,safe_float(alert.get('audioSeconds',0),0))),'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75),75))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75),75))),'animationUrl':media.get(f'preAlert{alert_index+1}AnimationUrl',''),'animationName':media.get(f'preAlert{alert_index+1}AnimationName',''),'audioUrl':media.get(f'preAlert{alert_index+1}AudioUrl',''),'audioName':media.get(f'preAlert{alert_index+1}AudioName','')})
+        raw_digits=item.get('digitSettings') if isinstance(item.get('digitSettings'),list) else []
+        digit_settings=[]
+        for digit in range(10):
+            source=raw_digits[digit] if digit<len(raw_digits) and isinstance(raw_digits[digit],dict) else {}
+            digit_settings.append({'text':str(source.get('text') if source.get('text') is not None else str(digit))[:8],'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','color':valid_hex(source.get('color')) or '#ffffff','size':max(14,min(400,safe_int(source.get('size',130),130))),'imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(1200,safe_int(source.get('imageSize',130),130)) )})
         pachinko_patterns.append({
             'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
             'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
             'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
-            'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))),
-            'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atContinuationRate':max(0,min(100,safe_int(item.get('atContinuationRate',80),80))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
-            'upperEnabled':bool(item.get('upperEnabled',False)), 'upperEntryRate':max(0,min(100,safe_int(item.get('upperEntryRate',10),10))), 'upperContinuationRate':max(0,min(100,safe_int(item.get('upperContinuationRate',90),90))), 'upperMinWin':max(0,min(999999,safe_int(item.get('upperMinWin',20),20))), 'upperMaxWin':max(0,min(999999,safe_int(item.get('upperMaxWin',50),50))),
-            'luckyTriggerEnabled':bool(item.get('luckyTriggerEnabled',False)), 'luckyTriggerRate':max(0,min(100,safe_int(item.get('luckyTriggerRate',5),5))), 'luckyTriggerContinuationRate':max(0,min(100,safe_int(item.get('luckyTriggerContinuationRate',95),95))), 'luckyTriggerMinWin':max(0,min(999999,safe_int(item.get('luckyTriggerMinWin',50),50))), 'luckyTriggerMaxWin':max(0,min(999999,safe_int(item.get('luckyTriggerMaxWin',100),100))),
-            'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, **media
+            'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))), 'timeShortSpinSeconds':max(.05,min(30,safe_float(item.get('timeShortSpinSeconds',.8),.8))), 'reachEnabled':item.get('reachEnabled',True) is not False,
+            'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atSpins':at_spins, 'atHitNumerator':max(0,min(at_den,safe_int(item.get('atHitNumerator',at_default_num),at_default_num))), 'atHitDenominator':at_den, 'atSpinSeconds':max(.05,min(30,safe_float(item.get('atSpinSeconds',.8),.8))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
+            'upperEnabled':bool(item.get('upperEnabled',False)), 'upperEntryRate':max(0,min(100,safe_int(item.get('upperEntryRate',10),10))), 'upperSpins':upper_spins, 'upperHitNumerator':max(0,min(upper_den,safe_int(item.get('upperHitNumerator',upper_default_num),upper_default_num))), 'upperHitDenominator':upper_den, 'upperSpinSeconds':max(.05,min(30,safe_float(item.get('upperSpinSeconds',.8),.8))), 'upperMinWin':max(0,min(999999,safe_int(item.get('upperMinWin',20),20))), 'upperMaxWin':max(0,min(999999,safe_int(item.get('upperMaxWin',50),50))),
+            'luckyTriggerEnabled':bool(item.get('luckyTriggerEnabled',False)), 'luckyTriggerRate':max(0,min(100,safe_int(item.get('luckyTriggerRate',5),5))), 'luckyTriggerContinuationRate':max(0,min(100,safe_int(item.get('luckyTriggerContinuationRate',95),95))), 'luckyTriggerSpinSeconds':max(.05,min(30,safe_float(item.get('luckyTriggerSpinSeconds',.8),.8))), 'luckyTriggerMinWin':max(0,min(999999,safe_int(item.get('luckyTriggerMinWin',50),50))), 'luckyTriggerMaxWin':max(0,min(999999,safe_int(item.get('luckyTriggerMaxWin',100),100))),
+            'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, 'preAlerts':prealerts, 'digitSettings':digit_settings, **media
         })
     raw_p_event=raw_pachinko.get('event') if isinstance(raw_pachinko.get('event'),dict) else {}
     p_created=max(0,safe_float(raw_p_event.get('createdAt') or 0));p_active=bool(raw_p_event.get('active',False)) and p_created>=SERVER_STARTED_AT
-    merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'route':str(raw_p_event.get('route') or '')[:30],'rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
+    merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'timeShortSpins':max(0,min(10000,safe_int(raw_p_event.get('timeShortSpins',0),0))),'timeShortHitSpin':max(0,min(10000,safe_int(raw_p_event.get('timeShortHitSpin',0),0))),'route':str(raw_p_event.get('route') or '')[:30],'preAlertIndex':max(-1,min(2,safe_int(raw_p_event.get('preAlertIndex',-1),-1))),'preAlertTiming':raw_p_event.get('preAlertTiming') if raw_p_event.get('preAlertTiming') in ('spin-start','during-spin','before-result') else 'before-result','rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
 
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
@@ -1142,23 +1160,66 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False):
             route='at';phase='at';guard=0
             while guard<1000:
                 guard+=1
-                if phase=='at': lo,hi=sorted((int(pattern.get('atMinWin',5)),int(pattern.get('atMaxWin',20))));rate=float(pattern.get('atContinuationRate',80))
-                elif phase=='upper': lo,hi=sorted((int(pattern.get('upperMinWin',20)),int(pattern.get('upperMaxWin',50))));rate=float(pattern.get('upperContinuationRate',90))
-                else: lo,hi=sorted((int(pattern.get('luckyTriggerMinWin',50)),int(pattern.get('luckyTriggerMaxWin',100))));rate=float(pattern.get('luckyTriggerContinuationRate',95))
-                win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win);continued=random.random()*100<rate
+                if phase=='at':
+                    lo,hi=sorted((int(pattern.get('atMinWin',5)),int(pattern.get('atMaxWin',20))))
+                    phase_spins=max(1,min(10000,int(pattern.get('atSpins',10))))
+                    hit_num=max(0,min(int(pattern.get('atHitDenominator',1000)),int(pattern.get('atHitNumerator',155))))
+                    hit_den=max(1,int(pattern.get('atHitDenominator',1000)))
+                elif phase=='upper':
+                    lo,hi=sorted((int(pattern.get('upperMinWin',20)),int(pattern.get('upperMaxWin',50))))
+                    phase_spins=max(1,min(10000,int(pattern.get('upperSpins',10))))
+                    hit_num=max(0,min(int(pattern.get('upperHitDenominator',1000)),int(pattern.get('upperHitNumerator',206))))
+                    hit_den=max(1,int(pattern.get('upperHitDenominator',1000)))
+                else:
+                    lo,hi=sorted((int(pattern.get('luckyTriggerMinWin',50)),int(pattern.get('luckyTriggerMaxWin',100))))
+                    phase_spins=1
+                    hit_num=0
+                    hit_den=1
+                    win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win)
+                    continued=random.random()*100<float(pattern.get('luckyTriggerContinuationRate',95))
+                    rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':phase,'spins':1,'hitSpin':1})
+                    if not continued: break
+                    continue
+                phase_hit_spin=0
+                for phase_spin in range(1,phase_spins+1):
+                    if random.randint(1,hit_den)<=hit_num:
+                        phase_hit_spin=phase_spin
+                        break
+                if phase_hit_spin:
+                    win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win)
+                    continued=True
+                else:
+                    win=0
+                    continued=False
                 next_phase=phase
                 if continued and phase=='at' and pattern.get('upperEnabled') and random.random()*100<float(pattern.get('upperEntryRate',10)): next_phase='upper'
                 if continued and phase in ('at','upper') and pattern.get('luckyTriggerEnabled') and random.random()*100<float(pattern.get('luckyTriggerRate',5)): next_phase='lt'
-                rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':next_phase})
-                if not continued: break
+                rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':next_phase,'spins':phase_spins,'hitSpin':phase_hit_spin})
+                if not continued or guard>=1000: break
                 phase=next_phase
         elif pattern.get('timeShortEnabled'):
-            route='time-short';short_spins=max(0,int(pattern.get('timeShortSpins',50)));short_den=max(1,int(pattern.get('timeShortHitDenominator',99)))
+            route='time-short';short_spins=max(0,int(pattern.get('timeShortSpins',50)));short_den=max(1,int(pattern.get('timeShortHitDenominator',99)));time_short_hit_spin=0
             for spin in range(1,short_spins+1):
                 if random.randint(1,short_den)==1:
-                    route='time-short-hit';total=min(999999,total+max(0,int(pattern.get('baseWin',10))));break
+                    route='time-short-hit';time_short_hit_spin=spin;total=min(999999,total+max(0,int(pattern.get('baseWin',10))));break
+        else:
+            short_spins=0;time_short_hit_spin=0
+    def prealert_matches(alert):
+        if not alert.get('enabled'): return False
+        condition=alert.get('condition','any')
+        if condition=='hit' and not hit_spin: return False
+        if condition=='miss' and hit_spin: return False
+        if condition=='cz-success' and route!='cz-success': return False
+        if condition=='cz-fail' and route!='cz-fail': return False
+        if condition=='at' and not any(r.get('phase')=='at' for r in rounds): return False
+        if condition=='upper' and not any(r.get('phase')=='upper' for r in rounds): return False
+        if condition=='lt' and not any(r.get('phase')=='lt' for r in rounds): return False
+        return random.random()*100 < max(0,min(100,int(alert.get('chance',100))))
+    matching_alerts=[index for index,alert in enumerate(pattern.get('preAlerts',[])[:3]) if prealert_matches(alert)]
+    prealert_index=random.choice(matching_alerts) if matching_alerts else -1
+    prealert=pattern.get('preAlerts',[{}])[prealert_index] if prealert_index>=0 else {}
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'route':route,'rounds':rounds,'total':total,'createdAt':time.time()}
+    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
     if machine.get('event',{}).get('active'): machine.setdefault('queue',[]).append(event)
     else: event['active']=True;machine['event']=event
     return True
@@ -2085,7 +2146,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/complete', '/api/pachinko/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/complete', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2359,12 +2420,28 @@ class Handler(SimpleHTTPRequestHandler):
                 run_pachinko_draw(state,pattern,'テスト',is_test=True);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
             elif self.path == '/api/pachinko/complete':
                 result={'ok':complete_pachinko_event(safe_int(data.get('eventId') or 0))}
+            elif self.path == '/api/pachinko/digit-image':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
+                digit=safe_int(data.get('digit'),-1)
+                if digit<0 or digit>9: raise ValueError('数字画像の対象を確認してください')
+                pattern.setdefault('digitSettings',[{'text':str(i),'fontFamily':'global','color':'#ffffff','size':130,'imageUrl':'','imageName':'','imageSize':130} for i in range(10)])
+                target_digit=pattern['digitSettings'][digit]
+                if bool(data.get('clear')): target_digit['imageUrl']='';target_digit['imageName']=''
+                else:
+                    match=re.fullmatch(r'data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                    if not match: raise ValueError('PNG、JPG、WebP、GIF形式にしてください')
+                    raw=base64.b64decode(match.group(2),validate=True)
+                    if not raw or len(raw)>15*1024*1024: raise ValueError('数字画像は15MB以下にしてください')
+                    ext={'jpeg':'jpg'}.get(match.group(1),match.group(1));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];filename=f'pachinko_digit{digit}_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw);target_digit['imageUrl']='/'+filename+'?v='+str(safe_int(time.time()*1000));target_digit['imageName']=Path(str(data.get('name') or filename)).name[:120]
+                write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
             elif self.path == '/api/pachinko/media':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
                 stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
-                if stage not in ('spin','reach','cz','hit','at','upper','lt','end') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
                 url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
                 if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
                 elif kind=='animation':
@@ -2541,7 +2618,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6619'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6623'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2756,7 +2833,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6619')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6623')
     server.serve_forever()
 
 if __name__ == '__main__':
