@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.23'
+APP_VERSION = '0.66.25'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1145,7 +1145,7 @@ def complete_other_gacha_event(event_id):
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
-def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False):
+def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None):
     machine=data['pachinkoGacha'];spins=max(1,int(pattern.get('spinsPerGift',10)));den=max(1,int(pattern.get('hitDenominator',199)));num=max(1,min(den,int(pattern.get('hitNumerator',1))))
     hit_spin=0
     for spin in range(1,spins+1):
@@ -1216,7 +1216,11 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False):
         if condition=='lt' and not any(r.get('phase')=='lt' for r in rounds): return False
         return random.random()*100 < max(0,min(100,int(alert.get('chance',100))))
     matching_alerts=[index for index,alert in enumerate(pattern.get('preAlerts',[])[:3]) if prealert_matches(alert)]
-    prealert_index=random.choice(matching_alerts) if matching_alerts else -1
+    if is_test and test_pre_alert_index is not None and 0 <= safe_int(test_pre_alert_index,-1) < min(3,len(pattern.get('preAlerts',[]))):
+        # Dedicated preview: force the selected alert without changing live chance/condition rules.
+        prealert_index=safe_int(test_pre_alert_index,-1)
+    else:
+        prealert_index=random.choice(matching_alerts) if matching_alerts else -1
     prealert=pattern.get('preAlerts',[{}])[prealert_index] if prealert_index>=0 else {}
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
     event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
@@ -2417,7 +2421,10 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('テストするパチンコガチャが見つかりません')
                 if not pattern.get('enabled',True): raise ValueError('停止中のパターンです')
-                run_pachinko_draw(state,pattern,'テスト',is_test=True);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
+                requested_alert=data.get('preAlertIndex')
+                test_alert_index=None if requested_alert is None else safe_int(requested_alert,-1)
+                if test_alert_index is not None and not 0<=test_alert_index<3: raise ValueError('先バレパターンを確認してください')
+                run_pachinko_draw(state,pattern,'テスト',is_test=True,test_pre_alert_index=test_alert_index);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
             elif self.path == '/api/pachinko/complete':
                 result={'ok':complete_pachinko_event(safe_int(data.get('eventId') or 0))}
             elif self.path == '/api/pachinko/digit-image':
@@ -2441,7 +2448,7 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
                 stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
-                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','spinBeep','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
                 url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
                 if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
                 elif kind=='animation':
@@ -2618,7 +2625,7 @@ def run_desktop_app(server):
     from tkinter import messagebox
 
     control_url = f'http://127.0.0.1:8765/control.html?build={APP_VERSION}'
-    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6623'
+    overlay_url = f'http://{LAN_IP}:8765/overlay.html?build=6625'
     window = tk.Tk()
     window.title('Live Overlay Studio')
     try:
@@ -2833,7 +2840,7 @@ def main():
     if os.name == 'nt':
         threading.Timer(1.5, lambda: webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')).start()
     print(f'Live Overlay Studio v{APP_VERSION} running: http://127.0.0.1:8765/control.html?build={APP_VERSION}')
-    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6623')
+    print(f'Overlay source: http://{LAN_IP}:8765/overlay.html?build=6625')
     server.serve_forever()
 
 if __name__ == '__main__':
