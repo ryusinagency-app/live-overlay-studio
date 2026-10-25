@@ -24,7 +24,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.55'
+APP_VERSION = '0.66.56'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2830,6 +2830,13 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('テストするスロットが見つかりません')
                 if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
+                # Repeated preview clicks must not build an invisible backlog.  A
+                # running live gift remains authoritative, but stale queued tests
+                # are discarded and a running test is replaced immediately.
+                machine=state['slotMachine']
+                machine['queue']=[item for item in machine.get('queue',[]) if not item.get('isTest')]
+                if machine.get('event',{}).get('active') and machine['event'].get('isTest'):
+                    machine['event']=copy.deepcopy(SLOT_EMPTY_EVENT)
                 run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                 write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
             elif self.path == '/api/slot/apply-spin':
