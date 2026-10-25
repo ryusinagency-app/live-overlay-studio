@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.40'
+APP_VERSION = '0.66.41'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -829,6 +829,7 @@ def normalize_state(data):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
+            media[stage+'VideoVolume']=max(0,min(100,safe_int(item.get(stage+'VideoVolume',item.get(stage+'AudioVolume',75)),75)))
             # Rotation duration and result/media display duration are independent.
             duration_key='spinDisplaySeconds' if stage=='spin' else stage+'Seconds'
             media[duration_key]=max(.2,min(120,safe_float(item.get(duration_key,3),3)))

@@ -4,20 +4,25 @@
 </style></head><body><main id="stage" class="stage"><section id="card" class="card"><div id="media" class="media"></div><div id="alertMedia" class="alertMedia"></div><div class="copy"><div id="pattern" class="pattern"></div><div id="sender" class="sender"></div><div id="status" class="status"></div><div id="spin" class="spin"></div><div id="sub" class="sub"></div><div id="total" class="total"></div></div></section></main><script>
 const $=id=>document.getElementById(id);let lastId=0,playing=false,currentAudio=null,currentVideo=null,alertAudio=null,alertVideo=null,spinBeepAudio=null,spinBeepOscillator=null,spinBeepContext=null,playbackSpeed=1,activePattern=null;
 let playbackGeneration=0,playingEventId=0,activePreAlertIndex=-1,pollInFlight=false;
+let currentMediaUrl='',currentAudioUrl='',currentVideoStage='',currentAudioStage='';
+const pachinkoMediaStages=['spin','reach','cz','hit','at','upper','lt','end','stop'];
+function pachinkoMediaVolume(p,key,video=false){const value=Number(p[(key+(video?'VideoVolume':'AudioVolume'))]??(video?p[key+'AudioVolume']:75)??75);return Math.max(0,Math.min(1,Number.isFinite(value)?value/100:.75))}
 const playbackCancellers=new Set(),previewMode=new URLSearchParams(location.search).has('preview');
 function sleep(ms){return new Promise((resolve,reject)=>{let timer;const cancel=()=>{clearTimeout(timer);playbackCancellers.delete(cancel);reject(Object.assign(new Error('再生を停止しました'),{name:'AbortError'}))};timer=setTimeout(()=>{playbackCancellers.delete(cancel);resolve()},ms);playbackCancellers.add(cancel)})}
 async function pachinkoRequest(url,options={}){const controller=typeof AbortController==='function'?new AbortController():null;let timer;try{return await Promise.race([(async()=>{const response=await fetch(url,{cache:'no-store',...options,...(controller?{signal:controller.signal}:{})});if(!response.ok)throw new Error('パチンコ通信エラー '+response.status);return response.json()})(),new Promise((resolve,reject)=>{timer=setTimeout(()=>{if(controller)controller.abort();reject(new Error('パチンコ通信タイムアウト'))},5000)})])}finally{clearTimeout(timer)}}
 function cancelPachinkoPlayback(){playbackGeneration++;for(const cancel of [...playbackCancellers])cancel();stopMedia();playing=false;playingEventId=0;activePattern=null;activePreAlertIndex=-1;playbackSpeed=1;$('stage').classList.remove('show');$('spin').classList.remove('pulse');showText()}
-function applyPachinkoLiveVolumes(pattern){if(!activePattern||pattern.id!==activePattern.id)return;activePattern.preAlerts=pattern.preAlerts||[];if(activePreAlertIndex<0)return;const alert=activePattern.preAlerts[activePreAlertIndex]||{},volume=(value)=>Math.max(0,Math.min(1,Number.isFinite(Number(value))?Number(value)/100:.75));if(alertAudio)alertAudio.volume=volume(alert.audioVolume);if(alertVideo)alertVideo.volume=volume(alert.videoVolume)}
+function applyPachinkoLiveVolumes(pattern){if(!activePattern||pattern.id!==activePattern.id)return;activePattern.preAlerts=pattern.preAlerts||[];for(const key of pachinkoMediaStages){activePattern[key+'AudioVolume']=pattern[key+'AudioVolume'];activePattern[key+'VideoVolume']=pattern[key+'VideoVolume']}if(currentAudio)currentAudio.volume=pachinkoMediaVolume(activePattern,currentAudioStage);if(currentVideo)currentVideo.volume=pachinkoMediaVolume(activePattern,currentVideoStage,true);if(activePreAlertIndex<0)return;const alert=activePattern.preAlerts[activePreAlertIndex]||{},volume=(value)=>Math.max(0,Math.min(1,Number.isFinite(Number(value))?Number(value)/100:.75));if(alertAudio)alertAudio.volume=volume(alert.audioVolume);if(alertVideo)alertVideo.volume=volume(alert.videoVolume)}
 function stopPachinkoBeep(){if(spinBeepAudio){spinBeepAudio.pause();spinBeepAudio.currentTime=0;spinBeepAudio=null}if(spinBeepOscillator){try{spinBeepOscillator.stop()}catch(e){}spinBeepOscillator=null}}
 function playPachinkoBeep(p){
+  if(!p||p.spinBeepEnabled===false||!p.spinBeepAudioUrl||p.spinBeepAudioUrl===currentAudioUrl){stopPachinkoBeep();return}
+  if(spinBeepAudio&&spinBeepAudio.__overlayUrl===p.spinBeepAudioUrl){spinBeepAudio.volume=Math.max(0,Math.min(1,Number(p.spinBeepVolume??35)/100));return}
   stopPachinkoBeep();
-  if(!p||p.spinBeepEnabled===false||!p.spinBeepAudioUrl)return;
   const audio=new Audio(p.spinBeepAudioUrl);spinBeepAudio=audio;audio.loop=true;
+  audio.__overlayUrl=p.spinBeepAudioUrl;
   audio.volume=Math.max(0,Math.min(1,Number(p.spinBeepVolume??35)/100));
   audio.play().catch(()=>{});
 }
-function stopMedia(){stopPachinkoBeep();if(currentAudio){currentAudio.pause();currentAudio=null}if(currentVideo){currentVideo.pause();currentVideo=null}if(alertAudio){alertAudio.pause();alertAudio=null}if(alertVideo){alertVideo.pause();alertVideo=null}$('media').replaceChildren();$('alertMedia').replaceChildren();$('alertMedia').classList.remove('show')}
+function stopMedia(){stopPachinkoBeep();if(currentAudio){currentAudio.pause();currentAudio=null}if(currentVideo){currentVideo.pause();currentVideo=null}currentMediaUrl='';currentAudioUrl='';currentVideoStage='';currentAudioStage='';if(alertAudio){alertAudio.pause();alertAudio=null}if(alertVideo){alertVideo.pause();alertVideo=null}$('media').replaceChildren();$('alertMedia').replaceChildren();$('alertMedia').classList.remove('show')}
 function showText(status='',spin='',sub='',total=''){$('status').classList.remove('preAlertMessage');delete $('status').dataset.preAlert;$('status').style.removeProperty('--pre-alert-color');$('status').style.removeProperty('--pre-alert-size');$('status').textContent=status;$('spin').textContent=spin;$('sub').textContent=sub;$('total').textContent=total;if(activePattern)applyPachinkoTextRoles()}
 function setSlotDigits(number,p){const host=$('spin'),settings=p?.digitSettings||[];host.replaceChildren();for(const ch of String(number)){const d=Number(ch),cfg=settings[d]||{},span=document.createElement('span');span.className='pachinkoDigit';if(cfg.imageUrl){const img=document.createElement('img');img.className='pachinkoDigitImage';img.src=cfg.imageUrl;img.alt=cfg.text||ch;const size=Math.max(20,Math.min(1200,Number(cfg.imageSize)||130));img.style.width=size+'px';img.style.height=size+'px';span.append(img)}else{span.textContent=cfg.text??ch;span.style.color=cfg.color||'#fff';span.style.fontSize=Math.max(14,Math.min(400,Number(cfg.size)||130))+'px';span.style.fontFamily=pachinkoFontStack(cfg.fontFamily||'global')}host.append(span)}}
 async function playPachinkoPreAlert(p,index){
@@ -69,8 +74,25 @@ function pachinkoRoleKey(property){return 'role'+property.replace(/-/g,'')}
 function clearPachinkoRoleStyles(el){for(const property of ['color','font-size','font-family','position','left','right','top','bottom','translate','margin','z-index','width','max-width','white-space']){const key=pachinkoRoleKey(property);if(el.dataset[key]==='1'){el.style.removeProperty(property);delete el.dataset[key]}}}
 function setPachinkoRoleStyle(el,property,value,priority=''){el.style.setProperty(property,value,priority);el.dataset[pachinkoRoleKey(property)]='1'}
 function applyPachinkoTextRoles(){const roles=activePattern?.textRoles||{};for(const id of ['pattern','sender','status','spin','sub','total']){const el=$(id),raw=String(el.textContent||''),x=roles[pachinkoRoleFor(id,raw)]||{},customImage=x.mode==='image'&&x.imageUrl,customText=!customImage&&!!x.text,fontFamily=x.fontFamily||'global';clearPachinkoRoleStyles(el);el.classList.remove('roleTextOff','roleCustomText','roleCustomImage');for(const property of ['--role-content','--role-image','--role-image-size','--role-color','--role-size','--role-font'])el.style.removeProperty(property);const baseColor=getComputedStyle(el).color,baseSize=getComputedStyle(el).fontSize;if(x.enabled===false){el.classList.add('roleTextOff');continue}if(x.positionEnabled){setPachinkoRoleStyle(el,'position','absolute','important');setPachinkoRoleStyle(el,'left',Math.max(0,Math.min(100,Number.isFinite(+x.x)?+x.x:50))+'%','important');setPachinkoRoleStyle(el,'right','auto','important');setPachinkoRoleStyle(el,'top',Math.max(0,Math.min(100,Number.isFinite(+x.y)?+x.y:50))+'%','important');setPachinkoRoleStyle(el,'bottom','auto','important');setPachinkoRoleStyle(el,'translate','-50% -50%','important');setPachinkoRoleStyle(el,'margin','0','important');setPachinkoRoleStyle(el,'z-index','20','important');setPachinkoRoleStyle(el,'width','max-content','important');setPachinkoRoleStyle(el,'max-width','94%','important');setPachinkoRoleStyle(el,'white-space','normal','important')}if(customImage){el.classList.add('roleCustomImage');el.style.setProperty('--role-image',`url("${String(x.imageUrl).replace(/"/g,'%22')}")`);el.style.setProperty('--role-image-size',Math.max(20,Math.min(600,+x.imageSize||120))+'px')}else if(customText){el.classList.add('roleCustomText');el.style.setProperty('--role-content',JSON.stringify(pachinkoRoleTemplate(x.text,raw)));el.style.setProperty('--role-color',x.colorEnabled&&x.color?x.color:baseColor);el.style.setProperty('--role-size',(+x.size>0?+x.size+'px':baseSize));el.style.setProperty('--role-font',pachinkoFontStack(fontFamily))}else{if(x.colorEnabled&&x.color)setPachinkoRoleStyle(el,'color',x.color,'important');if(+x.size>0)setPachinkoRoleStyle(el,'font-size',(+x.size)+'px');if(fontFamily!=='global')setPachinkoRoleStyle(el,'font-family',pachinkoFontStack(fontFamily),'important')}}}
-function startStageMedia(p,key){stopMedia();const url=p[key+'AnimationUrl']||'',audioUrl=p[key+'AudioUrl']||'';if(url){const video=/\.(mp4|webm)(\?|$)/i.test(url),node=document.createElement(video?'video':'img');node.src=url;if(video){node.autoplay=true;node.playsInline=true;node.loop=true;node.volume=Math.max(0,Math.min(1,Number(p[key+'AudioVolume']??75)/100));currentVideo=node;node.play().catch(()=>{})}$('media').append(node)}if(audioUrl){currentAudio=new Audio(audioUrl);currentAudio.volume=Math.max(0,Math.min(1,Number(p[key+'AudioVolume']??75)/100));currentAudio.play().catch(()=>{})}}
-async function playStage(p,key,text,detail='',fallback=1){startStageMedia(p,key);showText(text,'',detail,'');const seconds=Math.max(.2,Math.min(120,Number(p[(key==='spin'?'spinDisplay':key)+'Seconds'])||fallback));await sleep(seconds*1000*playbackSpeed);stopMedia()}
+function startStageMedia(p,key,{keepMissing=false}={}){
+ const url=p[key+'AnimationUrl']||'',audioUrl=p[key+'AudioUrl']||'';
+ // Keep the same player and its position across text/result/turn changes.
+ if(url||!keepMissing){
+  if(url!==currentMediaUrl||!$('media').firstElementChild){
+   if(currentVideo)currentVideo.pause();currentVideo=null;currentMediaUrl=url;$('media').replaceChildren();
+   if(url){const video=/\.(mp4|webm)(?:[?#]|$)/i.test(url),node=document.createElement(video?'video':'img');node.src=url;if(video){node.autoplay=true;node.playsInline=true;node.loop=true;node.volume=pachinkoMediaVolume(p,key,true);currentVideo=node}$('media').append(node);if(video)node.play().catch(()=>{})}
+  }
+  if(url){currentVideoStage=key;if(currentVideo){currentVideo.loop=true;currentVideo.volume=pachinkoMediaVolume(p,key,true)}}
+ }
+ if(audioUrl||!keepMissing){
+  if(audioUrl!==currentAudioUrl||(!currentAudio&&audioUrl)){
+   if(currentAudio)currentAudio.pause();currentAudio=null;currentAudioUrl=audioUrl;
+   if(audioUrl){currentAudio=new Audio(audioUrl);currentAudio.loop=true;currentAudio.volume=pachinkoMediaVolume(p,key);currentAudio.play().catch(()=>{})}
+  }
+  if(audioUrl){currentAudioStage=key;currentAudio.loop=true;currentAudio.volume=pachinkoMediaVolume(p,key)}
+ }
+}
+async function playStage(p,key,text,detail='',fallback=1){stopPachinkoBeep();startStageMedia(p,key);showText(text,'',detail,'');const seconds=Math.max(.2,Math.min(120,Number(p[(key==='spin'?'spinDisplay':key)+'Seconds'])||fallback));await sleep(seconds*1000*playbackSpeed)}
 // Visual reels follow the server result; they never perform a second lottery.
 function pachinkoSymbols(p=activePattern){
   const digits=Array.from({length:10},(_,n)=>String(n)).filter(d=>p?.digitSettings?.[Number(d)]?.enabled!==false);
@@ -90,20 +112,11 @@ function pachinkoRollingNumber(p=activePattern){
   return left+pickPachinkoSymbol(p)+right;
 }
 function startPachinkoReachMedia(p){
-  const url=p.reachAnimationUrl;
-  if(url){
-    if(currentVideo){currentVideo.pause();currentVideo=null}
-    const video=/\.(mp4|webm)(\?|$)/i.test(url),node=document.createElement(video?'video':'img');node.src=url;
-    if(video){node.autoplay=true;node.playsInline=true;node.loop=true;node.volume=Math.max(0,Math.min(1,Number(p.reachAudioVolume??75)/100));currentVideo=node;node.play().catch(()=>{})}
-    $('media').replaceChildren(node);
-  }
-  if(p.reachAudioUrl){alertAudio=new Audio(p.reachAudioUrl);alertAudio.volume=Math.max(0,Math.min(1,Number(p.reachAudioVolume??75)/100));alertAudio.play().catch(()=>{})}
+  startStageMedia(p,'reach',{keepMissing:true});
 }
 async function animatePachinkoTurn(p,{hit,seconds,label,progress,mediaKey,displaySeconds}){
   startStageMedia(p,mediaKey);
-  // The dedicated rotation track replaces stage audio while the reels move.
-  if(p.spinBeepAudioUrl&&currentAudio){currentAudio.pause();currentAudio=null}
-  if(currentAudio)currentAudio.loop=true;
+  // Stage music keeps playing; the optional reel track is independent.
   playPachinkoBeep(p);
   const totalMs=Math.max(1,seconds*1000*playbackSpeed),steps=Math.max(1,Math.min(8,Math.floor(totalMs/15))),tick=totalMs/steps;
   for(let j=0;j<steps;j++){
@@ -125,10 +138,10 @@ async function animatePachinkoTurn(p,{hit,seconds,label,progress,mediaKey,displa
     }
   }
   // Stop the rotation track before displaying the settled reels and stop sound.
-  stopMedia();startStageMedia(p,'stop');
+  stopPachinkoBeep();startStageMedia(p,'stop',{keepMissing:true});
   showText(hit?label+'大当たり！':label+'はずれ','',progress,'');setSlotDigits(final,p);
   const hold=Math.max(.2,Math.min(120,Number(displaySeconds??p.stopSeconds??1)));
-  await sleep(hold*1000*playbackSpeed);stopMedia();
+  await sleep(hold*1000*playbackSpeed);
 }
 async function animateSpins(p,event){
   activePattern=p;const target=event.hitSpin||event.spins,total=Math.max(1,event.spins);
@@ -146,7 +159,7 @@ async function animatePhaseSpins(p,round,phase){
   const count=Math.max(1,Number(round.spins)||1),target=Math.max(0,Number(round.hitSpin)||0),end=target||count,visual=Math.min(end,60);
   const label=phase==='upper'?'上位ST':phase==='lt'?'LT':phase==='timeShort'?'時短':'ST';
   const duration=Math.max(.05,Number(p[phase==='upper'?'upperSpinSeconds':phase==='lt'?'luckyTriggerSpinSeconds':phase==='timeShort'?'timeShortSpinSeconds':'atSpinSeconds'])||.8);
-  const mediaKey=phase==='upper'?'upper':phase==='lt'?'lt':'spin';
+  const mediaKey=phase==='upper'?'upper':phase==='lt'?'lt':phase==='timeShort'?'spin':'at';
   for(let i=1;i<=visual;i++){
     const shown=end>visual?Math.round(i/visual*end):i;
     await animatePachinkoTurn(p,{hit:!!target&&i===visual,seconds:duration,label,progress:round.mode==='continue'?'継続式':`${shown} / ${count} 回転`,mediaKey,displaySeconds:phase==='timeShort'?p.timeShortDisplaySeconds:undefined});
