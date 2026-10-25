@@ -333,7 +333,10 @@ def apply_spin(state, event_id, spin_index):
     event['total'] = min(999999999, _int(event.get('total')) + _int(spin.get('win')))
     event['appliedSpins'] = index + 1
     if event['appliedSpins'] >= len(event['spins']):
-        if event.get('sign') == 'both':
+        # ± selection is meaningful only when this draw actually earned WIN.
+        # A zero-WIN draw may finish and advance the queue without asking the
+        # streamer to choose a sign.
+        if event.get('sign') == 'both' and event['total'] > 0:
             event['choiceReady'] = True
         elif not event.get('isTest') and not event.get('winApplied'):
             delta = event['total'] * (-1 if event.get('sign') == 'minus' else 1)
@@ -372,5 +375,14 @@ def complete_event(state, event_id):
             'sign': event.get('choice') or event.get('sign', 'plus'), 'createdAt': time.time(),
         })
         machine['history'] = machine['history'][:200]
-    machine['event'] = machine.setdefault('queue', []).pop(0) if machine.get('queue') else copy.deepcopy(EMPTY_EVENT)
+    if machine.get('queue'):
+        next_event = machine.setdefault('queue', []).pop(0)
+        # Leave a visible blank gap between queued players.  Without it the
+        # previous result and the next spin are one atomic snapshot, which
+        # looks like the ± screen was skipped and the machine never closed.
+        next_event['active'] = True
+        next_event['startAfter'] = time.time() + 0.8
+        machine['event'] = next_event
+    else:
+        machine['event'] = copy.deepcopy(EMPTY_EVENT)
     return True
