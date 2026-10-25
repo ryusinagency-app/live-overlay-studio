@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.43'
+APP_VERSION = '0.66.44'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -83,6 +83,8 @@ def prepare_app_root():
         'overlay_gacha_win_ranking.html', 'overlay_gacha_rankings.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
         'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html',
+        'overlay_win_gacha_best_set.html', 'overlay_win_gacha_best_win.html', 'overlay_pachinko_best_win.html', 'overlay_best_ranking.js',
+        'overlay_best_ranking.css', 'ranking_controls.js',
         'overlay_win.html', 'v6608.js', 'README.txt', 'update_config.json', 'app_icon.ico'
     ]
     for name in assets:
@@ -288,6 +290,56 @@ def safe_int(value, default=0):
 
 def pachinko_boundary_stages():
     return tuple(phase+edge for phase in ('reach','cz','hit','at','upper','lt') for edge in ('Enter','Exit'))
+
+def gacha_best_records(records, history, pachinko=False):
+    """Personal bests survive the rolling history; legacy SETs include the first round."""
+    people={}
+    for item in records if isinstance(records,list) else []:
+        if not isinstance(item,dict): continue
+        name=str(item.get('senderName') or 'ゲスト').strip()[:80] or 'ゲスト'
+        row=people.setdefault(name,{'senderName':name,'bestSet':0,'bestWin':0})
+        for metric,field in (('bestSet','setRecord'),('bestWin','winRecord')):
+            score=max(0,safe_int(item.get(metric)))
+            if metric=='bestWin': score=min(999999,score)
+            detail=item.get(field) if isinstance(item.get(field),dict) else {}
+            if metric not in row or score>row[metric] or field not in row:
+                row[metric]=max(row.get(metric,0),score)
+                row[field]=gacha_record_detail(detail)
+    for item in history if isinstance(history,list) else []:
+        if not isinstance(item,dict) or item.get('isTest'): continue
+        name=str(item.get('senderName') or 'ゲスト').strip()[:80] or 'ゲスト'
+        row=people.setdefault(name,{'senderName':name,'bestSet':0,'bestWin':0})
+        detail=gacha_record_detail({**item,'result':item.get('total' if pachinko else 'result',0),'setCount':item.get('setCount',0 if pachinko else safe_int(item.get('continueCount'))+1)})
+        for metric,field,score in (('bestWin','winRecord',abs(detail['result'])),('bestSet','setRecord',detail['setCount'])):
+            if score>row[metric] or field not in row or (score==row[metric] and not row[field].get('patternName')):
+                row[metric]=score;row[field]=detail
+    return sorted(people.values(),key=lambda row:row['senderName'])
+
+def gacha_record_detail(item):
+    url=str(item.get('avatarUrl') or '')[:2000]
+    return {'avatarUrl':url if url.startswith(('https://','http://')) else '',
+            'patternName':str(item.get('patternName') or '')[:60],
+            'setCount':max(0,safe_int(item.get('setCount'))),
+            'result':max(-999999,min(999999,safe_int(item.get('result')))),
+            'createdAt':max(0,safe_float(item.get('createdAt')))}
+
+def normalize_ranking_view(raw, history=False):
+    raw=raw if isinstance(raw,dict) else {};view={}
+    for key,default,low,high in (('limit',10,1,100),('columns',1,1,8),('rows',5,1,10),('pageSeconds',8,2,60),('scrollSpeed',40,10,300),('avatarSize',44,20,160),('nameSize',20,8,96),('patternSize',16,8,96),('scoreSize',20,8,96),('cardOpacity',93,0,100)):
+        view[key]=max(low,min(high,safe_int(raw.get(key,default),default)))
+    if history: view['limit']=max(1,min(200,safe_int(raw.get('limit',200),200)))
+    view['direction']='horizontal' if raw.get('direction')=='horizontal' else 'vertical'
+    view['scrollStyle']=raw.get('scrollStyle') if raw.get('scrollStyle') in ('page','continuous','single','fade','slide','static') else 'page'
+    view['loop']=raw.get('loop',True) is not False
+    view['nameScroll']=raw.get('nameScroll',True) is not False
+    view['textScrollSpeed']=max(10,min(150,safe_int(raw.get('textScrollSpeed',30),30)))
+    view['fontFamily']=raw.get('fontFamily') if raw.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global'
+    for key,default in (('cardBg','#17181e'),('cardBorder','#ffcf59'),('textColor','#ffffff')): view[key]=valid_hex(raw.get(key)) or default
+    for key,default in (('title',''),('nameTemplate','{name}'),('patternTemplate','{gacha}'),('scoreTemplate','{set}SET {win}WIN')): view[key]=str(raw.get(key,default))[:160]
+    return view
+
+def gacha_best_board(machine, metric):
+    return sorted(machine.get('bestRecords',[]),key=lambda row:(-row[metric],row['senderName']))
 
 def safe_float(value, default=0.0):
     try:
@@ -813,7 +865,7 @@ def normalize_state(data):
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
         'continueRankLimit':max(1,min(10,safe_int(raw_gacha.get('continueRankLimit',10),10))), 'continueRankTextSize':max(14,min(96,safe_int(raw_gacha.get('continueRankTextSize',28),28))), 'continueRankScrollDirection':raw_gacha.get('continueRankScrollDirection') if raw_gacha.get('continueRankScrollDirection') in ('vertical','horizontal') else 'vertical',
         'winRankLimit':max(1,min(10,safe_int(raw_gacha.get('winRankLimit',10),10))), 'winRankTextSize':max(14,min(96,safe_int(raw_gacha.get('winRankTextSize',28),28))), 'winRankScrollDirection':raw_gacha.get('winRankScrollDirection') if raw_gacha.get('winRankScrollDirection') in ('vertical','horizontal') else 'vertical', 'rankingLayoutDirection':raw_gacha.get('rankingLayoutDirection') if raw_gacha.get('rankingLayoutDirection') in ('vertical','horizontal') else 'vertical',
-        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,safe_int(item.get('continueCount') or 0)),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
+        'history':[{'id':max(0,safe_int(item.get('id') or 0)),'senderName':str(item.get('senderName') or '')[:80],'patternName':str(item.get('patternName') or '')[:60],'result':max(-999999,min(999999,safe_int(item.get('result') or 0))),'continueCount':max(0,safe_int(item.get('continueCount') or 0)),'setCount':max(1,safe_int(item.get('setCount'),safe_int(item.get('continueCount'))+1)),'avatarUrl':gacha_record_detail(item)['avatarUrl'],'eventCreatedAt':safe_float(item.get('eventCreatedAt',item.get('createdAt',0))),'createdAt':max(0,safe_float(item.get('createdAt') or 0))} for item in (raw_gacha.get('history') or []) if isinstance(item,dict)][:200],
         'queue':[x for x in (raw_gacha.get('queue') or []) if isinstance(x,dict)][:100],
         'event':{'id':max(0,safe_int(raw_event.get('id') or 0)), 'type':str(raw_event.get('type') or ''), 'active':event_active, 'isTest':bool(raw_event.get('isTest',False)), 'mode':'single' if raw_event.get('mode')=='single' else 'continue', 'winSign':raw_event.get('winSign') if raw_event.get('winSign') in ('plus','minus','both') else 'plus', 'choice':raw_event.get('choice') if raw_event.get('choice') in ('plus','minus') else '', 'choiceReady':bool(raw_event.get('choiceReady',False)), 'patternId':str(raw_event.get('patternId') or ''), 'patternName':str(raw_event.get('patternName') or ''), 'effectStyle':'fullscreen-slot' if raw_event.get('effectStyle')=='fullscreen-slot' else 'card', 'textRoles':copy.deepcopy(raw_event.get('textRoles')) if isinstance(raw_event.get('textRoles'),dict) else {}, 'outcomes':copy.deepcopy(raw_event.get('outcomes')) if isinstance(raw_event.get('outcomes'),list) else [], 'upperOutcomes':copy.deepcopy(raw_event.get('upperOutcomes')) if isinstance(raw_event.get('upperOutcomes'),list) else [], 'spinNumberImageSize':max(40,min(1200,safe_int(raw_event.get('spinNumberImageSize',760),760))), 'rounds':raw_event.get('rounds') if isinstance(raw_event.get('rounds'),list) else [], 'appliedRounds':[safe_int(x) for x in raw_event.get('appliedRounds',[]) if str(x).isdigit()], 'total':max(-999999,min(999999,safe_int(raw_event.get('total') or 0))), 'currentWin':max(-999999,min(999999,safe_int(raw_event.get('currentWin') or 0))), 'giftName':str(raw_event.get('giftName') or ''), 'senderName':str(raw_event.get('senderName') or '')[:80], 'createdAt':event_created_at},
     }
@@ -905,10 +957,23 @@ def normalize_state(data):
             merged['pachinkoGacha']['event'][key]=max(0,min(999999,safe_int(raw_p_event[key],0)))
     for key in ('czUsed','czSuccess'):
         if key in raw_p_event: merged['pachinkoGacha']['event'][key]=bool(raw_p_event[key])
+    merged['gacha']['event']['avatarUrl']=gacha_record_detail(raw_event)['avatarUrl']
+    merged['pachinkoGacha']['event']['avatarUrl']=gacha_record_detail(raw_p_event)['avatarUrl']
     p_event=merged['pachinkoGacha']['event']
     p_event.update(winSign=raw_p_event.get('winSign') if raw_p_event.get('winSign') in ('plus','minus','both') else 'plus',
                    choice=raw_p_event.get('choice') if raw_p_event.get('choice') in ('plus','minus') else '',
                    choiceReady=bool(raw_p_event.get('choiceReady',False)),winApplied=bool(raw_p_event.get('winApplied',False)))
+    for machine,raw in ((merged['gacha'],raw_gacha),(merged['pachinkoGacha'],raw_pachinko)):
+        views=raw.get('rankingViews') if isinstance(raw.get('rankingViews'),dict) else {}
+        history_view=views.get('history')
+        if not isinstance(history_view,dict):
+            history_view={'cardBg':raw.get('historyCardBg'),'cardBorder':raw.get('historyCardBorder'),'textColor':raw.get('historyTextColor'),'cardOpacity':raw.get('historyCardOpacity',93),'fontFamily':raw.get('historyFontFamily','global'),'direction':raw.get('historyScrollDirection','vertical')}
+        machine['rankingViews']={key:normalize_ranking_view(history_view if key=='history' else views.get(key),key=='history') for key in ('set','win','history')}
+    merged['gacha']['bestRecords']=gacha_best_records(raw_gacha.get('bestRecords'),merged['gacha']['history'])
+    merged['pachinkoGacha']['bestRecords']=gacha_best_records(raw_pachinko.get('bestRecords'),merged['pachinkoGacha']['history'],True)
+    for key,default,low,high in (('winRankLimit',10,1,10),('winRankTextSize',28,14,96)):
+        merged['pachinkoGacha'][key]=max(low,min(high,safe_int(raw_pachinko.get(key,default),default)))
+    merged['pachinkoGacha']['winRankScrollDirection']='horizontal' if raw_pachinko.get('winRankScrollDirection')=='horizontal' else 'vertical'
     for field in ('shortcutChoicePlus','shortcutChoiceMinus'):
         merged['pachinkoGacha'][field]=str(raw_pachinko.get(field) or '').upper()[:100]
 
@@ -1111,10 +1176,24 @@ def read_overlay_state(kind):
                             if (event.get('patternId') and p.get('id') == event['patternId'])
                             or (not event.get('patternId') and p.get('name') == event.get('patternName'))), None)
             result['gacha'] = {key: value for key, value in gacha.items()
-                               if key not in ('patterns', 'queue', 'history')}
+                               if key not in ('patterns', 'queue', 'history', 'bestRecords', 'rankingViews')}
             result['gacha']['patterns'] = [pattern] if pattern else []
             effect_key = 'gacha:' + str(event.get('patternId') or '')
             result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+        elif kind == 'gacha-history':
+            machine=state['gacha'];view=machine['rankingViews']['history']
+            rows=sorted(machine.get('history',[]),key=lambda row:row.get('createdAt',0),reverse=True)[:view['limit']]
+            result={'fontFamily':state.get('fontFamily','system'),'boards':{'winHistory':{'rows':rows,'view':view}}}
+        elif kind == 'rankings':
+            result={'fontFamily':state.get('fontFamily','system'),'boards':{}}
+            for key,scope,metric in (('winSet','gacha','bestSet'),('winBest','gacha','bestWin'),('pachinkoBest','pachinkoGacha','bestWin')):
+                machine=state[scope]
+                view=machine['rankingViews']['set' if metric=='bestSet' else 'win']
+                rows=[]
+                for record in gacha_best_board(machine,metric)[:view['limit']]:
+                    detail=record.get('setRecord' if metric=='bestSet' else 'winRecord',{})
+                    rows.append({'senderName':record['senderName'],'bestSet':record['bestSet'],'bestWin':record['bestWin'],**detail})
+                result['boards'][key]={'rows':rows,'metric':metric,'view':view}
         elif kind == 'pachinko':
             machine=state['pachinkoGacha'];event=machine.get('event',{})
             pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
@@ -1267,7 +1346,7 @@ def pachinko_payout(pattern, prefix, minimum, maximum=None):
     lo,hi=sorted((max(0,int(minimum)),max(0,int(maximum if maximum is not None else minimum))))
     return random.randint(lo,hi)
 
-def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None):
+def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None, avatar_url=''):
     machine=data['pachinkoGacha'];spins=max(1,int(pattern.get('spinsPerGift',10)));den=max(1,int(pattern.get('hitDenominator',199)));num=max(1,min(den,int(pattern.get('hitNumerator',1))))
     hit_spin=0
     for spin in range(1,spins+1):
@@ -1341,7 +1420,7 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
         prealert_index=random.choice(matching_alerts) if matching_alerts else -1
     prealert=pattern.get('preAlerts',[{}])[prealert_index] if prealert_index>=0 else {}
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
+    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'avatarUrl':gacha_record_detail({'avatarUrl':avatar_url})['avatarUrl'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
     event.update(initialWin=initial_win,timeShortWin=time_short_win)
     event.update(czUsed=bool(hit_spin and pattern.get('czEnabled')),czSuccess=bool(hit_spin and pattern.get('czEnabled') and cz_success))
     event.update(winSign=pattern.get('winSign') if pattern.get('winSign') in ('plus','minus','both') else 'plus',choice='',choiceReady=False,winApplied=False)
@@ -1393,7 +1472,8 @@ def pachinko_signed_total(event):
 def record_pachinko_history(data,event):
     history=data['pachinkoGacha'].setdefault('history',[])
     if event.get('isTest') or any(safe_int(row.get('id'))==safe_int(event.get('id')) and safe_float(row.get('eventCreatedAt',-1))==safe_float(event.get('createdAt')) for row in history): return
-    history.insert(0,{'id':event['id'],'senderName':event.get('senderName',''),'patternName':event.get('patternName',''),'route':event.get('route',''),'total':pachinko_signed_total(event),'winSign':event.get('winSign','plus'),'choice':event.get('choice',''),'eventCreatedAt':event.get('createdAt',0),'createdAt':time.time()})
+    history.insert(0,{'id':event['id'],'senderName':event.get('senderName',''),'patternName':event.get('patternName',''),'route':event.get('route',''),'total':pachinko_signed_total(event),'setCount':max(len(event.get('rounds',[])),1 if event.get('hitSpin') else 0),'avatarUrl':event.get('avatarUrl',''),'winSign':event.get('winSign','plus'),'choice':event.get('choice',''),'eventCreatedAt':event.get('createdAt',0),'createdAt':time.time()})
+    data['pachinkoGacha']['bestRecords']=gacha_best_records(data['pachinkoGacha'].get('bestRecords'),[history[0]],True)
     del history[200:]
 
 def choose_pachinko_sign_in_state(data,choice):
@@ -1453,7 +1533,7 @@ def complete_gift_media_event(event_id):
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
-def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test=False):
+def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test=False, avatar_url=''):
     gacha=data['gacha']; win=data['winCounter']; rounds=[]; total=win['currentWin']
     mode=pattern.get('mode',gacha['mode']); rate=max(0,min(100,int(pattern.get('continuationRate',gacha['continuationRate']))))
     low,high=pattern['minWin'],pattern['maxWin']; sign=pattern.get('winSign','both')
@@ -1511,7 +1591,7 @@ def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test
         if not keep_going: break
         if enter_upper: phase='upper'
     used_ids=[int(gacha.get('event',{}).get('id') or 0)]+[int(x.get('id') or 0) for x in gacha.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'effectStyle':'fullscreen-slot' if pattern.get('effectStyle')=='fullscreen-slot' else 'card','textRoles':copy.deepcopy(pattern.get('textRoles') or {}),'outcomes':copy.deepcopy(pattern.get('outcomes') or []),'upperOutcomes':copy.deepcopy(pattern.get('upperOutcomes') or []),'spinNumberImageSize':max(40,min(1200,safe_int(pattern.get('spinNumberImageSize',760),760))),'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'createdAt':time.time()}
+    event={'id':max(used_ids,default=0)+1,'type':'gacha','active':False,'isTest':bool(is_test),'mode':mode,'winSign':sign,'choice':'','choiceReady':False,'patternId':pattern['id'],'patternName':pattern['name'],'effectStyle':'fullscreen-slot' if pattern.get('effectStyle')=='fullscreen-slot' else 'card','textRoles':copy.deepcopy(pattern.get('textRoles') or {}),'outcomes':copy.deepcopy(pattern.get('outcomes') or []),'upperOutcomes':copy.deepcopy(pattern.get('upperOutcomes') or []),'spinNumberImageSize':max(40,min(1200,safe_int(pattern.get('spinNumberImageSize',760),760))),'rounds':rounds,'appliedRounds':[],'total':earned,'currentWin':total,'giftName':gift_name,'senderName':str(sender_name or '')[:80],'avatarUrl':gacha_record_detail({'avatarUrl':avatar_url})['avatarUrl'],'createdAt':time.time()}
     queue=gacha.setdefault('queue',[])
     if gacha.get('event',{}).get('active'):
         queue.append(event)
@@ -1578,11 +1658,13 @@ def complete_gacha_event(event_id):
         data,_=normalize_state(data); gacha=data['gacha']; event=gacha['event']
         if int(event.get('id') or 0)!=event_id or not event.get('active'):
             return False
-        if event.get('type') == 'gacha' and not event.get('isTest') and not any(int(item.get('id') or 0)==event_id for item in gacha.get('history', [])):
+        if event.get('winSign')=='both' and not event.get('choice'): return False
+        if event.get('type') == 'gacha' and not event.get('isTest') and not any(int(item.get('id') or 0)==event_id and safe_float(item.get('eventCreatedAt',-1))==safe_float(event.get('createdAt')) for item in gacha.get('history', [])):
             result=int(event.get('total') or 0)
             if event.get('winSign') == 'both':
                 result= -abs(result) if event.get('choice') == 'minus' else abs(result)
-            gacha.setdefault('history', []).insert(0, {'id':event_id,'senderName':str(event.get('senderName') or 'ゲスト')[:80],'patternName':str(event.get('patternName') or 'WINガチャ')[:60],'result':result,'continueCount':sum(1 for item in event.get('rounds',[]) if isinstance(item,dict) and item.get('continued') is True),'createdAt':max(0,float(event.get('createdAt') or time.time()))})
+            gacha.setdefault('history', []).insert(0, {'id':event_id,'senderName':str(event.get('senderName') or 'ゲスト')[:80],'patternName':str(event.get('patternName') or 'WINガチャ')[:60],'result':result,'continueCount':sum(1 for item in event.get('rounds',[]) if isinstance(item,dict) and item.get('continued') is True),'setCount':max(1,len(event.get('rounds',[]))),'avatarUrl':event.get('avatarUrl',''),'eventCreatedAt':event.get('createdAt',0),'createdAt':max(0,float(event.get('createdAt') or time.time()))})
+            gacha['bestRecords']=gacha_best_records(gacha.get('bestRecords'),[gacha['history'][0]])
             gacha['history']=gacha['history'][:200]
         event['active']=False
         queue=gacha.setdefault('queue',[])
@@ -1721,7 +1803,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         if gift_rule:
             pattern=None
         if pattern:
-            run_gacha_draw(data,pattern,gift_name,sender_name)
+            run_gacha_draw(data,pattern,gift_name,sender_name,avatar_url=avatar_url)
             matched=True
         if smoke_pattern:
             run_smoking_gacha_draw(data,smoke_pattern,sender_name)
@@ -1730,7 +1812,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             run_other_gacha_draw(data,other_pattern,sender_name)
             matched=True
         if pachinko_pattern:
-            run_pachinko_draw(data,pachinko_pattern,sender_name)
+            run_pachinko_draw(data,pachinko_pattern,sender_name,avatar_url=avatar_url)
             matched=True
         if media_rule:
             queue_gift_media_event(data,media_rule,gift_name,sender_name,count)
@@ -2318,7 +2400,7 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
-        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko'):
+        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = self.path.rsplit('/', 1)[-1]
             body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
@@ -2401,6 +2483,7 @@ class Handler(SimpleHTTPRequestHandler):
                         # A stale control-page save must not erase history that
                         # the overlay appended after the page's last refresh.
                         data['gacha']['history']=copy.deepcopy(live_gacha.get('history',[]))
+                        data['gacha']['bestRecords']=copy.deepcopy(live_gacha.get('bestRecords',[]))
                     if isinstance(data.get('otherGacha'),dict):
                         live_other=current.get('otherGacha',{})
                         data['otherGacha']['event']=copy.deepcopy(live_other.get('event',{}))
@@ -2410,6 +2493,7 @@ class Handler(SimpleHTTPRequestHandler):
                         data['pachinkoGacha']['event']=copy.deepcopy(live_pachinko.get('event',{}))
                         data['pachinkoGacha']['queue']=copy.deepcopy(live_pachinko.get('queue',[]))
                         data['pachinkoGacha']['history']=copy.deepcopy(live_pachinko.get('history',[]))
+                        data['pachinkoGacha']['bestRecords']=copy.deepcopy(live_pachinko.get('bestRecords',[]))
                     if isinstance(data.get('giftMedia'),dict):
                         live_media=current.get('giftMedia',{})
                         data['giftMedia']['event']=copy.deepcopy(live_media.get('event',{}))
