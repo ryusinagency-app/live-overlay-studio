@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.42'
+APP_VERSION = '0.66.43'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -823,8 +823,8 @@ def normalize_state(data):
         if not isinstance(item,dict): continue
         raw_text_roles=item.get('textRoles') if isinstance(item.get('textRoles'),dict) else {}
         text_roles={}
-        for role in ('pattern','sender','preAlertState','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total'):
-            source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
+        for role in ('pattern','sender','preAlertState','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','endMissState','continueMissState','resultWin','setCount','total'):
+            source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('missState') if role in ('endMissState','continueMissState') and isinstance(raw_text_roles.get('missState'),dict) else raw_text_roles.get('resultState') if role in ('endMissState','continueMissState','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
             text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         media={}
         for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages():
@@ -2601,7 +2601,7 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == '/api/text-role-image':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 scope=str(data.get('scope') or '');pattern_id=str(data.get('patternId') or '');role=str(data.get('role') or '')
-                allowed={'gacha':('pattern','sender','start','startQuestion','spinState','spinStatus','spinNumber','resultState','continueState','upperEntryState','resultWin','roundTotal','setCount','choiceResult','choice','endResult','endState','finalTotal'),'pachinko':('pattern','sender','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','resultWin','setCount','total')}
+                allowed={'gacha':('pattern','sender','start','startQuestion','spinState','spinStatus','spinNumber','resultState','continueState','upperEntryState','resultWin','roundTotal','setCount','choiceResult','choice','endResult','endState','finalTotal'),'pachinko':('pattern','sender','spinState','spinNumber','progress','resultState','resultNumber','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState','endMissState','continueMissState','resultWin','setCount','total')}
                 if scope not in allowed or role not in allowed[scope]: raise ValueError('文字画像の設定先を確認してください')
                 state=read_state();collection=state['gacha']['patterns'] if scope=='gacha' else state['pachinkoGacha']['patterns'];pattern=next((x for x in collection if x['id']==pattern_id),None)
                 if not pattern: raise ValueError('設定先のガチャパターンが見つかりません')
