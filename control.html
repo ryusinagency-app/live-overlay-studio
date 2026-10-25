@@ -473,6 +473,7 @@ margin-right:-4px}}</style>
 <p class="note">ギフトで指定回転数を回し、当たり後にCZ・ST・上位ST・ラッキートリガーへ移行できます。WINガチャとは別の専用オーバーレイです。</p>
 <p id="pachinkoQueueStatus" class="note">待機なし</p>
 <div id="pachinkoQueueControls"></div>
+<div id="pachinkoChoiceSettings"><p id="pachinkoChoiceStatus" class="note">±選択の結果が出ると、＋か−を選択できます。</p><div class="missionTop"><button id="pachinkoChoosePlus" type="button" disabled>＋で確定</button><button id="pachinkoChooseMinus" type="button" disabled>−で確定</button></div><div class="cardSizeGrid"><div class="field"><label>＋選択のショートカット</label><div class="shortcutRow"><input id="pachinkoChoicePlusShortcut" class="shortcutValue" readonly placeholder="キー未設定"><button class="captureShortcut secondary" type="button">キー設定</button><button class="clearShortcut secondary" type="button">解除</button></div></div><div class="field"><label>−選択のショートカット</label><div class="shortcutRow"><input id="pachinkoChoiceMinusShortcut" class="shortcutValue" readonly placeholder="キー未設定"><button class="captureShortcut secondary" type="button">キー設定</button><button class="clearShortcut secondary" type="button">解除</button></div></div></div></div>
 <div id="pachinkoPreviewBackdrop" class="giftPickerBackdrop gachaPreviewDock hidden" role="dialog" aria-modal="true" aria-label="パチンコガチャのプレビュー"><div class="gachaPreviewWindow"><div class="giftPickerHead"><strong>パチンコガチャ プレビュー</strong><button id="pachinkoPreviewClose" class="secondary" type="button">閉じる</button></div><div class="pachinkoPreviewToolbar"><label>確認する演出<select id="pachinkoPreviewScene"><option value="flow">抽選全体</option><option value="spin">通常回転</option><option value="timeShort">時短回転</option><option value="at-spin">ST回転</option><option value="upper-spin">上位ST回転</option><option value="lt-spin">LT回転</option><option value="reach">リーチ</option><option value="hit">大当たり</option><option value="cz">CZ</option><option value="at">ST突入</option><option value="upper">上位ST突入</option><option value="lt">LT突入</option><option value="end">終了</option><option value="stop">数字停止</option><option value="preAlert1">先バレ1</option><option value="preAlert2">先バレ2</option><option value="preAlert3">先バレ3</option></select></label><button id="pachinkoPreviewPlay" type="button">再生／やり直し</button><button id="pachinkoPreviewStop" class="secondary" type="button">停止</button><small>配信用の抽選・待機列・現在WIN・履歴には反映しません。</small></div><iframe id="pachinkoPreviewFrame" title="パチンコガチャ演出プレビュー"></iframe></div></div>
 <div id="pachinkoPatterns"></div>
 <button id="addPachinkoPattern" class="secondary" type="button">＋ パチンコパターンを追加</button>
@@ -1885,6 +1886,6 @@ async function refreshGachaLiveState(){try{const fresh=await get(),live=fresh?.g
 setInterval(refreshGachaLiveState,500);
 
 </script>
-<script src="v6608.js?build=6641"></script>
+<script src="v6608.js?build=6642"></script>
 </body>
 </html>

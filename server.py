@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.41'
+APP_VERSION = '0.66.42'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -285,6 +285,9 @@ def safe_int(value, default=0):
             return int(float(value))
         except (TypeError, ValueError, OverflowError):
             return default
+
+def pachinko_boundary_stages():
+    return tuple(phase+edge for phase in ('reach','cz','hit','at','upper','lt') for edge in ('Enter','Exit'))
 
 def safe_float(value, default=0.0):
     try:
@@ -824,12 +827,13 @@ def normalize_state(data):
             source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('resultState') if role in ('reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
             text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         media={}
-        for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3'):
+        for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages():
             for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
             media[stage+'VideoVolume']=max(0,min(100,safe_int(item.get(stage+'VideoVolume',item.get(stage+'AudioVolume',75)),75)))
+            if stage.endswith(('Enter','Exit')): media[stage+'Enabled']=item.get(stage+'Enabled',False) is True
             # Rotation duration and result/media display duration are independent.
             duration_key='spinDisplaySeconds' if stage=='spin' else stage+'Seconds'
             media[duration_key]=max(.2,min(120,safe_float(item.get(duration_key,3),3)))
@@ -864,6 +868,7 @@ def normalize_state(data):
             'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, 'preAlerts':prealerts, 'digitSettings':digit_settings, **media
         })
         configured=pachinko_patterns[-1]
+        configured['winSign']=item.get('winSign') if item.get('winSign') in ('plus','minus','both') else 'plus'
         # Keep the legacy stage-level and per-alert audio volumes consistent.
         # Older saves/players used preAlertNAudioVolume; the editor uses preAlerts.
         for alert_index,alert in enumerate(prealerts):
@@ -882,6 +887,9 @@ def normalize_state(data):
         for prefix,default_rate in (('at',80),('upper',90),('luckyTrigger',95)):
             configured[prefix+'Mode']=item.get(prefix+'Mode') if item.get(prefix+'Mode') in ('st','continue') else ('continue' if prefix=='luckyTrigger' else 'st')
             configured[prefix+'ContinuationRate']=max(0,min(100,safe_float(item.get(prefix+'ContinuationRate',default_rate),default_rate)))
+            configured[prefix+'EndMissEnabled']=item.get(prefix+'EndMissEnabled',False) is True
+            configured[prefix+'ContinueMissEnabled']=item.get(prefix+'ContinueMissEnabled',False) is True
+            configured[prefix+'ContinueMissChance']=max(0,min(100,safe_float(item.get(prefix+'ContinueMissChance',20),20)))
         configured['luckyTriggerSpins']=max(1,min(10000,safe_int(item.get('luckyTriggerSpins',10),10)))
         configured['luckyTriggerHitDenominator']=max(1,min(1000000,safe_int(item.get('luckyTriggerHitDenominator',1000),1000)))
         configured['luckyTriggerHitNumerator']=max(0,min(configured['luckyTriggerHitDenominator'],safe_int(item.get('luckyTriggerHitNumerator',259),259)))
@@ -895,6 +903,14 @@ def normalize_state(data):
     for key in ('initialWin','timeShortWin'):
         if key in raw_p_event:
             merged['pachinkoGacha']['event'][key]=max(0,min(999999,safe_int(raw_p_event[key],0)))
+    for key in ('czUsed','czSuccess'):
+        if key in raw_p_event: merged['pachinkoGacha']['event'][key]=bool(raw_p_event[key])
+    p_event=merged['pachinkoGacha']['event']
+    p_event.update(winSign=raw_p_event.get('winSign') if raw_p_event.get('winSign') in ('plus','minus','both') else 'plus',
+                   choice=raw_p_event.get('choice') if raw_p_event.get('choice') in ('plus','minus') else '',
+                   choiceReady=bool(raw_p_event.get('choiceReady',False)),winApplied=bool(raw_p_event.get('winApplied',False)))
+    for field in ('shortcutChoicePlus','shortcutChoiceMinus'):
+        merged['pachinkoGacha'][field]=str(raw_pachinko.get(field) or '').upper()[:100]
 
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
@@ -1176,6 +1192,8 @@ def dispatch_hotkey_action(action):
             win=data['winCounter']; win['currentWin']=max(-999999,min(999999,win['currentWin']+action['delta']))
         elif action['type'] == 'gachaChoice':
             choose_gacha_sign_in_state(data, action['choice'])
+        elif action['type'] == 'pachinkoChoice':
+            choose_pachinko_sign_in_state(data,action['choice'])
         elif action['type'] == 'smokingTimer':
             timer=data['smokingTimer']; now=time.time(); remain=max(0,int((timer.get('endAt') or 0)-now)) if timer.get('endAt') else max(0,int(timer.get('remainingSeconds') or 0)); next_value=max(0,remain+int(action['delta']))
             timer['remainingSeconds']=next_value; timer['endAt']=now+next_value if next_value else 0
@@ -1278,15 +1296,23 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
                             phase_hit_spin=phase_spin
                             break
                 if phase_hit_spin:
-                    win=pachinko_payout(pattern,prefix,lo,hi);total=min(999999,total+win)
+                    win=pachinko_payout(pattern,prefix,lo,hi)
                     continued=(random.random()*100<float(pattern.get(prefix+'ContinuationRate',defaults[3]))) if mode=='continue' else True
+                    result_kind='win'
+                    if mode=='continue':
+                        if not continued and pattern.get(prefix+'EndMissEnabled',False):
+                            win=0;phase_hit_spin=0;result_kind='end-miss'
+                        elif continued and pattern.get(prefix+'ContinueMissEnabled',False) and random.random()*100<float(pattern.get(prefix+'ContinueMissChance',20)):
+                            win=0;phase_hit_spin=0;result_kind='continue-miss'
+                    total=min(999999,total+win)
                 else:
                     win=0
                     continued=False
+                    result_kind='end-miss'
                 next_phase=phase
-                if continued and phase=='at' and pattern.get('upperEnabled') and random.random()*100<float(pattern.get('upperEntryRate',10)): next_phase='upper'
-                if continued and phase in ('at','upper') and pattern.get('luckyTriggerEnabled') and random.random()*100<float(pattern.get('luckyTriggerRate',5)): next_phase='lt'
-                rounds.append({'phase':phase,'mode':mode,'win':win,'total':total,'continued':continued,'nextPhase':next_phase,'spins':phase_spins,'hitSpin':phase_hit_spin})
+                if continued and phase_hit_spin and phase=='at' and pattern.get('upperEnabled') and random.random()*100<float(pattern.get('upperEntryRate',10)): next_phase='upper'
+                if continued and phase_hit_spin and phase in ('at','upper') and pattern.get('luckyTriggerEnabled') and random.random()*100<float(pattern.get('luckyTriggerRate',5)): next_phase='lt'
+                rounds.append({'phase':phase,'mode':mode,'resultKind':result_kind,'win':win,'total':total,'continued':continued,'nextPhase':next_phase,'spins':phase_spins,'hitSpin':phase_hit_spin})
                 if not continued or guard>=1000: break
                 phase=next_phase
         elif pattern.get('timeShortEnabled'):
@@ -1317,6 +1343,8 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
     event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
     event.update(initialWin=initial_win,timeShortWin=time_short_win)
+    event.update(czUsed=bool(hit_spin and pattern.get('czEnabled')),czSuccess=bool(hit_spin and pattern.get('czEnabled') and cz_success))
+    event.update(winSign=pattern.get('winSign') if pattern.get('winSign') in ('plus','minus','both') else 'plus',choice='',choiceReady=False,winApplied=False)
     if machine.get('event',{}).get('active'): machine.setdefault('queue',[]).append(event)
     else: event['active']=True;machine['event']=event
     return True
@@ -1358,16 +1386,48 @@ def skip_pachinko_event(event_id,scope='current',created_at=None,expected_queue=
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
+def pachinko_signed_total(event):
+    sign=event.get('choice') if event.get('winSign')=='both' else event.get('winSign','plus')
+    return abs(safe_int(event.get('total')))*(-1 if sign=='minus' else 1)
+
+def record_pachinko_history(data,event):
+    history=data['pachinkoGacha'].setdefault('history',[])
+    if event.get('isTest') or any(safe_int(row.get('id'))==safe_int(event.get('id')) and safe_float(row.get('eventCreatedAt',-1))==safe_float(event.get('createdAt')) for row in history): return
+    history.insert(0,{'id':event['id'],'senderName':event.get('senderName',''),'patternName':event.get('patternName',''),'route':event.get('route',''),'total':pachinko_signed_total(event),'winSign':event.get('winSign','plus'),'choice':event.get('choice',''),'eventCreatedAt':event.get('createdAt',0),'createdAt':time.time()})
+    del history[200:]
+
+def choose_pachinko_sign_in_state(data,choice):
+    event=data['pachinkoGacha']['event']
+    if choice not in ('plus','minus') or event.get('type')!='pachinko-gacha' or not event.get('active') or event.get('winSign')!='both' or not event.get('choiceReady') or event.get('choice') or event.get('winApplied'): return False
+    event['choice']=choice
+    if not event.get('isTest'):
+        win=data['winCounter'];win['currentWin']=max(-999999,min(999999,win['currentWin']+pachinko_signed_total(event)))
+    event['winApplied']=True
+    record_pachinko_history(data,event)
+    return True
+
+def pachinko_choice_action(event_id,choice=None,created_at=None):
+    with STATE_LOCK:
+        try: data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception: return False
+        data,_=normalize_state(data);event=data['pachinkoGacha']['event']
+        if safe_int(event.get('id'))!=event_id or not event.get('active') or event.get('winSign')!='both': return False
+        if created_at is not None and safe_float(event.get('createdAt'))!=safe_float(created_at): return False
+        if choice is None: event['choiceReady']=True
+        elif not choose_pachinko_sign_in_state(data,choice): return False
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        return True
+
 def complete_pachinko_event(event_id):
     with STATE_LOCK:
         try: data=json.loads(STATE.read_text(encoding='utf-8'))
         except Exception: data=copy.deepcopy(DEFAULT)
         data,_=normalize_state(data);machine=data['pachinkoGacha'];event=machine['event']
         if safe_int(event.get('id') or 0)!=safe_int(event_id) or not event.get('active'): return False
+        if event.get('winSign')=='both' and not event.get('choice'): return False
         if not event.get('isTest'):
-            data['winCounter']['currentWin']=max(-999999,min(999999,data['winCounter']['currentWin']+safe_int(event.get('total') or 0)))
-            machine.setdefault('history',[]).insert(0,{'id':event['id'],'senderName':event.get('senderName',''),'patternName':event.get('patternName',''),'route':event.get('route',''),'total':safe_int(event.get('total') or 0),'createdAt':time.time()})
-            machine['history']=machine['history'][:200]
+            if not event.get('winApplied'): data['winCounter']['currentWin']=max(-999999,min(999999,data['winCounter']['currentWin']+pachinko_signed_total(event)))
+            record_pachinko_history(data,event)
         event['active']=False;queue=machine.setdefault('queue',[])
         if queue:
             nxt=queue.pop(0);nxt['active']=True;nxt['createdAt']=time.time();machine['event']=nxt
@@ -1864,6 +1924,10 @@ def start_global_hotkeys():
             for field, choice in (('shortcutChoicePlus','plus'), ('shortcutChoiceMinus','minus')):
                 binding = str(gacha.get(field) or '').upper()
                 if binding and binding not in desired: desired[binding] = {'type':'gachaChoice','choice':choice}
+            pachinko=data.get('pachinkoGacha',{})
+            for field,choice in (('shortcutChoicePlus','plus'),('shortcutChoiceMinus','minus')):
+                binding=str(pachinko.get(field) or '').upper()
+                if binding and binding not in desired: desired[binding]={'type':'pachinkoChoice','choice':choice}
             compiled = {}
             for binding, action in desired.items():
                 parsed = parse_shortcut(binding)
@@ -2284,7 +2348,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2570,6 +2634,10 @@ class Handler(SimpleHTTPRequestHandler):
                 result['pachinkoGacha']=read_state()['pachinkoGacha']
             elif self.path == '/api/pachinko/complete':
                 result={'ok':complete_pachinko_event(safe_int(data.get('eventId') or 0))}
+            elif self.path in ('/api/pachinko/choice-ready','/api/pachinko/choose-sign'):
+                choice=None if self.path.endswith('/choice-ready') else str(data.get('choice') or '')
+                result={'ok':pachinko_choice_action(safe_int(data.get('eventId'),0),choice,data.get('createdAt'))}
+                result['pachinkoGacha']=read_state()['pachinkoGacha']
             elif self.path == '/api/pachinko/digit-image':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
@@ -2591,7 +2659,7 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
                 stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
-                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','stop','spinBeep','preAlert1','preAlert2','preAlert3') or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','stop','spinBeep','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages() or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
                 url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
                 if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
                 elif kind=='animation':
