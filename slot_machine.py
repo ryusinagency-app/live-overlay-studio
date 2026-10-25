@@ -75,10 +75,10 @@ def default_pattern(index=1):
         'atContinuationRate': 70, 'upperAtEnabled': False, 'upperAtChance': 10,
         'upperAtSpins': 50, 'upperAtHitDenominator': 10,
         'cabinetUrl': '', 'monitorUrl': '', 'gogoUrl': '', 'gogoAudioUrl': '',
-        'spinAudioUrl': '', 'stopAudioUrl': '',
+        'startAudioUrl': '', 'spinAudioUrl': '', 'stopAudioUrl': '',
         'stop1AudioUrl': '', 'stop2AudioUrl': '', 'stop3AudioUrl': '',
         'bigEffectUrl': '', 'bigEffectAudioUrl': '', 'smallRoleAudioVolume': 75,
-        'gogoAudioVolume': 80, 'spinAudioVolume': 55, 'stopAudioVolume': 65,
+        'gogoAudioVolume': 80, 'startAudioVolume': 65, 'spinAudioVolume': 55, 'stopAudioVolume': 65,
         'stop1AudioVolume': 65, 'stop2AudioVolume': 65, 'stop3AudioVolume': 65,
         'bigEffectAudioVolume': 80, 'bigEffectVideoVolume': 70,
         'videoVolume': 70, 'background': '#08090d', 'accent': '#ffcf59',
@@ -164,7 +164,7 @@ def normalize_pattern(raw, index=1):
         ('atContinuationRate', 70, 0, 100), ('upperAtChance', 10, 0, 100),
         ('upperAtSpins', 50, 1, 10000), ('upperAtHitDenominator', 10, 1, 1000000),
         ('smallRoleAudioVolume', 75, 0, 100), ('gogoAudioVolume', 80, 0, 100),
-        ('spinAudioVolume', 55, 0, 100), ('stopAudioVolume', 65, 0, 100),
+        ('startAudioVolume', 65, 0, 100), ('spinAudioVolume', 55, 0, 100), ('stopAudioVolume', 65, 0, 100),
         ('stop1AudioVolume', 65, 0, 100), ('stop2AudioVolume', 65, 0, 100),
         ('stop3AudioVolume', 65, 0, 100), ('bigEffectAudioVolume', 80, 0, 100),
         ('bigEffectVideoVolume', 70, 0, 100),
@@ -179,7 +179,7 @@ def normalize_pattern(raw, index=1):
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
     result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
     for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'gogoUrl',
-                'gogoAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
+                'gogoAudioUrl', 'startAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
                 'stop1AudioUrl', 'stop2AudioUrl', 'stop3AudioUrl',
                 'bigEffectUrl', 'bigEffectAudioUrl'):
         result[key] = _media(raw.get(key))
