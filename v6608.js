@@ -202,7 +202,7 @@ function closePachinkoPreview(){pachinkoPreviewSerial++;pachinkoPreviewPatternId
 function openPachinkoPreview(id,scene='flow'){
  pachinkoPreviewPatternId=id;pachinkoPreviewReady=false;pachinkoPreviewPending=null;pachinkoPreviewChoiceGeneration=0;pachinkoPreviewChoice.hidden=true;const frame=byId('pachinkoPreviewFrame');byId('pachinkoPreviewScene').value=scene;byId('pachinkoPreviewBackdrop').classList.remove('hidden');
  frame.onload=()=>{if(!pachinkoPreviewPatternId||frame.getAttribute('src')==='about:blank')return;pachinkoPreviewReady=true;if(pachinkoPreviewPending){frame.contentWindow?.postMessage(pachinkoPreviewPending,location.origin);pachinkoPreviewPending=null}};
- frame.src='/overlay_pachinko.html?preview=1&build=6644&v='+Date.now();playPachinkoPreview();
+ frame.src='/overlay_pachinko.html?preview=1&build=6645&v='+Date.now();playPachinkoPreview();
 }
 byId('pachinkoPreviewClose').onclick=closePachinkoPreview;
 byId('pachinkoPreviewPlay').onclick=playPachinkoPreview;
