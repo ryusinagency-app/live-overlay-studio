@@ -7,6 +7,12 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;font-family:var(--overlay-font,system-ui,"Yu Gothic",sans-serif);color:var(--card-text,var(--text,#fff))}.card{position:absolute;left:4%;top:6%;min-width:300px;padding:15px 22px 18px;background:var(--panel,rgba(20,20,27,.9));border-left:7px solid var(--accent,#e52b3c);border-radius:0 14px 14px 0;color:var(--card-text,var(--text,#fff));filter:drop-shadow(0 4px 12px #0009)}.title{font-size:clamp(18px,2vw,30px);font-weight:900;letter-spacing:.08em}.winRow{display:flex;align-items:center;gap:12px}.winImage{display:block;width:64px;height:64px;object-fit:contain;flex:0 0 auto}.winImage.hidden{display:none}.value{font-size:clamp(36px,5vw,76px);font-weight:1000;line-height:1.1;text-shadow:var(--text-glow,none);font-variant-numeric:tabular-nums;white-space:nowrap}.currentValue,.goalValue{transition:color .2s ease}.track{height:9px;background:#ffffff35;border-radius:99px;overflow:hidden;margin-top:10px}.fill{height:100%;width:0;background:var(--gauge,#ffd55c);transition:width .35s ease;border-radius:inherit}
 </style>
 <body>
+<style>
+/* Opt-in reduced compositing; media, values and audio keep their normal flow. */
+.overlayLite .card{filter:none!important;box-shadow:none!important}
+.overlayLite .fill,.overlayLite .currentValue,.overlayLite .goalValue{transition:none!important}
+</style>
+<script>if(new URLSearchParams(location.search).get('lite')==='1')document.documentElement.classList.add('overlayLite');</script>
 <div class="card" id="card">
 <div class="title" id="title">現在</div>
 <div class="winRow"><img class="winImage hidden" id="winImage" alt=""><div class="value" id="winValue"><span class="currentValue" id="currentValue">0</span><span class="goalValue" id="goalValue">/10 WIN</span></div></div>
@@ -27,7 +33,7 @@ function rgbaTextBg(hex,opacity){const m=/^#([0-9a-f]{6})$/i.exec(hex||'');retur
 <script>
 let winSoundLastValue=null,winSoundLastGoal=null,winSoundPlayer=null;
 function updateWinSounds(state){const w=state.winCounter||{},value=Number(w.currentWin)||0,goal=Math.max(1,Number(w.goalWin)||10);if(winSoundLastValue!==null&&w.soundEnabled){let url='',kind='';if(winSoundLastValue<goal&&value>=goal){url=w.goalSoundUrl||'';kind='goal'}else if(value>winSoundLastValue){url=w.addSoundUrl||'';kind='add'}else if(value<winSoundLastValue){url=w.subSoundUrl||'';kind='sub'}if(url){if(winSoundPlayer){winSoundPlayer.pause();winSoundPlayer.currentTime=0}winSoundPlayer=new Audio(url);const volume=w[kind+'SoundVolume']??w.soundVolume??75;winSoundPlayer.volume=Math.max(0,Math.min(1,Number(volume)/100));winSoundPlayer.play().catch(()=>{})}}winSoundLastValue=value;winSoundLastGoal=goal}
-let winPollInFlight=false;
+let winPollInFlight=false,winRenderedStateKey='';
 async function fetchWinState(){
 const controller=typeof AbortController==='function'?new AbortController():null;let timer;
 try{return await Promise.race([(async()=>{const response=await fetch('/api/overlay/win',{cache:'no-store',...(controller?{signal:controller.signal}:{})});if(!response.ok)throw new Error('WIN通信エラー '+response.status);return await response.json()})(),new Promise((resolve,reject)=>{timer=setTimeout(()=>{if(controller)controller.abort();reject(new Error('WIN通信タイムアウト'))},5000)})])}finally{clearTimeout(timer)}
@@ -35,7 +41,7 @@ try{return await Promise.race([(async()=>{const response=await fetch('/api/overl
 async function update(){
 if(winPollInFlight)return;
 winPollInFlight=true;
-try{const state=await fetchWinState();renderWinState(state);applyGlobalTextFx(state);updateWinSounds(state)}catch(error){}finally{winPollInFlight=false;setTimeout(update,250)}
+try{const state=await fetchWinState();const key=JSON.stringify(state);if(key!==winRenderedStateKey){renderWinState(state);applyGlobalTextFx(state);winRenderedStateKey=key}updateWinSounds(state)}catch(error){}finally{winPollInFlight=false;setTimeout(update,250)}
 }
 update();
 </script>
