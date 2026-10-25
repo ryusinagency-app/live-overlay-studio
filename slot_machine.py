@@ -47,6 +47,7 @@ def default_pattern(index=1):
         'sign': 'plus', 'hitDenominator': 199, 'replayEnabled': True,
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
+        'bigEffectEnabled': True, 'bigEffectSeconds': 3.0,
         'missSymbols': ['BAR', 'ベル', 'ブドウ', '7', 'チェリー'],
         'symbols': [
             {'id': 'symbol-bar', 'name': 'BAR', 'imageUrl': ''},
@@ -71,12 +72,16 @@ def default_pattern(index=1):
         'atContinuationRate': 70, 'upperAtEnabled': False, 'upperAtChance': 10,
         'upperAtSpins': 50, 'upperAtHitDenominator': 10,
         'cabinetUrl': '', 'monitorUrl': '', 'gogoUrl': '', 'gogoAudioUrl': '',
-        'spinAudioUrl': '', 'stopAudioUrl': '', 'smallRoleAudioVolume': 75,
+        'spinAudioUrl': '', 'stopAudioUrl': '',
+        'stop1AudioUrl': '', 'stop2AudioUrl': '', 'stop3AudioUrl': '',
+        'bigEffectUrl': '', 'bigEffectAudioUrl': '', 'smallRoleAudioVolume': 75,
         'gogoAudioVolume': 80, 'spinAudioVolume': 55, 'stopAudioVolume': 65,
+        'stop1AudioVolume': 65, 'stop2AudioVolume': 65, 'stop3AudioVolume': 65,
+        'bigEffectAudioVolume': 80, 'bigEffectVideoVolume': 70,
         'videoVolume': 70, 'background': '#08090d', 'accent': '#ffcf59',
         'textColor': '#ffffff', 'reelColor': '#f7f2df',
         'cabinetSize': 100, 'monitorSize': 100, 'gogoSize': 100,
-        'symbolSize': 88, 'defaultGogoEnabled': True,
+        'symbolSize': 88, 'bigEffectSize': 100, 'defaultGogoEnabled': True,
     }
 
 
@@ -96,7 +101,7 @@ def normalize_pattern(raw, index=1):
     for key, default, low, high in (
         ('spinSeconds', 1.8, .2, 30), ('stopInterval', .35, .05, 5),
         ('resultSeconds', 1.2, .1, 30), ('hitNoticeSeconds', 2, .1, 30),
-        ('hitAlignSeconds', 2.4, .3, 30),
+        ('hitAlignSeconds', 2.4, .3, 30), ('bigEffectSeconds', 3, .1, 60),
     ):
         result[key] = _float(raw.get(key), default, low, high)
     result['bigSymbolText'] = str(raw.get('bigSymbolText') or '7')[:30]
@@ -150,16 +155,23 @@ def normalize_pattern(raw, index=1):
         ('upperAtSpins', 50, 1, 10000), ('upperAtHitDenominator', 10, 1, 1000000),
         ('smallRoleAudioVolume', 75, 0, 100), ('gogoAudioVolume', 80, 0, 100),
         ('spinAudioVolume', 55, 0, 100), ('stopAudioVolume', 65, 0, 100),
+        ('stop1AudioVolume', 65, 0, 100), ('stop2AudioVolume', 65, 0, 100),
+        ('stop3AudioVolume', 65, 0, 100), ('bigEffectAudioVolume', 80, 0, 100),
+        ('bigEffectVideoVolume', 70, 0, 100),
         ('videoVolume', 70, 0, 100),
         ('cabinetSize', 100, 10, 200), ('monitorSize', 100, 10, 200),
         ('gogoSize', 100, 10, 200), ('symbolSize', 88, 10, 150),
+        ('bigEffectSize', 100, 10, 200),
     ):
         result[key] = _int(raw.get(key), default, low, high)
     result['atEnabled'] = bool(raw.get('atEnabled', result['machineType'] == 'at'))
     result['upperAtEnabled'] = bool(raw.get('upperAtEnabled', False))
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
+    result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
     for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'gogoUrl',
-                'gogoAudioUrl', 'spinAudioUrl', 'stopAudioUrl'):
+                'gogoAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
+                'stop1AudioUrl', 'stop2AudioUrl', 'stop3AudioUrl',
+                'bigEffectUrl', 'bigEffectAudioUrl'):
         result[key] = _media(raw.get(key))
     for key, default in (('background', '#08090d'), ('accent', '#ffcf59'),
                          ('textColor', '#ffffff'), ('reelColor', '#f7f2df')):
