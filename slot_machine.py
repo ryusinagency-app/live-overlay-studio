@@ -48,6 +48,13 @@ def default_pattern(index=1):
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
         'missSymbols': ['BAR', 'ベル', 'ブドウ', '7', 'チェリー'],
+        'symbols': [
+            {'id': 'symbol-bar', 'name': 'BAR', 'imageUrl': ''},
+            {'id': 'symbol-bell', 'name': 'ベル', 'imageUrl': ''},
+            {'id': 'symbol-grape', 'name': 'ブドウ', 'imageUrl': ''},
+            {'id': 'symbol-seven', 'name': '7', 'imageUrl': ''},
+            {'id': 'symbol-cherry', 'name': 'チェリー', 'imageUrl': ''},
+        ],
         'bigSymbolText': '7', 'bigSymbolImageUrl': '', 'bigWin': 100,
         'payoutMode': 'fixed', 'payouts': [{'win': 100, 'weight': 100}],
         'smallRoles': [
@@ -68,6 +75,8 @@ def default_pattern(index=1):
         'gogoAudioVolume': 80, 'spinAudioVolume': 55, 'stopAudioVolume': 65,
         'videoVolume': 70, 'background': '#08090d', 'accent': '#ffcf59',
         'textColor': '#ffffff', 'reelColor': '#f7f2df',
+        'cabinetSize': 100, 'monitorSize': 100, 'gogoSize': 100,
+        'symbolSize': 88, 'defaultGogoEnabled': True,
     }
 
 
@@ -101,6 +110,15 @@ def normalize_pattern(raw, index=1):
     result['payouts'] = payouts or copy.deepcopy(base['payouts'])
     symbols = [str(x or '')[:30] for x in (raw.get('missSymbols') or []) if str(x or '').strip()]
     result['missSymbols'] = symbols[:30] or copy.deepcopy(base['missSymbols'])
+    symbol_rows=[]
+    for symbol_index,row in enumerate((raw.get('symbols') or [])):
+        if not isinstance(row,dict): continue
+        symbol_rows.append({'id':str(row.get('id') or f'symbol-{symbol_index+1}')[:80],
+                            'name':str(row.get('name') or f'図柄{symbol_index+1}')[:30],
+                            'imageUrl':_media(row.get('imageUrl'))})
+    if not symbol_rows:
+        symbol_rows=[{'id':f'symbol-{i+1}','name':name,'imageUrl':''} for i,name in enumerate(result['missSymbols'])]
+    result['symbols']=symbol_rows[:50]
     roles = []
     for role_index, role in enumerate((raw.get('smallRoles') or [])[:50]):
         if not isinstance(role, dict):
@@ -133,10 +151,13 @@ def normalize_pattern(raw, index=1):
         ('smallRoleAudioVolume', 75, 0, 100), ('gogoAudioVolume', 80, 0, 100),
         ('spinAudioVolume', 55, 0, 100), ('stopAudioVolume', 65, 0, 100),
         ('videoVolume', 70, 0, 100),
+        ('cabinetSize', 100, 10, 200), ('monitorSize', 100, 10, 200),
+        ('gogoSize', 100, 10, 200), ('symbolSize', 88, 10, 150),
     ):
         result[key] = _int(raw.get(key), default, low, high)
     result['atEnabled'] = bool(raw.get('atEnabled', result['machineType'] == 'at'))
     result['upperAtEnabled'] = bool(raw.get('upperAtEnabled', False))
+    result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
     for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'gogoUrl',
                 'gogoAudioUrl', 'spinAudioUrl', 'stopAudioUrl'):
         result[key] = _media(raw.get(key))
@@ -184,11 +205,12 @@ def _weighted_payout(pattern):
 
 
 def _miss_reels(pattern):
-    symbols = pattern['missSymbols']
-    reels = [random.choice(symbols) for _ in range(3)]
-    if reels[0] == reels[1] == reels[2]:
-        reels[2] = symbols[(symbols.index(reels[2]) + 1) % len(symbols)] if len(symbols) > 1 else 'BAR'
-    return reels
+    symbols = pattern.get('symbols') or [{'name':x,'imageUrl':''} for x in pattern['missSymbols']]
+    picked = [random.choice(symbols) for _ in range(3)]
+    if len(symbols)>1 and picked[0]['id'] == picked[1]['id'] == picked[2]['id']:
+        current=next((i for i,x in enumerate(symbols) if x['id']==picked[2]['id']),0)
+        picked[2]=symbols[(current+1)%len(symbols)]
+    return [x['name'] for x in picked],[x.get('imageUrl','') for x in picked]
 
 
 def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
@@ -243,8 +265,9 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
                           'win': chosen['win'] if chosen['addWinEnabled'] else 0,
                           'addedSpins': added, 'mode': mode})
         else:
-            spins.append({'kind': 'miss', 'roleName': 'はずれ', 'reels': _miss_reels(pattern),
-                          'symbolImageUrl': '', 'win': 0, 'addedSpins': 0, 'mode': mode})
+            reel_text,reel_images=_miss_reels(pattern)
+            spins.append({'kind': 'miss', 'roleName': 'はずれ', 'reels': reel_text,
+                          'reelImages':reel_images, 'symbolImageUrl': '', 'win': 0, 'addedSpins': 0, 'mode': mode})
     now = time.time()
     return {
         'id': int(now * 1000), 'type': 'slot', 'active': True,
@@ -278,7 +301,7 @@ def apply_spin(state, event_id, spin_index):
     event['total'] = min(999999999, _int(event.get('total')) + _int(spin.get('win')))
     event['appliedSpins'] = index + 1
     if event['appliedSpins'] >= len(event['spins']):
-        if event.get('sign') == 'both':
+        if event.get('sign') == 'both' and not event.get('isTest'):
             event['choiceReady'] = True
         elif not event.get('isTest') and not event.get('winApplied'):
             delta = event['total'] * (-1 if event.get('sign') == 'minus' else 1)
