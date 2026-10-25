@@ -84,6 +84,7 @@ def default_pattern(index=1):
         'videoVolume': 70, 'background': '#08090d', 'accent': '#ffcf59',
         'textColor': '#ffffff', 'reelColor': '#f7f2df',
         'cabinetSize': 100, 'monitorSize': 100, 'gogoSize': 100,
+        'gogoX': 50, 'gogoY': 76, 'gogoWidth': 240, 'gogoHeight': 120,
         'symbolSize': 88, 'bigEffectSize': 100, 'defaultGogoEnabled': True,
     }
 
@@ -172,6 +173,8 @@ def normalize_pattern(raw, index=1):
         ('videoVolume', 70, 0, 100),
         ('cabinetSize', 100, 10, 200), ('monitorSize', 100, 10, 200),
         ('gogoSize', 100, 10, 200), ('symbolSize', 88, 10, 150),
+        ('gogoX', 50, 0, 100), ('gogoY', 76, 0, 100),
+        ('gogoWidth', 240, 20, 1920), ('gogoHeight', 120, 20, 1080),
         ('bigEffectSize', 100, 10, 200),
     ):
         result[key] = _int(raw.get(key), default, low, high)
