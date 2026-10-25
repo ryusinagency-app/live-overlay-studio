@@ -6,7 +6,7 @@
  const nameObserver=typeof ResizeObserver==='function'?new ResizeObserver(entries=>entries.forEach(entry=>measureNames(entry.target))):null;
  window.addEventListener('resize',()=>nameConfigs.forEach((_,host)=>measureNames(host)));
  window.addEventListener('ranking-tab-visible',()=>requestAnimationFrame(()=>nameConfigs.forEach((_,host)=>measureNames(host))));
- function config(scope,kind){return {...defaults,...(kind==='history'?{limit:200}:{}),...state?.[scope]?.rankingViews?.[kind]}}
+ function config(scope,kind){const value={...defaults,...(kind==='history'?{limit:200}:{}),...state?.[scope]?.rankingViews?.[kind]};for(const key of ['nameTemplate','patternTemplate','scoreTemplate'])if(!String(value[key]??'').trim())value[key]=defaults[key];for(const key of ['textColor','cardBg','cardBorder'])if(!/^#[0-9a-f]{6}$/i.test(value[key]||''))value[key]=defaults[key];return value}
  const numberFields=[['limit','ランキング人数',1,100],['columns','列数',1,8],['rows','行数',1,10],['pageSeconds','ページ切替間隔（秒）',2,60],['scrollSpeed','スクロール速度（px/秒）',10,300],['avatarSize','アイコンサイズ（px）',20,160],['nameSize','ギフター名の文字サイズ',8,96],['patternSize','ガチャ名の文字サイズ',8,96],['scoreSize','SET・WINの文字サイズ',8,96],['textScrollSpeed','名前のスクロール速度（px/秒）',10,150],['cardOpacity','背景の透過度（100で不透明）',0,100]];
  function editor(id,title){const details=document.createElement('details');details.className='gachaRankingSettings bestRankingEditor';details.dataset.board=id;details.open=!id.endsWith('History');const summary=document.createElement('summary');summary.textContent=title+(id.endsWith('History')?'の表示設定':'ランキング・表示設定');details.append(summary);const fields=document.createElement('div');fields.className='rankingViewFields';
   const field=(key,label,type,options)=>{const box=document.createElement('label');box.className='field';box.textContent=label;const input=document.createElement(type==='select'?'select':'input');input.dataset.rankingField=key;if(type==='select')for(const [value,text] of options){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option)}else input.type=type;box.append(input);fields.append(box);return input};
@@ -32,5 +32,5 @@
  renderGachaHistory=function(){signatures.delete('gachaHistoryList');renderRankingRecords()};
  const settingsBefore=renderSettings;renderSettings=function(){settingsBefore();fill();renderRankingRecords()};const collectBefore=collect;collect=function(...args){collectBefore(...args);collectRankingViews()};
  const liveBefore=updateGachaLiveStatus;updateGachaLiveStatus=function(...args){liveBefore(...args);renderRankingRecords()};window.renderRankingRecords=renderRankingRecords;
- ensure();
+ ensure();fill();renderRankingRecords();
 })();
