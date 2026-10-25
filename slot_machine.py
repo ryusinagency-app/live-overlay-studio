@@ -47,7 +47,10 @@ def default_pattern(index=1):
         'sign': 'plus', 'hitDenominator': 199, 'replayEnabled': True,
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
-        'bigEffectEnabled': True, 'bigEffectSeconds': 3.0,
+        'bigEffectEnabled': True, 'bigEffectMode': 'visual-audio', 'bigEffectSeconds': 3.0,
+        'monitorTextEnabled': True, 'spinText': '回転中', 'bonusText': 'BONUS!',
+        'missText': 'はずれ', 'winResultText': '+{win} WIN',
+        'monitorTextColor': '#ffffff', 'monitorTextSize': 70,
         'missSymbols': ['BAR', 'ベル', 'ブドウ', '7', 'チェリー'],
         'symbols': [
             {'id': 'symbol-bar', 'name': 'BAR', 'imageUrl': ''},
@@ -105,6 +108,13 @@ def normalize_pattern(raw, index=1):
     ):
         result[key] = _float(raw.get(key), default, low, high)
     result['bigSymbolText'] = str(raw.get('bigSymbolText') or '7')[:30]
+    result['bigEffectMode'] = 'audio-only' if raw.get('bigEffectMode') == 'audio-only' else 'visual-audio'
+    result['monitorTextEnabled'] = raw.get('monitorTextEnabled', True) is not False
+    for key, default in (('spinText', '回転中'), ('bonusText', 'BONUS!'),
+                         ('missText', 'はずれ'), ('winResultText', '+{win} WIN')):
+        value = raw.get(key)
+        result[key] = str(default if value is None else value)[:120]
+    result['monitorTextSize'] = _int(raw.get('monitorTextSize'), 70, 10, 300)
     result['bigWin'] = _int(raw.get('bigWin'), 100, 0, 999999)
     result['payoutMode'] = 'weighted' if raw.get('payoutMode') == 'weighted' else 'fixed'
     payouts = []
@@ -174,7 +184,8 @@ def normalize_pattern(raw, index=1):
                 'bigEffectUrl', 'bigEffectAudioUrl'):
         result[key] = _media(raw.get(key))
     for key, default in (('background', '#08090d'), ('accent', '#ffcf59'),
-                         ('textColor', '#ffffff'), ('reelColor', '#f7f2df')):
+                         ('textColor', '#ffffff'), ('reelColor', '#f7f2df'),
+                         ('monitorTextColor', '#ffffff')):
         value = str(raw.get(key) or '')
         result[key] = value.lower() if len(value) == 7 and value.startswith('#') else default
     return result
@@ -227,10 +238,11 @@ def _miss_reels(pattern):
 
 def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
     budget = pattern['giftSpins']
+    max_spins = min(20000, max(budget, budget * 20, budget + 20))
     mode = 'normal'
     spins = []
     safety = 0
-    while budget > 0 and safety < 20000:
+    while budget > 0 and safety < max_spins:
         safety += 1
         budget -= 1
         denominator = pattern['hitDenominator']
@@ -248,11 +260,13 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
             if pattern['machineType'] == 'at' and pattern['atEnabled']:
                 if mode == 'normal':
                     mode = 'upper' if pattern['upperAtEnabled'] and random.random() * 100 < pattern['upperAtChance'] else 'at'
-                    added = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                    requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                    added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
                     spins[-1]['addedSpins'] = added
                 elif random.random() * 100 < pattern['atContinuationRate']:
-                    added = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                    requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                    added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
                     spins[-1]['addedSpins'] = added
             continue
@@ -266,7 +280,8 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
                 chosen = role
                 break
         if chosen:
-            added = chosen['addSpins'] if chosen['addSpinsEnabled'] else 0
+            requested = chosen['addSpins'] if chosen['addSpinsEnabled'] else 0
+            added = min(requested, max(0, max_spins - len(spins) - 1 - budget))
             budget += added
             symbol = chosen['symbolText']
             spins.append({'kind': 'replay' if chosen['id'] == 'replay' else 'small',
@@ -313,7 +328,7 @@ def apply_spin(state, event_id, spin_index):
     event['total'] = min(999999999, _int(event.get('total')) + _int(spin.get('win')))
     event['appliedSpins'] = index + 1
     if event['appliedSpins'] >= len(event['spins']):
-        if event.get('sign') == 'both' and not event.get('isTest'):
+        if event.get('sign') == 'both':
             event['choiceReady'] = True
         elif not event.get('isTest') and not event.get('winApplied'):
             delta = event['total'] * (-1 if event.get('sign') == 'minus' else 1)
