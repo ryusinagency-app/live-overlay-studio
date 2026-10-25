@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.39'
+APP_VERSION = '0.66.40'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -844,7 +844,7 @@ def normalize_state(data):
         prealerts=[]
         for alert_index in range(3):
             alert=raw_prealerts[alert_index] if alert_index<len(raw_prealerts) and isinstance(raw_prealerts[alert_index],dict) else {}
-            prealerts.append({'enabled':bool(alert.get('enabled',False)),'condition':alert.get('condition') if alert.get('condition') in ('any','hit','miss','cz-success','cz-fail','at','upper','lt') else 'any','chance':max(0,min(100,safe_int(alert.get('chance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'textSeconds':max(.2,min(120,safe_float(alert.get('textSeconds',1.2),1.2))),'mediaSeconds':max(0,min(120,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','audioSeconds':max(0,min(120,safe_float(alert.get('audioSeconds',0),0))),'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75),75))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75),75))),'animationUrl':media.get(f'preAlert{alert_index+1}AnimationUrl',''),'animationName':media.get(f'preAlert{alert_index+1}AnimationName',''),'audioUrl':media.get(f'preAlert{alert_index+1}AudioUrl',''),'audioName':media.get(f'preAlert{alert_index+1}AudioName','')})
+            prealerts.append({'enabled':bool(alert.get('enabled',False)),'condition':alert.get('condition') if alert.get('condition') in ('any','hit','miss','cz-success','cz-fail','at','upper','lt') else 'any','chance':max(0,min(100,safe_int(alert.get('chance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'textSeconds':max(.2,min(120,safe_float(alert.get('textSeconds',1.2),1.2))),'mediaSeconds':max(0,min(120,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','audioSeconds':max(0,min(120,safe_float(alert.get('audioSeconds',0),0))),'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',item.get(f'preAlert{alert_index+1}AudioVolume',75)),75))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75),75))),'animationUrl':media.get(f'preAlert{alert_index+1}AnimationUrl',''),'animationName':media.get(f'preAlert{alert_index+1}AnimationName',''),'audioUrl':media.get(f'preAlert{alert_index+1}AudioUrl',''),'audioName':media.get(f'preAlert{alert_index+1}AudioName','')})
         raw_digits=item.get('digitSettings') if isinstance(item.get('digitSettings'),list) else []
         digit_settings=[]
         for digit in range(10):
@@ -863,6 +863,10 @@ def normalize_state(data):
             'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, 'preAlerts':prealerts, 'digitSettings':digit_settings, **media
         })
         configured=pachinko_patterns[-1]
+        # Keep the legacy stage-level and per-alert audio volumes consistent.
+        # Older saves/players used preAlertNAudioVolume; the editor uses preAlerts.
+        for alert_index,alert in enumerate(prealerts):
+            configured[f'preAlert{alert_index+1}AudioVolume']=alert['audioVolume']
         for digit,settings in enumerate(digit_settings):
             source=raw_digits[digit] if digit<len(raw_digits) and isinstance(raw_digits[digit],dict) else {}
             settings['enabled']=source.get('enabled',True) is not False
@@ -1094,6 +1098,10 @@ def read_overlay_state(kind):
             result['gacha']['patterns'] = [pattern] if pattern else []
             effect_key = 'gacha:' + str(event.get('patternId') or '')
             result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+        elif kind == 'pachinko':
+            machine=state['pachinkoGacha'];event=machine.get('event',{})
+            pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
+            result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
         else:
             raise ValueError('Unknown overlay snapshot')
         return copy.deepcopy(result)
@@ -1311,6 +1319,43 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
     if machine.get('event',{}).get('active'): machine.setdefault('queue',[]).append(event)
     else: event['active']=True;machine['event']=event
     return True
+
+def build_pachinko_preview(pattern):
+    """Generate the real lottery flow in isolated memory, never enqueue or award."""
+    sandbox=copy.deepcopy(DEFAULT)
+    sandbox['pachinkoGacha']={'patterns':[pattern],'queue':[],'history':[],'event':{}}
+    sandbox,_=normalize_state(sandbox)
+    normalized=sandbox['pachinkoGacha']['patterns'][0]
+    run_pachinko_draw(sandbox,normalized,'プレビュー',is_test=True)
+    event=sandbox['pachinkoGacha']['event'];event['preview']=True
+    return {'ok':True,'pattern':normalized,'event':event}
+
+def skip_pachinko_event(event_id,scope='current',created_at=None,expected_queue=None):
+    """Explicit skip only: preserve WIN/history and reject stale current IDs."""
+    with STATE_LOCK:
+        try: data=json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception: return False
+        data,_=normalize_state(data);machine=data['pachinkoGacha'];event=machine['event'];pending=machine.setdefault('queue',[])
+        if scope=='waiting':
+            index=next((i for i,e in enumerate(pending) if safe_int(e.get('id'))==event_id),None)
+            if index is None: return False
+            if created_at is not None and safe_float(pending[index].get('createdAt'))!=safe_float(created_at): return False
+            pending.pop(index)
+        elif scope=='queue':
+            if not pending or not isinstance(expected_queue,list): return False
+            tokens={(safe_int(e.get('id')),safe_float(e.get('createdAt'))) for e in expected_queue if isinstance(e,dict)}
+            remaining=[e for e in pending if (safe_int(e.get('id')),safe_float(e.get('createdAt'))) not in tokens]
+            if len(remaining)==len(pending): return False
+            pending[:]=remaining
+        elif scope=='current':
+            if not event.get('active') or safe_int(event.get('id'))!=event_id: return False
+            if created_at is not None and safe_float(event.get('createdAt'))!=safe_float(created_at): return False
+            event['active']=False
+            if pending:
+                following=pending.pop(0);following['active']=True;following['createdAt']=time.time();machine['event']=following
+        else: return False
+        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        return True
 
 def complete_pachinko_event(event_id):
     with STATE_LOCK:
@@ -2208,7 +2253,7 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
-        if self.path in ('/api/overlay/win', '/api/overlay/gacha'):
+        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko'):
             kind = self.path.rsplit('/', 1)[-1]
             body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
@@ -2238,7 +2283,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/complete', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2513,6 +2558,15 @@ class Handler(SimpleHTTPRequestHandler):
                 test_alert_index=None if requested_alert is None else safe_int(requested_alert,-1)
                 if test_alert_index is not None and not 0<=test_alert_index<3: raise ValueError('先バレパターンを確認してください')
                 run_pachinko_draw(state,pattern,'テスト',is_test=True,test_pre_alert_index=test_alert_index);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
+            elif self.path == '/api/pachinko/preview':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                pattern=data.get('pattern')
+                if not isinstance(pattern,dict): raise ValueError('プレビューするパターンを確認してください')
+                result=build_pachinko_preview(pattern)
+            elif self.path == '/api/pachinko/skip':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                result={'ok':skip_pachinko_event(safe_int(data.get('eventId'),0),str(data.get('scope') or 'current'),data.get('createdAt'),data.get('events'))}
+                result['pachinkoGacha']=read_state()['pachinkoGacha']
             elif self.path == '/api/pachinko/complete':
                 result={'ok':complete_pachinko_event(safe_int(data.get('eventId') or 0))}
             elif self.path == '/api/pachinko/digit-image':
