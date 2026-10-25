@@ -234,10 +234,17 @@ def _weighted_payout(pattern):
 def _miss_reels(pattern):
     symbols = pattern.get('symbols') or [{'name':x,'imageUrl':''} for x in pattern['missSymbols']]
     picked = [random.choice(symbols) for _ in range(3)]
-    if len(symbols)>1 and picked[0]['id'] == picked[1]['id'] == picked[2]['id']:
-        current=next((i for i,x in enumerate(symbols) if x['id']==picked[2]['id']),0)
-        picked[2]=symbols[(current+1)%len(symbols)]
-    return [x['name'] for x in picked],[x.get('imageUrl','') for x in picked]
+    # What the viewer sees is the image (or text when no image exists), not the
+    # catalog ID.  Duplicate catalog rows can therefore be visually identical
+    # even when their IDs differ.  Never return a visible three-of-a-kind for a
+    # miss result.
+    def visible_key(item):
+        image = str(item.get('imageUrl') or '').strip()
+        return ('image', image) if image else ('text', str(item.get('name') or '').strip())
+    if visible_key(picked[0]) == visible_key(picked[1]) == visible_key(picked[2]):
+        replacement = next((item for item in symbols if visible_key(item) != visible_key(picked[0])), None)
+        picked[2] = replacement or {'id':'forced-miss','name':'×','imageUrl':''}
+    return [x.get('name','') for x in picked],[x.get('imageUrl','') for x in picked]
 
 
 def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
@@ -259,6 +266,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
             win = _weighted_payout(pattern)
             symbol = pattern['bigSymbolText']
             spins.append({'kind': 'hit', 'roleName': '大当たり', 'reels': [symbol] * 3,
+                          'reelImages': [pattern['bigSymbolImageUrl']] * 3,
                           'symbolImageUrl': pattern['bigSymbolImageUrl'], 'win': win,
                           'addedSpins': 0, 'mode': mode})
             if pattern['machineType'] == 'at' and pattern['atEnabled']:
@@ -290,7 +298,8 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
             symbol = chosen['symbolText']
             spins.append({'kind': 'replay' if chosen['id'] == 'replay' else 'small',
                           'roleId': chosen['id'], 'roleName': chosen['name'],
-                          'reels': [symbol] * 3, 'symbolImageUrl': chosen['symbolImageUrl'],
+                          'reels': [symbol] * 3, 'reelImages': [chosen['symbolImageUrl']] * 3,
+                          'symbolImageUrl': chosen['symbolImageUrl'],
                           'animationUrl': chosen['animationUrl'], 'audioUrl': chosen['audioUrl'],
                           'audioVolume': chosen['audioVolume'],
                           'effectSeconds': chosen['effectSeconds'],
