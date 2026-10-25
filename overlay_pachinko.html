@@ -58,17 +58,24 @@ function clearPachinkoRoleStyles(el){for(const property of ['color','font-size',
 function setPachinkoRoleStyle(el,property,value,priority=''){el.style.setProperty(property,value,priority);el.dataset[pachinkoRoleKey(property)]='1'}
 function applyPachinkoTextRoles(){const roles=activePattern?.textRoles||{};for(const id of ['pattern','sender','status','spin','sub','total']){const el=$(id),raw=String(el.textContent||''),x=roles[pachinkoRoleFor(id,raw)]||{},customImage=x.mode==='image'&&x.imageUrl,customText=!customImage&&!!x.text,fontFamily=x.fontFamily||'global';clearPachinkoRoleStyles(el);el.classList.remove('roleTextOff','roleCustomText','roleCustomImage');for(const property of ['--role-content','--role-image','--role-image-size','--role-color','--role-size','--role-font'])el.style.removeProperty(property);const baseColor=getComputedStyle(el).color,baseSize=getComputedStyle(el).fontSize;if(x.enabled===false){el.classList.add('roleTextOff');continue}if(x.positionEnabled){setPachinkoRoleStyle(el,'position','absolute','important');setPachinkoRoleStyle(el,'left',Math.max(0,Math.min(100,Number.isFinite(+x.x)?+x.x:50))+'%','important');setPachinkoRoleStyle(el,'right','auto','important');setPachinkoRoleStyle(el,'top',Math.max(0,Math.min(100,Number.isFinite(+x.y)?+x.y:50))+'%','important');setPachinkoRoleStyle(el,'bottom','auto','important');setPachinkoRoleStyle(el,'translate','-50% -50%','important');setPachinkoRoleStyle(el,'margin','0','important');setPachinkoRoleStyle(el,'z-index','20','important');setPachinkoRoleStyle(el,'width','max-content','important');setPachinkoRoleStyle(el,'max-width','94%','important');setPachinkoRoleStyle(el,'white-space','normal','important')}if(customImage){el.classList.add('roleCustomImage');el.style.setProperty('--role-image',`url("${String(x.imageUrl).replace(/"/g,'%22')}")`);el.style.setProperty('--role-image-size',Math.max(20,Math.min(600,+x.imageSize||120))+'px')}else if(customText){el.classList.add('roleCustomText');el.style.setProperty('--role-content',JSON.stringify(pachinkoRoleTemplate(x.text,raw)));el.style.setProperty('--role-color',x.colorEnabled&&x.color?x.color:baseColor);el.style.setProperty('--role-size',(+x.size>0?+x.size+'px':baseSize));el.style.setProperty('--role-font',pachinkoFontStack(fontFamily))}else{if(x.colorEnabled&&x.color)setPachinkoRoleStyle(el,'color',x.color,'important');if(+x.size>0)setPachinkoRoleStyle(el,'font-size',(+x.size)+'px');if(fontFamily!=='global')setPachinkoRoleStyle(el,'font-family',pachinkoFontStack(fontFamily),'important')}}}
 function startStageMedia(p,key){stopMedia();const url=p[key+'AnimationUrl']||'',audioUrl=p[key+'AudioUrl']||'';if(url){const video=/\.(mp4|webm)(\?|$)/i.test(url),node=document.createElement(video?'video':'img');node.src=url;if(video){node.autoplay=true;node.playsInline=true;node.loop=true;node.volume=Math.max(0,Math.min(1,Number(p[key+'AudioVolume']??75)/100));currentVideo=node;node.play().catch(()=>{})}$('media').append(node)}if(audioUrl){currentAudio=new Audio(audioUrl);currentAudio.volume=Math.max(0,Math.min(1,Number(p[key+'AudioVolume']??75)/100));currentAudio.play().catch(()=>{})}}
-async function playStage(p,key,text,detail='',fallback=1){startStageMedia(p,key);showText(text,'',detail,'');const seconds=Math.max(.2,Math.min(120,Number(p[key+'Seconds'])||fallback));await sleep(Math.max(100,seconds*1000*playbackSpeed));stopMedia()}
+async function playStage(p,key,text,detail='',fallback=1){startStageMedia(p,key);showText(text,'',detail,'');const seconds=Math.max(.2,Math.min(120,Number(p[(key==='spin'?'spinDisplay':key)+'Seconds'])||fallback));await sleep(seconds*1000*playbackSpeed);stopMedia()}
 // Visual reels follow the server result; they never perform a second lottery.
-function pachinkoSlotNumber(hit=false){
-  const digits=String(Math.floor(Math.random()*1000)).padStart(3,'0').split('');
+function pachinkoSymbols(p=activePattern){
+  const digits=Array.from({length:10},(_,n)=>String(n)).filter(d=>p?.digitSettings?.[Number(d)]?.enabled!==false);
+  // Keep misses distinct even for malformed/old settings with too few symbols.
+  for(let n=0;digits.length<2&&n<10;n++)if(!digits.includes(String(n)))digits.push(String(n));
+  return digits;
+}
+function pickPachinkoSymbol(p=activePattern,except=null){const digits=pachinkoSymbols(p).filter(d=>d!==except);return digits[Math.floor(Math.random()*digits.length)]}
+function pachinkoSlotNumber(hit=false,p=activePattern){
+  const digits=Array.from({length:3},()=>pickPachinkoSymbol(p));
   if(hit)return digits[0].repeat(3);
-  if(digits[0]===digits[1]&&digits[1]===digits[2])digits[2]=String((Number(digits[2])+1)%10);
+  if(digits[0]===digits[1]&&digits[1]===digits[2])digits[2]=pickPachinkoSymbol(p,digits[0]);
   return digits.join('');
 }
-function pachinkoRollingNumber(){
-  const left=Math.floor(Math.random()*10),right=(left+1+Math.floor(Math.random()*9))%10;
-  return ''+left+Math.floor(Math.random()*10)+right;
+function pachinkoRollingNumber(p=activePattern){
+  const left=pickPachinkoSymbol(p),right=pickPachinkoSymbol(p,left);
+  return left+pickPachinkoSymbol(p)+right;
 }
 function startPachinkoReachMedia(p){
   const url=p.reachAnimationUrl;
@@ -80,27 +87,27 @@ function startPachinkoReachMedia(p){
   }
   if(p.reachAudioUrl){alertAudio=new Audio(p.reachAudioUrl);alertAudio.volume=Math.max(0,Math.min(1,Number(p.reachAudioVolume??75)/100));alertAudio.play().catch(()=>{})}
 }
-async function animatePachinkoTurn(p,{hit,seconds,label,progress,mediaKey}){
+async function animatePachinkoTurn(p,{hit,seconds,label,progress,mediaKey,displaySeconds}){
   startStageMedia(p,mediaKey);
   // The dedicated rotation track replaces stage audio while the reels move.
   if(p.spinBeepAudioUrl&&currentAudio){currentAudio.pause();currentAudio=null}
   if(currentAudio)currentAudio.loop=true;
   playPachinkoBeep(p);
-  const steps=8,tick=Math.max(15,seconds*1000*playbackSpeed/steps);
+  const totalMs=Math.max(1,seconds*1000*playbackSpeed),steps=Math.max(1,Math.min(8,Math.floor(totalMs/15))),tick=totalMs/steps;
   for(let j=0;j<steps;j++){
-    showText(label+'抽選中','',progress,'');setSlotDigits(pachinkoRollingNumber(),p);await sleep(tick);
+    showText(label+'抽選中','',progress,'');setSlotDigits(pachinkoRollingNumber(p),p);await sleep(tick);
   }
   const reach=p.reachEnabled!==false&&(hit||Math.random()*100<Number(p.reachMissChance??15));
-  let final=pachinkoSlotNumber(hit);
+  let final=pachinkoSlotNumber(hit,p);
   if(reach){
     startPachinkoReachMedia(p);
-    const side=String(Math.floor(Math.random()*10));
-    final=side+(hit?side:String((Number(side)+1+Math.floor(Math.random()*9))%10))+side;
+    const side=pickPachinkoSymbol(p);
+    final=side+(hit?side:pickPachinkoSymbol(p,side))+side;
     // Side reels stop first. Only the centre reel continues, before the result.
     const reachSeconds=Math.max(.2,Math.min(120,Number(p.reachSeconds)||3));
     const ticks=Math.max(2,Math.ceil(reachSeconds*10));
     for(let j=0;j<ticks;j++){
-      let middle=String(Math.floor(Math.random()*9));if(Number(middle)>=Number(side))middle=String(Number(middle)+1);
+      const middle=pickPachinkoSymbol(p,side);
       showText('リーチ！','',progress,'');setSlotDigits(side+middle+side,p);
       await sleep(Math.max(15,reachSeconds*1000*playbackSpeed/ticks));
     }
@@ -108,8 +115,8 @@ async function animatePachinkoTurn(p,{hit,seconds,label,progress,mediaKey}){
   // Stop the rotation track before displaying the settled reels and stop sound.
   stopMedia();startStageMedia(p,'stop');
   showText(hit?label+'大当たり！':label+'はずれ','',progress,'');setSlotDigits(final,p);
-  const hold=Math.max(.2,Math.min(120,Number(p.stopSeconds)||1));
-  await sleep(Math.max(100,hold*1000*playbackSpeed));stopMedia();
+  const hold=Math.max(.2,Math.min(120,Number(displaySeconds??p.stopSeconds??1)));
+  await sleep(hold*1000*playbackSpeed);stopMedia();
 }
 async function animateSpins(p,event){
   activePattern=p;const target=event.hitSpin||event.spins,total=Math.max(1,event.spins);
@@ -120,7 +127,7 @@ async function animateSpins(p,event){
     if(!alerted&&event.preAlertIndex>=0&&((event.preAlertTiming==='during-spin'&&i>=Math.max(1,Math.ceil(visual/2)))||(event.preAlertTiming==='before-result'&&i===visual))){
       alerted=true;await playPachinkoPreAlert(p,event.preAlertIndex);
     }
-    await animatePachinkoTurn(p,{hit:!!event.hitSpin&&i===visual,seconds:duration,label:'',progress:`${shown} / ${total} 回転`,mediaKey:'spin'});
+    await animatePachinkoTurn(p,{hit:!!event.hitSpin&&i===visual,seconds:duration,label:'',progress:`${shown} / ${total} 回転`,mediaKey:'spin',displaySeconds:p.spinDisplaySeconds??p.stopSeconds});
   }
 }
 async function animatePhaseSpins(p,round,phase){
@@ -130,10 +137,10 @@ async function animatePhaseSpins(p,round,phase){
   const mediaKey=phase==='upper'?'upper':phase==='lt'?'lt':'spin';
   for(let i=1;i<=visual;i++){
     const shown=end>visual?Math.round(i/visual*end):i;
-    await animatePachinkoTurn(p,{hit:!!target&&i===visual,seconds:duration,label,progress:`${shown} / ${count} 回転`,mediaKey});
+    await animatePachinkoTurn(p,{hit:!!target&&i===visual,seconds:duration,label,progress:round.mode==='continue'?'継続式':`${shown} / ${count} 回転`,mediaKey,displaySeconds:phase==='timeShort'?p.timeShortDisplaySeconds:undefined});
   }
 }
-async function playEvent(state,event){playing=true;const p=(state.pachinkoGacha?.patterns||[]).find(x=>x.id===event.patternId)||{};activePattern=p;playbackSpeed=event.isTest&&[1,.5,.2].includes(Number(p.testPlaybackSpeed))?Number(p.testPlaybackSpeed):1;document.documentElement.style.setProperty('--accent',p.accentColor||'#ff3d66');document.documentElement.style.setProperty('--bg',p.cardBg||'#120b18');document.documentElement.style.setProperty('--text',p.textColor||'#fff');document.documentElement.style.setProperty('--font-size',Math.max(18,Math.min(300,+p.fontSize||64))+'px');$('card').classList.toggle('fullscreen',p.effectStyle==='fullscreen');$('pattern').textContent=event.patternName||p.name||'パチンコガチャ';$('sender').textContent=event.senderName||'';$('stage').classList.add('show');try{if(event.preAlertIndex>=0&&event.preAlertTiming==='spin-start')await playPachinkoPreAlert(p,event.preAlertIndex);await animateSpins(p,event);if(!event.hitSpin){await playStage(p,'end','終了','はずれ',2)}else{if(event.route.startsWith('cz'))await playStage(p,'cz',event.route==='cz-success'?'CZ成功！':'CZ失敗',event.route==='cz-success'?'ST抽選へ':'終了',2);if(event.route!=='cz-fail')await playStage(p,'hit','大当たり！',`+${Math.max(0,event.total||p.baseWin||0)} WIN`,2);if(event.route.startsWith('time-short')){await playStage(p,'spin','時短突入',(event.timeShortSpins||p.timeShortSpins||0)+'回転',1);if((event.timeShortSpins||p.timeShortSpins||0)>0)await animatePhaseSpins(p,{spins:event.timeShortSpins||p.timeShortSpins,hitSpin:event.timeShortHitSpin||0},'timeShort');if(event.timeShortHitSpin){showText('時短引き戻し！','+'+(p.baseWin||0)+' WIN','','');await sleep(Math.max(150,500*playbackSpeed))}}let phase='';for(const [i,r] of (event.rounds||[]).entries()){if(r.phase!==phase){phase=r.phase;await playStage(p,phase==='lt'?'lt':phase==='upper'?'upper':'at',phase==='lt'?'LUCKY TRIGGER':phase==='upper'?'上位ST突入':'ST突入',(i+1)+' SET',1)}await animatePhaseSpins(p,r,phase);const roundSeconds=Math.max(.2,Number(p[(phase==='lt'?'lt':phase==='upper'?'upper':'at')+'Seconds'])||2);showText(r.hitSpin?(r.continued?'継続！':'終了'):'終了',r.win?'+'+r.win+' WIN':'—',(i+1)+' SET','合計 +'+r.total+' WIN');$('spin').classList.add('pulse');await sleep(Math.max(150,roundSeconds*1000*playbackSpeed));$('spin').classList.remove('pulse')}await playStage(p,'end','終了',`合計 +${event.total||0} WIN`,3)}await fetch('/api/pachinko/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:event.id})})}catch(e){try{await fetch('/api/pachinko/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:event.id})})}catch(_){}}finally{stopMedia();$('stage').classList.remove('show');activePattern=null;showText();playing=false;playbackSpeed=1}}
+async function playEvent(state,event){playing=true;const p=(state.pachinkoGacha?.patterns||[]).find(x=>x.id===event.patternId)||{};activePattern=p;playbackSpeed=event.isTest&&[1,.5,.2].includes(Number(p.testPlaybackSpeed))?Number(p.testPlaybackSpeed):1;document.documentElement.style.setProperty('--accent',p.accentColor||'#ff3d66');document.documentElement.style.setProperty('--bg',p.cardBg||'#120b18');document.documentElement.style.setProperty('--text',p.textColor||'#fff');document.documentElement.style.setProperty('--font-size',Math.max(18,Math.min(300,+p.fontSize||64))+'px');$('card').classList.toggle('fullscreen',p.effectStyle==='fullscreen');$('pattern').textContent=event.patternName||p.name||'パチンコガチャ';$('sender').textContent=event.senderName||'';$('stage').classList.add('show');try{if(event.preAlertIndex>=0&&event.preAlertTiming==='spin-start')await playPachinkoPreAlert(p,event.preAlertIndex);await animateSpins(p,event);if(!event.hitSpin){await playStage(p,'end','終了','はずれ',2)}else{if(event.route.startsWith('cz'))await playStage(p,'cz',event.route==='cz-success'?'CZ成功！':'CZ失敗',event.route==='cz-success'?'ST抽選へ':'終了',2);if(event.route!=='cz-fail')await playStage(p,'hit','大当たり！',`+${Math.max(0,event.initialWin??p.baseWin??0)} WIN`,2);if(event.route.startsWith('time-short')){await playStage(p,'spin','時短突入',(event.timeShortSpins||p.timeShortSpins||0)+'回転',1);if((event.timeShortSpins||p.timeShortSpins||0)>0)await animatePhaseSpins(p,{spins:event.timeShortSpins||p.timeShortSpins,hitSpin:event.timeShortHitSpin||0},'timeShort');if(event.timeShortHitSpin){showText('時短引き戻し！','+'+(event.timeShortWin??p.baseWin??0)+' WIN','','');await sleep(Math.max(150,500*playbackSpeed))}}let phase='';for(const [i,r] of (event.rounds||[]).entries()){if(r.phase!==phase){phase=r.phase;await playStage(p,phase==='lt'?'lt':phase==='upper'?'upper':'at',phase==='lt'?'LUCKY TRIGGER':phase==='upper'?'上位ST突入':'ST突入',(i+1)+' SET',1)}await animatePhaseSpins(p,r,phase);const roundSeconds=Math.max(.2,Number(p[(phase==='lt'?'luckyTrigger':phase==='upper'?'upper':'at')+'ResultSeconds']??p[(phase==='lt'?'lt':phase==='upper'?'upper':'at')+'Seconds'])||2);showText(r.hitSpin?(r.continued?'継続！':'終了'):'終了',r.hitSpin?'+'+r.win+' WIN':'—',(i+1)+' SET','合計 +'+r.total+' WIN');$('spin').classList.add('pulse');await sleep(roundSeconds*1000*playbackSpeed);$('spin').classList.remove('pulse')}await playStage(p,'end','終了',`合計 +${event.total||0} WIN`,3)}await fetch('/api/pachinko/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:event.id})})}catch(e){try{await fetch('/api/pachinko/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId:event.id})})}catch(_){}}finally{stopMedia();$('stage').classList.remove('show');activePattern=null;showText();playing=false;playbackSpeed=1}}
 async function poll(){if(playing)return;try{const s=await(await fetch('/api/state',{cache:'no-store'})).json(),e=s.pachinkoGacha?.event;if(e?.active&&e.id&&e.id!==lastId){lastId=e.id;playEvent(s,e)}}catch(e){}}
 poll();setInterval(poll,300);setInterval(applyPachinkoTextRoles,100);
 </script></body></html>

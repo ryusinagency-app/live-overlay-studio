@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.38'
+APP_VERSION = '0.66.39'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -829,7 +829,9 @@ def normalize_state(data):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
-            media[stage+'Seconds']=max(.2,min(120,safe_float(item.get(stage+'Seconds',3),3)))
+            # Rotation duration and result/media display duration are independent.
+            duration_key='spinDisplaySeconds' if stage=='spin' else stage+'Seconds'
+            media[duration_key]=max(.2,min(120,safe_float(item.get(duration_key,3),3)))
         at_spins=max(1,min(10000,safe_int(item.get('atSpins',10),10)))
         at_den=max(1,min(1000000,safe_int(item.get('atHitDenominator',1000),1000)))
         at_legacy_rate=max(0,min(100,safe_int(item.get('atContinuationRate',80),80)))/100
@@ -860,9 +862,34 @@ def normalize_state(data):
             'luckyTriggerEnabled':bool(item.get('luckyTriggerEnabled',False)), 'luckyTriggerRate':max(0,min(100,safe_int(item.get('luckyTriggerRate',5),5))), 'luckyTriggerContinuationRate':max(0,min(100,safe_int(item.get('luckyTriggerContinuationRate',95),95))), 'luckyTriggerSpinSeconds':max(.05,min(30,safe_float(item.get('luckyTriggerSpinSeconds',.8),.8))), 'luckyTriggerMinWin':max(0,min(999999,safe_int(item.get('luckyTriggerMinWin',50),50))), 'luckyTriggerMaxWin':max(0,min(999999,safe_int(item.get('luckyTriggerMaxWin',100),100))),
             'effectStyle':'fullscreen' if item.get('effectStyle')=='fullscreen' else 'card', 'cardBg':valid_hex(item.get('cardBg')) or '#120b18', 'accentColor':valid_hex(item.get('accentColor')) or '#ff3d66', 'textColor':valid_hex(item.get('textColor')) or '#ffffff', 'fontSize':max(18,min(300,safe_int(item.get('fontSize',64),64))), 'textRoles':text_roles, 'preAlerts':prealerts, 'digitSettings':digit_settings, **media
         })
+        configured=pachinko_patterns[-1]
+        for digit,settings in enumerate(digit_settings):
+            source=raw_digits[digit] if digit<len(raw_digits) and isinstance(raw_digits[digit],dict) else {}
+            settings['enabled']=source.get('enabled',True) is not False
+        # At least two symbols are needed to depict a miss without triple digits.
+        if sum(x['enabled'] for x in digit_settings)<2:
+            for settings in digit_settings:
+                if sum(x['enabled'] for x in digit_settings)>=2: break
+                settings['enabled']=True
+        for prefix in ('normal','timeShort','at','upper','luckyTrigger'):
+            configured[prefix+'WinOutcomes']=normalize_pachinko_payouts(item.get(prefix+'WinOutcomes'))
+            configured[prefix+'WinMode']=item.get(prefix+'WinMode') if item.get(prefix+'WinMode') in ('legacy','weighted') else ('weighted' if configured[prefix+'WinOutcomes'] else 'legacy')
+        for prefix,default_rate in (('at',80),('upper',90),('luckyTrigger',95)):
+            configured[prefix+'Mode']=item.get(prefix+'Mode') if item.get(prefix+'Mode') in ('st','continue') else ('continue' if prefix=='luckyTrigger' else 'st')
+            configured[prefix+'ContinuationRate']=max(0,min(100,safe_float(item.get(prefix+'ContinuationRate',default_rate),default_rate)))
+        configured['luckyTriggerSpins']=max(1,min(10000,safe_int(item.get('luckyTriggerSpins',10),10)))
+        configured['luckyTriggerHitDenominator']=max(1,min(1000000,safe_int(item.get('luckyTriggerHitDenominator',1000),1000)))
+        configured['luckyTriggerHitNumerator']=max(0,min(configured['luckyTriggerHitDenominator'],safe_int(item.get('luckyTriggerHitNumerator',259),259)))
+        configured['timeShortDisplaySeconds']=max(.2,min(120,safe_float(item.get('timeShortDisplaySeconds',item.get('stopSeconds',3)),3)))
+        for prefix,stage in (('at','at'),('upper','upper'),('luckyTrigger','lt')):
+            configured[prefix+'ResultSeconds']=max(.2,min(120,safe_float(item.get(prefix+'ResultSeconds',item.get(stage+'Seconds',3)),3)))
     raw_p_event=raw_pachinko.get('event') if isinstance(raw_pachinko.get('event'),dict) else {}
     p_created=max(0,safe_float(raw_p_event.get('createdAt') or 0));p_active=bool(raw_p_event.get('active',False)) and p_created>=SERVER_STARTED_AT
     merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'timeShortSpins':max(0,min(10000,safe_int(raw_p_event.get('timeShortSpins',0),0))),'timeShortHitSpin':max(0,min(10000,safe_int(raw_p_event.get('timeShortHitSpin',0),0))),'route':str(raw_p_event.get('route') or '')[:30],'preAlertIndex':max(-1,min(2,safe_int(raw_p_event.get('preAlertIndex',-1),-1))),'preAlertTiming':raw_p_event.get('preAlertTiming') if raw_p_event.get('preAlertTiming') in ('spin-start','during-spin','before-result') else 'before-result','rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
+
+    for key in ('initialWin','timeShortWin'):
+        if key in raw_p_event:
+            merged['pachinkoGacha']['event'][key]=max(0,min(999999,safe_int(raw_p_event[key],0)))
 
     # Store one independent WIN counter + WIN gacha snapshot per game profile.
     # Older saves are migrated into a single profile without changing values.
@@ -1201,14 +1228,26 @@ def complete_other_gacha_event(event_id):
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
+def normalize_pachinko_payouts(rows):
+    return [{'value':max(0,min(999999,safe_int(row.get('value',0),0))),
+             'probability':max(0,min(100,safe_float(row.get('probability',0),0)))}
+            for row in (rows if isinstance(rows,list) else [])[:100] if isinstance(row,dict)]
+
+def pachinko_payout(pattern, prefix, minimum, maximum=None):
+    rows=[] if pattern.get(prefix+'WinMode')=='legacy' else [row for row in normalize_pachinko_payouts(pattern.get(prefix+'WinOutcomes')) if row['probability']>0]
+    if rows:
+        return random.choices([row['value'] for row in rows],weights=[row['probability'] for row in rows],k=1)[0]
+    lo,hi=sorted((max(0,int(minimum)),max(0,int(maximum if maximum is not None else minimum))))
+    return random.randint(lo,hi)
+
 def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None):
     machine=data['pachinkoGacha'];spins=max(1,int(pattern.get('spinsPerGift',10)));den=max(1,int(pattern.get('hitDenominator',199)));num=max(1,min(den,int(pattern.get('hitNumerator',1))))
     hit_spin=0
     for spin in range(1,spins+1):
         if random.randint(1,den)<=num: hit_spin=spin;break
-    route='miss';rounds=[];total=0
+    route='miss';rounds=[];total=0;initial_win=0;time_short_win=0;short_spins=0;time_short_hit_spin=0
     if hit_spin:
-        route='hit';total=max(0,int(pattern.get('baseWin',10)))
+        route='hit';initial_win=pachinko_payout(pattern,'normal',pattern.get('baseWin',10));total=initial_win
         cz_success=True
         if pattern.get('czEnabled'):
             cz_success=random.random()*100<float(pattern.get('czRate',50));route='cz-success' if cz_success else 'cz-fail'
@@ -1216,48 +1255,36 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
             route='at';phase='at';guard=0
             while guard<1000:
                 guard+=1
-                if phase=='at':
-                    lo,hi=sorted((int(pattern.get('atMinWin',5)),int(pattern.get('atMaxWin',20))))
-                    phase_spins=max(1,min(10000,int(pattern.get('atSpins',10))))
-                    hit_num=max(0,min(int(pattern.get('atHitDenominator',1000)),int(pattern.get('atHitNumerator',155))))
-                    hit_den=max(1,int(pattern.get('atHitDenominator',1000)))
-                elif phase=='upper':
-                    lo,hi=sorted((int(pattern.get('upperMinWin',20)),int(pattern.get('upperMaxWin',50))))
-                    phase_spins=max(1,min(10000,int(pattern.get('upperSpins',10))))
-                    hit_num=max(0,min(int(pattern.get('upperHitDenominator',1000)),int(pattern.get('upperHitNumerator',206))))
-                    hit_den=max(1,int(pattern.get('upperHitDenominator',1000)))
-                else:
-                    lo,hi=sorted((int(pattern.get('luckyTriggerMinWin',50)),int(pattern.get('luckyTriggerMaxWin',100))))
-                    phase_spins=1
-                    hit_num=0
-                    hit_den=1
-                    win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win)
-                    continued=random.random()*100<float(pattern.get('luckyTriggerContinuationRate',95))
-                    rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':phase,'spins':1,'hitSpin':1})
-                    if not continued: break
-                    continue
-                phase_hit_spin=0
-                for phase_spin in range(1,phase_spins+1):
-                    if random.randint(1,hit_den)<=hit_num:
-                        phase_hit_spin=phase_spin
-                        break
+                prefix={'at':'at','upper':'upper','lt':'luckyTrigger'}[phase]
+                mode=pattern.get(prefix+'Mode','continue' if phase=='lt' else 'st')
+                defaults={'at':(5,20,155,80),'upper':(20,50,206,90),'lt':(50,100,259,95)}[phase]
+                lo,hi=sorted((int(pattern.get(prefix+'MinWin',defaults[0])),int(pattern.get(prefix+'MaxWin',defaults[1]))))
+                phase_spins=1 if mode=='continue' else max(1,min(10000,int(pattern.get(prefix+'Spins',10))))
+                hit_den=max(1,int(pattern.get(prefix+'HitDenominator',1000)))
+                hit_num=max(0,min(hit_den,int(pattern.get(prefix+'HitNumerator',defaults[2]))))
+                phase_hit_spin=1 if mode=='continue' else 0
+                if mode!='continue':
+                    for phase_spin in range(1,phase_spins+1):
+                        if random.randint(1,hit_den)<=hit_num:
+                            phase_hit_spin=phase_spin
+                            break
                 if phase_hit_spin:
-                    win=random.randint(max(0,lo),max(0,hi));total=min(999999,total+win)
-                    continued=True
+                    win=pachinko_payout(pattern,prefix,lo,hi);total=min(999999,total+win)
+                    continued=(random.random()*100<float(pattern.get(prefix+'ContinuationRate',defaults[3]))) if mode=='continue' else True
                 else:
                     win=0
                     continued=False
                 next_phase=phase
                 if continued and phase=='at' and pattern.get('upperEnabled') and random.random()*100<float(pattern.get('upperEntryRate',10)): next_phase='upper'
                 if continued and phase in ('at','upper') and pattern.get('luckyTriggerEnabled') and random.random()*100<float(pattern.get('luckyTriggerRate',5)): next_phase='lt'
-                rounds.append({'phase':phase,'win':win,'total':total,'continued':continued,'nextPhase':next_phase,'spins':phase_spins,'hitSpin':phase_hit_spin})
+                rounds.append({'phase':phase,'mode':mode,'win':win,'total':total,'continued':continued,'nextPhase':next_phase,'spins':phase_spins,'hitSpin':phase_hit_spin})
                 if not continued or guard>=1000: break
                 phase=next_phase
         elif pattern.get('timeShortEnabled'):
             route='time-short';short_spins=max(0,int(pattern.get('timeShortSpins',50)));short_den=max(1,int(pattern.get('timeShortHitDenominator',99)));time_short_hit_spin=0
             for spin in range(1,short_spins+1):
                 if random.randint(1,short_den)==1:
-                    route='time-short-hit';time_short_hit_spin=spin;total=min(999999,total+max(0,int(pattern.get('baseWin',10))));break
+                    route='time-short-hit';time_short_hit_spin=spin;time_short_win=pachinko_payout(pattern,'timeShort',pattern.get('baseWin',10));total=min(999999,total+time_short_win);break
         else:
             short_spins=0;time_short_hit_spin=0
     def prealert_matches(alert):
@@ -1280,6 +1307,7 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
     prealert=pattern.get('preAlerts',[{}])[prealert_index] if prealert_index>=0 else {}
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
     event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
+    event.update(initialWin=initial_win,timeShortWin=time_short_win)
     if machine.get('event',{}).get('active'): machine.setdefault('queue',[]).append(event)
     else: event['active']=True;machine['event']=event
     return True
