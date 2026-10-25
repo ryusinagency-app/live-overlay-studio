@@ -65,11 +65,11 @@ def default_pattern(index=1):
             {'id': 'replay', 'name': 'リプレイ', 'enabled': True, 'probability': 14.0,
              'symbolText': 'REPLAY', 'symbolImageUrl': '', 'addSpinsEnabled': True,
              'addSpins': 1, 'addWinEnabled': False, 'win': 0,
-             'animationUrl': '', 'audioUrl': '', 'audioVolume': 75},
+             'animationUrl': '', 'audioUrl': '', 'audioVolume': 75, 'effectSeconds': 1.2},
             {'id': 'grape', 'name': 'ブドウ', 'enabled': True, 'probability': 12.0,
              'symbolText': 'ブドウ', 'symbolImageUrl': '', 'addSpinsEnabled': False,
              'addSpins': 3, 'addWinEnabled': False, 'win': 0,
-             'animationUrl': '', 'audioUrl': '', 'audioVolume': 75},
+             'animationUrl': '', 'audioUrl': '', 'audioVolume': 75, 'effectSeconds': 1.2},
         ],
         'atEnabled': False, 'atSpins': 30, 'atHitDenominator': 20,
         'atContinuationRate': 70, 'upperAtEnabled': False, 'upperAtChance': 10,
@@ -153,6 +153,7 @@ def normalize_pattern(raw, index=1):
             'animationUrl': _media(role.get('animationUrl')),
             'audioUrl': _media(role.get('audioUrl')),
             'audioVolume': _int(role.get('audioVolume'), 75, 0, 100),
+            'effectSeconds': _float(role.get('effectSeconds'), result['resultSeconds'], .1, 60),
         })
     result['smallRoles'] = roles or copy.deepcopy(base['smallRoles'])
     if not result['replayEnabled']:
@@ -289,6 +290,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
                           'reels': [symbol] * 3, 'symbolImageUrl': chosen['symbolImageUrl'],
                           'animationUrl': chosen['animationUrl'], 'audioUrl': chosen['audioUrl'],
                           'audioVolume': chosen['audioVolume'],
+                          'effectSeconds': chosen['effectSeconds'],
                           'win': chosen['win'] if chosen['addWinEnabled'] else 0,
                           'addedSpins': added, 'mode': mode})
         else:
