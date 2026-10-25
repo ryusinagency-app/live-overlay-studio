@@ -46,6 +46,7 @@ if errorlevel 1 (
   --add-data "overlay_gift_history.html;." ^
   --add-data "overlay_gift_media.html;." ^
   --add-data "overlay_pachinko.html;." ^
+  --add-data "overlay_slot.html;." ^
   --add-data "overlay_missions.html;." ^
   --add-data "overlay_smoking.html;." ^
   --add-data "overlay_smoking_gacha.html;." ^
@@ -56,6 +57,7 @@ if errorlevel 1 (
   --add-data "overlay_best_ranking.js;." ^
   --add-data "overlay_best_ranking.css;." ^
   --add-data "ranking_controls.js;." ^
+  --add-data "slot_controls.js;." ^
   --add-data "overlay_win.html;." ^
   --add-data "v6608.js;." ^
   --add-data "README.txt;." ^

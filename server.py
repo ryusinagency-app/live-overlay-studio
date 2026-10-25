@@ -19,8 +19,12 @@ import hashlib
 import tempfile
 import urllib.request
 import socket
+from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_slot_spin,
+                          choose_sign as choose_slot_sign, complete_event as complete_slot_event,
+                          default_pattern as default_slot_pattern,
+                          normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.45'
+APP_VERSION = '0.66.46'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -58,7 +62,7 @@ def prepare_app_root():
         if not source_state.exists() and installed_state.exists():
             try:
                 shutil.copy2(installed_state, source_state)
-                media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
+                media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
                 for item in installed_root.iterdir():
                     if item.is_file() and item.name.startswith(media_prefixes):
                         shutil.copy2(item, source_root / item.name)
@@ -82,9 +86,9 @@ def prepare_app_root():
         'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gacha_set_ranking.html',
         'overlay_gacha_win_ranking.html', 'overlay_gacha_rankings.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
-        'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html',
+        'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html', 'overlay_slot.html',
         'overlay_win_gacha_best_set.html', 'overlay_win_gacha_best_win.html', 'overlay_pachinko_best_win.html', 'overlay_best_ranking.js',
-        'overlay_best_ranking.css', 'ranking_controls.js',
+        'overlay_best_ranking.css', 'ranking_controls.js', 'slot_controls.js',
         'overlay_win.html', 'v6608.js', 'README.txt', 'update_config.json', 'app_icon.ico'
     ]
     for name in assets:
@@ -99,7 +103,7 @@ def prepare_app_root():
     old_state = executable_root / 'state.json'
     if not (app_root / 'state.json').exists() and old_state.exists():
         shutil.copy2(old_state, app_root / 'state.json')
-        media_prefixes = ('smoking_alarm.', 'gacha_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
+        media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
         for item in executable_root.iterdir():
             if item.is_file() and item.name.startswith(media_prefixes):
                 shutil.copy2(item, app_root / item.name)
@@ -192,6 +196,7 @@ DEFAULT = {
     'gtaBridge': {'enabled': False, 'logPath': '', 'marker': 'Sent WebSocket message: {"type":"win"', 'winAmount': 1, 'loseEnabled': True, 'loseMarker': 'Sent WebSocket message: {"type":"lose"', 'loseAmount': 1},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
     'pachinkoGacha': {'patterns': [], 'queue': [], 'history': [], 'event': {'id':0,'type':'','active':False,'patternId':'','patternName':'','senderName':'','spins':0,'hitSpin':0,'route':'','rounds':[],'total':0,'createdAt':0}},
+    'slotMachine': {'patterns': [default_slot_pattern()], 'shortcutChoicePlus':'CTRL+ALT+6', 'shortcutChoiceMinus':'CTRL+ALT+SHIFT+6', 'queue': [], 'history': [], 'event': copy.deepcopy(SLOT_EMPTY_EVENT)},
     'otherGacha': {'patterns':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'patternId':'','patternName':'','rounds':[],'senderName':'','createdAt':0}},
     'giftMedia': {'rules':[], 'queue':[], 'event':{'id':0,'type':'','active':False,'ruleId':'','giftName':'','senderName':'','count':1,'imageUrl':'','videoUrl':'','audioUrl':'','audioVolume':75,'videoVolume':75,'width':800,'height':450,'duration':6,'createdAt':0}},
     'smokingTimer': {'endAt': 0, 'remainingSeconds': 0, 'runId': 0, 'audioUrl': '', 'audioName': '', 'volume': 80, 'fontSize': 130, 'titleSize': 56, 'cardBg': '', 'cardBorder': '', 'shortcutAdd5':'', 'shortcutSub5':'', 'shortcutAdd10':'', 'shortcutSub10':'', 'shortcutAdd15':'', 'shortcutSub15':'', 'shortcutAdd30':'', 'shortcutSub30':''},
@@ -1108,6 +1113,9 @@ def normalize_state(data):
         changed = True
     if merged.get('smokingGacha') != data.get('smokingGacha', DEFAULT['smokingGacha']):
         changed = True
+    merged['slotMachine'] = normalize_slot_machine(merged.get('slotMachine'), SERVER_STARTED_AT)
+    if merged.get('slotMachine') != data.get('slotMachine', DEFAULT['slotMachine']):
+        changed = True
     if merged.get('gaugeColor') != data.get('gaugeColor'):
         changed = True
     if merged.get('cardDefaults') != data.get('cardDefaults', DEFAULT['cardDefaults']):
@@ -1198,6 +1206,10 @@ def read_overlay_state(kind):
             machine=state['pachinkoGacha'];event=machine.get('event',{})
             pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
             result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
+        elif kind == 'slot':
+            machine=state['slotMachine'];event=machine.get('event',{})
+            pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
+            result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
         else:
             raise ValueError('Unknown overlay snapshot')
         return copy.deepcopy(result)
@@ -1273,6 +1285,10 @@ def dispatch_hotkey_action(action):
             choose_gacha_sign_in_state(data, action['choice'])
         elif action['type'] == 'pachinkoChoice':
             choose_pachinko_sign_in_state(data,action['choice'])
+        elif action['type'] == 'slotChoice':
+            event=data['slotMachine']['event']
+            if event.get('active'):
+                choose_slot_sign(data,event.get('id'),action['choice'])
         elif action['type'] == 'smokingTimer':
             timer=data['smokingTimer']; now=time.time(); remain=max(0,int((timer.get('endAt') or 0)-now)) if timer.get('endAt') else max(0,int(timer.get('remainingSeconds') or 0)); next_value=max(0,remain+int(action['delta']))
             timer['remainingSeconds']=next_value; timer['endAt']=now+next_value if next_value else 0
@@ -1796,6 +1812,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
+        slot_pattern=next((p for p in data['slotMachine']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
         media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and normalize_gift_name(r['giftName'])==name and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
         gift_rule=next((x for x in win['giftRules'] if x['giftName'] and normalize_gift_name(x['giftName'])==name),None)
         # WIN adjustment gifts only change the counter, even if the same gift
@@ -1813,6 +1830,11 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             matched=True
         if pachinko_pattern:
             run_pachinko_draw(data,pachinko_pattern,sender_name,avatar_url=avatar_url)
+            matched=True
+        if slot_pattern:
+            # A gift maps to its configured number of spins. TikTok combo count
+            # intentionally does not multiply or merge the spin allocation.
+            run_slot_draw(data,slot_pattern,gift_name,sender_name,avatar_url=avatar_url)
             matched=True
         if media_rule:
             queue_gift_media_event(data,media_rule,gift_name,sender_name,count)
@@ -2010,6 +2032,10 @@ def start_global_hotkeys():
             for field,choice in (('shortcutChoicePlus','plus'),('shortcutChoiceMinus','minus')):
                 binding=str(pachinko.get(field) or '').upper()
                 if binding and binding not in desired: desired[binding]={'type':'pachinkoChoice','choice':choice}
+            slot=data.get('slotMachine',{})
+            for field,choice in (('shortcutChoicePlus','plus'),('shortcutChoiceMinus','minus')):
+                binding=str(slot.get(field) or '').upper()
+                if binding and binding not in desired: desired[binding]={'type':'slotChoice','choice':choice}
             compiled = {}
             for binding, action in desired.items():
                 parsed = parse_shortcut(binding)
@@ -2400,7 +2426,7 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
-        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = self.path.rsplit('/', 1)[-1]
             body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
@@ -2430,7 +2456,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2494,6 +2520,11 @@ class Handler(SimpleHTTPRequestHandler):
                         data['pachinkoGacha']['queue']=copy.deepcopy(live_pachinko.get('queue',[]))
                         data['pachinkoGacha']['history']=copy.deepcopy(live_pachinko.get('history',[]))
                         data['pachinkoGacha']['bestRecords']=copy.deepcopy(live_pachinko.get('bestRecords',[]))
+                    if isinstance(data.get('slotMachine'),dict):
+                        live_slot=current.get('slotMachine',{})
+                        data['slotMachine']['event']=copy.deepcopy(live_slot.get('event',{}))
+                        data['slotMachine']['queue']=copy.deepcopy(live_slot.get('queue',[]))
+                        data['slotMachine']['history']=copy.deepcopy(live_slot.get('history',[]))
                     if isinstance(data.get('giftMedia'),dict):
                         live_media=current.get('giftMedia',{})
                         data['giftMedia']['event']=copy.deepcopy(live_media.get('event',{}))
@@ -2791,6 +2822,62 @@ class Handler(SimpleHTTPRequestHandler):
                 queue_gift_media_event(state,rule,rule.get('giftName') or 'テストギフト','テスト',1);write_state(state);result={'ok':True}
             elif self.path == '/api/gift-media/complete':
                 result={'ok':complete_gift_media_event(safe_int(data.get('eventId') or 0))}
+            elif self.path == '/api/slot/test':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('テストするスロットが見つかりません')
+                if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
+                run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
+                write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
+            elif self.path == '/api/slot/apply-spin':
+                with STATE_LOCK:
+                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception: state=copy.deepcopy(DEFAULT)
+                    state,_=normalize_state(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
+                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                result={'ok':ok}
+            elif self.path == '/api/slot/choose-sign':
+                with STATE_LOCK:
+                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception: state=copy.deepcopy(DEFAULT)
+                    state,_=normalize_state(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
+                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                result={'ok':ok}
+            elif self.path == '/api/slot/complete':
+                with STATE_LOCK:
+                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception: state=copy.deepcopy(DEFAULT)
+                    state,_=normalize_state(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
+                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                result={'ok':ok}
+            elif self.path == '/api/slot/media':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                if not pattern: raise ValueError('保存先のスロットが見つかりません')
+                field=str(data.get('field') or '');role_id=str(data.get('roleId') or '')
+                allowed={'cabinetUrl':'visual','monitorUrl':'visual','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','symbolImageUrl':'image','animationUrl':'visual','audioUrl':'audio'}
+                media_type=allowed.get(field)
+                if not media_type: raise ValueError('素材の設定先を確認してください')
+                target=pattern
+                if role_id:
+                    target=next((x for x in pattern.get('smallRoles',[]) if x.get('id')==role_id),None)
+                    if not target or field not in ('symbolImageUrl','animationUrl','audioUrl'): raise ValueError('小役の設定先を確認してください')
+                if bool(data.get('clear')): target[field]=''
+                else:
+                    payload=str(data.get('dataUrl') or '')
+                    if media_type=='audio':
+                        match=re.fullmatch(r'data:audio/(wav|x-wav|mpeg|mp3|ogg|mp4|m4a|aac|webm);base64,([A-Za-z0-9+/=]+)',payload)
+                        if not match: raise ValueError('対応する音源形式を選択してください')
+                        raw=base64.b64decode(match.group(2),validate=True);ext={'mpeg':'mp3','mp4':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1));limit=15
+                    else:
+                        match=re.fullmatch(r'data:(image/(gif|png|jpeg|webp)|video/(mp4|webm));base64,([A-Za-z0-9+/=]+)',payload)
+                        if not match: raise ValueError('GIF、PNG、JPG、WebP、MP4、WebM形式にしてください')
+                        if media_type=='image' and not match.group(1).startswith('image/'): raise ValueError('図柄には画像を選択してください')
+                        raw=base64.b64decode(match.group(4),validate=True);ext={'jpeg':'jpg'}.get(match.group(2) or match.group(3),match.group(2) or match.group(3));limit=30
+                    if not raw or len(raw)>limit*1024*1024: raise ValueError(f'素材は{limit}MB以下にしてください')
+                    safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];safe_role=re.sub(r'[^A-Za-z0-9_-]','_',role_id)[:40]
+                    filename=f'slot_{safe_id}_{safe_role+"_" if safe_role else ""}{field[:-3]}.{ext}';(ROOT/filename).write_bytes(raw);target[field]='/'+filename+'?v='+str(safe_int(time.time()*1000))
+                write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
             elif self.path == '/api/other-gacha/test':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();pattern=next((x for x in state['otherGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
