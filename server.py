@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 import socket
 
-APP_VERSION = '0.66.36'
+APP_VERSION = '0.66.37'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -133,6 +133,8 @@ if FROZEN_APP and os.name == 'nt':
         raise SystemExit(0)
 STATE = ROOT / 'state.json'
 STATE_LOCK = threading.Lock()
+OVERLAY_SNAPSHOT_LOCK = threading.Lock()
+OVERLAY_SNAPSHOT_CACHE = {'signature': None, 'at': 0, 'state': None}
 JST = timezone(timedelta(hours=9))
 DEFAULT = {
     'cardDefaults': {'background': '', 'border': ''},
@@ -1026,6 +1028,48 @@ def read_state():
         if changed or not STATE.exists():
             STATE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
         return merged
+
+def read_overlay_state(kind):
+    """Small, consistent playback snapshots; never expose profiles/history to renderers."""
+    def signature():
+        try:
+            stat = STATE.stat()
+            return (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+        except OSError:
+            return None
+    with OVERLAY_SNAPSHOT_LOCK:
+        cache = OVERLAY_SNAPSHOT_CACHE
+        current_signature = signature()
+        if cache['state'] is None or cache['signature'] != current_signature or time.monotonic() - cache['at'] >= .2:
+            cache['state'] = read_state()
+            # If a writer races us after read_state releases STATE_LOCK, keep the
+            # earlier signature so the next request invalidates this snapshot.
+            cache['signature'] = current_signature
+            cache['at'] = time.monotonic()
+        state = cache['state']
+        common = ('fontFamily', 'accent', 'panelColor', 'panelOpacity', 'textColor', 'gaugeColor',
+                  'textGlowEnabled', 'textGlowColor', 'textGlowStrength', 'cardDefaults',
+                  'textOutlineEnabled', 'textOutlineColor', 'textOutlineWidth',
+                  'textBackgroundEnabled', 'textBackgroundColor', 'textBackgroundOpacity')
+        result = {key: state[key] for key in common if key in state}
+        if kind == 'win':
+            result['winCounter'] = {key: value for key, value in state['winCounter'].items()
+                                    if key != 'giftRules' and not key.startswith('shortcut')}
+            result['textEffects'] = {'win': state.get('textEffects', {}).get('win', {})}
+        elif kind == 'gacha':
+            gacha = state['gacha']
+            event = gacha.get('event', {})
+            pattern = next((p for p in gacha.get('patterns', [])
+                            if (event.get('patternId') and p.get('id') == event['patternId'])
+                            or (not event.get('patternId') and p.get('name') == event.get('patternName'))), None)
+            result['gacha'] = {key: value for key, value in gacha.items()
+                               if key not in ('patterns', 'queue', 'history')}
+            result['gacha']['patterns'] = [pattern] if pattern else []
+            effect_key = 'gacha:' + str(event.get('patternId') or '')
+            result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+        else:
+            raise ValueError('Unknown overlay snapshot')
+        return copy.deepcopy(result)
 
 def write_state(data):
     allowed = {**copy.deepcopy(DEFAULT), **data}
@@ -2136,8 +2180,12 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
+        if self.path in ('/api/overlay/win', '/api/overlay/gacha'):
+            kind = self.path.rsplit('/', 1)[-1]
+            body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/network':
-            body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
+            body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'localBaseUrl': 'http://127.0.0.1:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/state':
             body = json.dumps(read_state(), ensure_ascii=False).encode('utf-8')
@@ -2627,6 +2675,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(400, str(e))
 
 class LocalThreadingHTTPServer(ThreadingHTTPServer):
+    # Several sources reconnect together when LIVE Studio adds or restores a scene.
+    request_queue_size = 64
     # Allow the app to be reopened immediately after it was closed.  Windows
     # can otherwise keep port 8765 reserved briefly and make the browser show
     # an error page even though the desktop window opened normally.
