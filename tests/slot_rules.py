@@ -45,6 +45,74 @@ def check_gift_spins_and_hit_continuation():
     assert complete_event(state, event['id'])
 
 
+def check_cz_patterns_and_at_entry():
+    pattern = default_pattern()
+    pattern.update({'machineType': 'at', 'atEnabled': True, 'czEnabled': True,
+                    'czEntryRate': 100, 'atSpins': 3, 'atHitDenominator': 1_000_000,
+                    'replayEnabled': False, 'smallRoles': [], 'czPatterns': [
+                        {'id': 'cz-hot', 'name': '激熱CZ', 'enabled': True,
+                         'expectation': 5, 'weight': 100, 'atEntryRate': 100,
+                         'spinSeconds': 2.2, 'stopInterval': .6, 'resultSeconds': 1.7,
+                         'seconds': 4.5, 'animationUrl': '/cz.mp4',
+                         'audioUrl': '/cz.mp3', 'audioVolume': 63, 'videoVolume': 47},
+                    ]})
+    normalized = normalize_slot_machine({'patterns': [pattern]})['patterns'][0]
+    assert normalized['czEnabled'] and normalized['czEntryRate'] == 100
+    assert normalized['czPatterns'][0]['expectation'] == 5
+    random.seed(17)
+    event = build_event(normalized, 'バラ', 'CZテスト', initial_spins=1)
+    cz = event['spins'][0]
+    assert cz['kind'] == 'cz' and cz['czSuccess'] is True
+    assert cz['roleName'] == '激熱CZ' and cz['addedSpins'] == 3
+    assert cz['animationUrl'] == '/cz.mp4' and cz['audioVolume'] == 63
+    assert (cz['spinSeconds'], cz['stopInterval'], cz['resultSeconds']) == (2.2, .6, 1.7)
+    assert all(spin['mode'] == 'at' for spin in event['spins'][1:])
+
+
+def check_direct_and_rare_role_freeze():
+    direct = default_pattern()
+    direct.update({'machineType': 'at', 'atEnabled': True, 'upperAtEnabled': True,
+                   'freezeEnabled': True, 'freezeDirectEnabled': True,
+                   'freezeAfterMode': 'upper-entry',
+                   'freezeDenominator': 1, 'upperAtSpins': 2,
+                   'freezeUrl': '/freeze.mp4', 'freezeAudioUrl': '/freeze.mp3'})
+    event = build_event(normalize_slot_machine({'patterns': [direct]})['patterns'][0], 'テスト', 'A', initial_spins=1)
+    assert event['spins'][0]['kind'] == 'freeze' and event['spins'][0]['upperEntered']
+    assert normalize_slot_machine({'patterns': [direct]})['patterns'][0]['freezeAfterMode'] == 'upper-entry'
+    assert event['spins'][0]['animationUrl'] == '/freeze.mp4'
+    assert all(spin['mode'] == 'upper' for spin in event['spins'][1:])
+
+    rare = default_pattern()
+    rare.update({'machineType': 'at', 'atEnabled': True, 'upperAtEnabled': True,
+                 'freezeEnabled': True, 'freezeDirectEnabled': False,
+                 'hitDenominator': 1_000_000, 'replayEnabled': False,
+                 'smallRoles': [{'id': 'strong', 'name': '強レア役', 'enabled': True,
+                                 'probability': 100, 'symbolText': '強', 'symbolImageUrl': '',
+                                 'addSpinsEnabled': False, 'addSpins': 0,
+                                 'addWinEnabled': False, 'win': 0, 'animationUrl': '',
+                                 'audioUrl': '', 'audioVolume': 75, 'effectSeconds': 1,
+                                 'freezeEnabled': True, 'freezeChance': 100}]})
+    random.seed(44)
+    event = build_event(normalize_slot_machine({'patterns': [rare]})['patterns'][0], 'テスト', 'B', initial_spins=1)
+    assert event['spins'][0]['kind'] == 'freeze'
+    assert event['spins'][0]['triggerRoleName'] == '強レア役'
+
+
+def check_at_phase_timing_and_audio_settings():
+    pattern = normalize_slot_machine({'patterns': [{
+        'machineType': 'at', 'atSpinSeconds': 2.3, 'atStopInterval': .45,
+        'atResultSeconds': 1.8, 'atEffectSeconds': 4.2,
+        'upperSpinSeconds': 1.1, 'upperStopInterval': .2,
+        'upperResultSeconds': 2.6, 'upperEffectSeconds': 5.4,
+        'atAudioUrl': '/at.mp3', 'atAudioVolume': 42,
+        'upperAudioUrl': '/upper.mp3', 'upperAudioVolume': 84,
+    }]})['patterns'][0]
+    assert (pattern['atSpinSeconds'], pattern['atStopInterval'], pattern['atResultSeconds'], pattern['atEffectSeconds']) == (2.3, .45, 1.8, 4.2)
+    assert (pattern['upperSpinSeconds'], pattern['upperStopInterval'], pattern['upperResultSeconds'], pattern['upperEffectSeconds']) == (1.1, .2, 2.6, 5.4)
+    assert pattern['atAudioUrl'] == '/at.mp3' and pattern['atAudioVolume'] == 42
+    assert pattern['upperAudioUrl'] == '/upper.mp3' and pattern['upperAudioVolume'] == 84
+
+
 def check_small_role_bonus_and_normalization():
     pattern = default_pattern()
     pattern.update({'giftSpins': 1, 'hitDenominator': 1_000_000, 'replayEnabled': False})
@@ -193,9 +261,12 @@ def check_daily_stats_and_hit_reset():
 if __name__ == '__main__':
     check_multiple_gifts_and_combo_spin_budget()
     check_gift_spins_and_hit_continuation()
+    check_cz_patterns_and_at_entry()
+    check_direct_and_rare_role_freeze()
+    check_at_phase_timing_and_audio_settings()
     check_small_role_bonus_and_normalization()
     check_image_catalog_sizes_and_test_completion()
     check_choice_only_for_win_and_queue_gap()
     check_visible_reels_always_match_the_result()
     check_daily_stats_and_hit_reset()
-    print('PASS slot rules: gifts, combo spins, reels, daily stats and signed WIN')
+    print('PASS slot rules: gifts, CZ/AT flow, combo spins, reels, daily stats and signed WIN')
