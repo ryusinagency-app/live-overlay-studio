@@ -80,20 +80,28 @@ def check_cz_patterns_and_at_entry():
 
 def check_at_continuation_scene_result():
     base = {'machineType': 'at', 'atEnabled': True, 'giftSpins': 1,
-            'hitDenominator': 1, 'atHitDenominator': 1, 'atSpins': 1,
+            'hitDenominator': 1, 'atHitDenominator': 1_000_000, 'atSpins': 3,
             'replayEnabled': False, 'smallRoles': [],
             'atContinueSuccessEnabled': True, 'atContinueSuccessUrl': '/continue.mp4',
             'atContinueFailureEnabled': True, 'atContinueFailureAudioUrl': '/end.mp3'}
     success = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 100}]})['patterns'][0]
+    random.seed(71)
     event = build_event(success, 'テスト', '成功', initial_spins=1)
-    continued_hits = [spin for spin in event['spins'] if spin.get('mode') == 'at' and spin['kind'] == 'hit']
-    assert continued_hits and continued_hits[0]['atContinuationResult'] == 'success'
+    first_at_block = [spin for spin in event['spins'] if spin.get('mode') == 'at'][:3]
+    assert len(first_at_block) == 3
+    assert all('atContinuationResult' not in spin for spin in first_at_block[:-1])
+    assert first_at_block[-1]['atContinuationResult'] == 'success'
+    assert first_at_block[-1]['addedSpins'] == 3
     assert success['atContinueSuccessUrl'] == '/continue.mp4'
 
     failure = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 0}]})['patterns'][0]
+    random.seed(72)
     event = build_event(failure, 'テスト', '失敗', initial_spins=1)
-    failed_hits = [spin for spin in event['spins'] if spin.get('mode') == 'at' and spin['kind'] == 'hit']
-    assert failed_hits and failed_hits[0]['atContinuationResult'] == 'failure'
+    at_spins = [spin for spin in event['spins'] if spin.get('mode') == 'at']
+    assert len(at_spins) == 3
+    assert all('atContinuationResult' not in spin for spin in at_spins[:-1])
+    assert at_spins[-1]['atContinuationResult'] == 'failure'
+    assert at_spins[-1]['addedSpins'] == 0
     assert failure['atContinueFailureAudioUrl'] == '/end.mp3'
 
     upper_success = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 0,
