@@ -104,7 +104,27 @@ def default_pattern(index=1):
         'atEnabled': False, 'atSpins': 30, 'atHitDenominator': 20,
         'atContinuationRate': 70, 'upperAtEnabled': False, 'upperAtChance': 10,
         'upperAtSpins': 50, 'upperAtHitDenominator': 10,
-        'cabinetUrl': '', 'monitorUrl': '', 'gogoUrl': '', 'gogoAudioUrl': '',
+        'atSpinSeconds': 1.8, 'atStopInterval': .35, 'atResultSeconds': 1.2,
+        'atEffectSeconds': 3, 'upperSpinSeconds': 1.8,
+        'upperStopInterval': .35, 'upperResultSeconds': 1.2, 'upperEffectSeconds': 3,
+        'czEnabled': False, 'czEntryRate': 10,
+        'czPatterns': [
+            {'id': 'cz-1', 'name': 'CZ 期待度1', 'enabled': True, 'expectation': 1,
+             'weight': 20, 'atEntryRate': 20, 'spinSeconds': 1.8,
+             'stopInterval': .35, 'resultSeconds': 1.2, 'seconds': 3, 'animationUrl': '',
+             'audioUrl': '', 'audioVolume': 75, 'videoVolume': 70},
+        ],
+        'cabinetUrl': '', 'monitorUrl': '', 'atMonitorUrl': '', 'upperMonitorUrl': '',
+        'atAudioUrl': '', 'upperAudioUrl': '', 'atAudioVolume': 70, 'upperAudioVolume': 70,
+        'upperEntryUrl': '', 'upperEntryAudioUrl': '', 'upperEntrySeconds': 3,
+        'atMonitorVideoVolume': 70, 'upperMonitorVideoVolume': 70,
+        'upperEntryVideoVolume': 70, 'upperEntryAudioVolume': 80,
+        'freezeEnabled': False, 'freezeDirectEnabled': True,
+        'freezeAfterMode': 'upper-direct',
+        'freezeDenominator': 8192, 'freezeSeconds': 6,
+        'freezeUrl': '', 'freezeAudioUrl': '', 'freezeVideoVolume': 70,
+        'freezeAudioVolume': 80,
+        'gogoUrl': '', 'gogoAudioUrl': '',
         'startAudioUrl': '', 'spinAudioUrl': '', 'stopAudioUrl': '',
         'stop1AudioUrl': '', 'stop2AudioUrl': '', 'stop3AudioUrl': '',
         'bigEffectUrl': '', 'bigEffectAudioUrl': '', 'smallRoleAudioVolume': 75,
@@ -203,6 +223,8 @@ def normalize_pattern(raw, index=1):
             'audioUrl': _media(role.get('audioUrl')),
             'audioVolume': _int(role.get('audioVolume'), 75, 0, 100),
             'effectSeconds': _float(role.get('effectSeconds'), result['resultSeconds'], .1, 60),
+            'freezeEnabled': bool(role.get('freezeEnabled', False)),
+            'freezeChance': _float(role.get('freezeChance'), 0, 0, 100),
         })
     result['smallRoles'] = roles or copy.deepcopy(base['smallRoles'])
     if not result['replayEnabled']:
@@ -218,6 +240,11 @@ def normalize_pattern(raw, index=1):
         ('stop1AudioVolume', 65, 0, 100), ('stop2AudioVolume', 65, 0, 100),
         ('stop3AudioVolume', 65, 0, 100), ('bigEffectAudioVolume', 80, 0, 100),
         ('bigEffectVideoVolume', 70, 0, 100),
+        ('atMonitorVideoVolume', 70, 0, 100), ('upperMonitorVideoVolume', 70, 0, 100),
+        ('upperEntryVideoVolume', 70, 0, 100), ('upperEntryAudioVolume', 80, 0, 100),
+        ('atAudioVolume', 70, 0, 100), ('upperAudioVolume', 70, 0, 100),
+        ('freezeDenominator', 8192, 1, 1000000),
+        ('freezeVideoVolume', 70, 0, 100), ('freezeAudioVolume', 80, 0, 100),
         ('videoVolume', 70, 0, 100),
         ('cabinetSize', 100, 10, 200), ('monitorSize', 100, 10, 200),
         ('gogoSize', 100, 10, 200), ('symbolSize', 88, 10, 150),
@@ -226,11 +253,47 @@ def normalize_pattern(raw, index=1):
         ('bigEffectSize', 100, 10, 200),
     ):
         result[key] = _int(raw.get(key), default, low, high)
+    result['upperEntrySeconds'] = _float(raw.get('upperEntrySeconds'), 3, 0, 60)
+    result['freezeSeconds'] = _float(raw.get('freezeSeconds'), 6, 0, 120)
+    for prefix in ('at', 'upper'):
+        result[prefix + 'SpinSeconds'] = _float(raw.get(prefix + 'SpinSeconds'), result['spinSeconds'], .2, 30)
+        result[prefix + 'StopInterval'] = _float(raw.get(prefix + 'StopInterval'), result['stopInterval'], .05, 5)
+        result[prefix + 'ResultSeconds'] = _float(raw.get(prefix + 'ResultSeconds'), result['resultSeconds'], .1, 30)
+        result[prefix + 'EffectSeconds'] = _float(raw.get(prefix + 'EffectSeconds'), result['bigEffectSeconds'], .1, 60)
     result['atEnabled'] = bool(raw.get('atEnabled', result['machineType'] == 'at'))
     result['upperAtEnabled'] = bool(raw.get('upperAtEnabled', False))
+    result['freezeEnabled'] = bool(raw.get('freezeEnabled', False))
+    result['freezeDirectEnabled'] = raw.get('freezeDirectEnabled', True) is not False
+    result['freezeAfterMode'] = 'upper-entry' if raw.get('freezeAfterMode') == 'upper-entry' else 'upper-direct'
+    result['czEnabled'] = bool(raw.get('czEnabled', False))
+    result['czEntryRate'] = _float(raw.get('czEntryRate'), 10, 0, 100)
+    cz_patterns = []
+    for cz_index, cz in enumerate((raw.get('czPatterns') or [])[:20]):
+        if not isinstance(cz, dict):
+            continue
+        cz_patterns.append({
+            'id': str(cz.get('id') or f'cz-{cz_index + 1}')[:80],
+            'name': str(cz.get('name') or f'CZ {cz_index + 1}')[:60],
+            'enabled': cz.get('enabled', True) is not False,
+            'expectation': _int(cz.get('expectation'), min(5, cz_index + 1), 1, 5),
+            'weight': _float(cz.get('weight'), 20, 0, 1000000),
+            'atEntryRate': _float(cz.get('atEntryRate'), 20, 0, 100),
+            'spinSeconds': _float(cz.get('spinSeconds'), result['spinSeconds'], .2, 30),
+            'stopInterval': _float(cz.get('stopInterval'), result['stopInterval'], .05, 5),
+            'resultSeconds': _float(cz.get('resultSeconds'), result['resultSeconds'], .1, 30),
+            'seconds': _float(cz.get('seconds'), 3, .1, 60),
+            'animationUrl': _media(cz.get('animationUrl')),
+            'audioUrl': _media(cz.get('audioUrl')),
+            'audioVolume': _int(cz.get('audioVolume'), 75, 0, 100),
+            'videoVolume': _int(cz.get('videoVolume'), 70, 0, 100),
+        })
+    result['czPatterns'] = cz_patterns or copy.deepcopy(base['czPatterns'])
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
     result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
-    for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'gogoUrl',
+    for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'atMonitorUrl',
+                'upperMonitorUrl', 'atAudioUrl', 'upperAudioUrl',
+                'upperEntryUrl', 'upperEntryAudioUrl',
+                'freezeUrl', 'freezeAudioUrl', 'gogoUrl',
                 'gogoAudioUrl', 'startAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
                 'stop1AudioUrl', 'stop2AudioUrl', 'stop3AudioUrl',
                 'bigEffectUrl', 'bigEffectAudioUrl'):
@@ -297,6 +360,20 @@ def _weighted_payout(pattern):
     return rows[-1]['win']
 
 
+def _weighted_cz(pattern):
+    rows = [x for x in pattern.get('czPatterns', []) if x.get('enabled') and x.get('weight', 0) > 0]
+    if not rows:
+        return None
+    total = sum(float(x['weight']) for x in rows)
+    pick = random.uniform(0, total)
+    upto = 0
+    for row in rows:
+        upto += float(row['weight'])
+        if pick <= upto:
+            return row
+    return rows[-1]
+
+
 def _miss_reels(pattern):
     symbols = pattern.get('symbols') or [{'name':x,'imageUrl':''} for x in pattern['missSymbols']]
     picked = [random.choice(symbols) for _ in range(3)]
@@ -323,6 +400,46 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     while budget > 0 and safety < max_spins:
         safety += 1
         budget -= 1
+        if (mode == 'normal' and pattern['machineType'] == 'at' and pattern.get('upperAtEnabled')
+                and pattern.get('freezeEnabled') and pattern.get('freezeDirectEnabled')
+                and random.randrange(pattern.get('freezeDenominator', 8192)) == 0):
+            reel_text, reel_images = _miss_reels(pattern)
+            requested = pattern['upperAtSpins']
+            added = min(requested, max(0, max_spins - len(spins) - budget))
+            budget += added
+            spins.append({'kind': 'freeze', 'roleName': 'フリーズ', 'reels': reel_text,
+                          'reelImages': reel_images, 'symbolImageUrl': '', 'win': 0,
+                          'addedSpins': added, 'animationUrl': pattern.get('freezeUrl', ''),
+                          'audioUrl': pattern.get('freezeAudioUrl', ''),
+                          'audioVolume': pattern.get('freezeAudioVolume', 80),
+                          'videoVolume': pattern.get('freezeVideoVolume', 70),
+                          'effectSeconds': pattern.get('freezeSeconds', 6),
+                          'resultSeconds': pattern.get('resultSeconds', 1.2),
+                          'mode': 'normal', 'upperEntered': True})
+            mode = 'upper'
+            continue
+        if (mode == 'normal' and pattern['machineType'] == 'at' and pattern.get('atEnabled')
+                and pattern.get('czEnabled') and random.random() * 100 < pattern.get('czEntryRate', 0)):
+            cz = _weighted_cz(pattern)
+            if cz:
+                success = random.random() * 100 < cz['atEntryRate']
+                reel_text, reel_images = _miss_reels(pattern)
+                added = 0
+                if success:
+                    requested = pattern['atSpins']
+                    added = min(requested, max(0, max_spins - len(spins) - budget))
+                    budget += added
+                    mode = 'at'
+                spins.append({'kind': 'cz', 'roleName': cz['name'], 'czId': cz['id'],
+                              'expectation': cz['expectation'], 'czSuccess': success,
+                              'reels': reel_text, 'reelImages': reel_images,
+                              'symbolImageUrl': '', 'win': 0, 'addedSpins': added,
+                              'animationUrl': cz['animationUrl'], 'audioUrl': cz['audioUrl'],
+                              'audioVolume': cz['audioVolume'], 'videoVolume': cz['videoVolume'],
+                              'spinSeconds': cz['spinSeconds'], 'stopInterval': cz['stopInterval'],
+                              'resultSeconds': cz['resultSeconds'],
+                              'effectSeconds': cz['seconds'], 'mode': 'normal'})
+                continue
         denominator = pattern['hitDenominator']
         if mode == 'at':
             denominator = pattern['atHitDenominator']
@@ -341,6 +458,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
             if pattern['machineType'] == 'at' and pattern['atEnabled']:
                 if mode == 'normal':
                     mode = 'upper' if pattern['upperAtEnabled'] and random.random() * 100 < pattern['upperAtChance'] else 'at'
+                    spins[-1]['upperEntered'] = mode == 'upper'
                     requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
                     added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
@@ -361,6 +479,26 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                 chosen = role
                 break
         if chosen:
+            if (mode == 'normal' and pattern['machineType'] == 'at' and pattern.get('upperAtEnabled')
+                    and pattern.get('freezeEnabled') and chosen.get('freezeEnabled')
+                    and random.random() * 100 < chosen.get('freezeChance', 0)):
+                requested = pattern['upperAtSpins']
+                added = min(requested, max(0, max_spins - len(spins) - budget))
+                budget += added
+                symbol = chosen['symbolText']
+                spins.append({'kind': 'freeze', 'roleName': 'フリーズ（' + chosen['name'] + '）',
+                              'triggerRoleName': chosen['name'], 'reels': [symbol] * 3,
+                              'reelImages': [chosen['symbolImageUrl']] * 3,
+                              'symbolImageUrl': chosen['symbolImageUrl'], 'win': 0,
+                              'addedSpins': added, 'animationUrl': pattern.get('freezeUrl', ''),
+                              'audioUrl': pattern.get('freezeAudioUrl', ''),
+                              'audioVolume': pattern.get('freezeAudioVolume', 80),
+                              'videoVolume': pattern.get('freezeVideoVolume', 70),
+                              'effectSeconds': pattern.get('freezeSeconds', 6),
+                              'resultSeconds': pattern.get('resultSeconds', 1.2),
+                              'mode': 'normal', 'upperEntered': True})
+                mode = 'upper'
+                continue
             requested = chosen['addSpins'] if chosen['addSpinsEnabled'] else 0
             added = min(requested, max(0, max_spins - len(spins) - 1 - budget))
             budget += added

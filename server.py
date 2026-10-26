@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.62'
+APP_VERSION = '0.66.63'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -234,14 +234,17 @@ def _gift_value(value, *names):
     return None
 
 def _gift_image_url(value):
-    image = _gift_value(value, 'image', 'gift_image', 'giftImage', 'icon')
-    for item in (image, value):
+    images = [_gift_value(value, 'image', 'gift_image', 'giftImage', 'icon', 'picture',
+                          'image_url', 'imageUrl', 'icon_url', 'iconUrl'), value]
+    for item in images:
         if not item:
             continue
+        if isinstance(item, str) and item.startswith(('http://', 'https://')):
+            return item
         direct = _gift_value(item, 'url', 'uri')
         if isinstance(direct, str) and direct.startswith(('http://', 'https://')):
             return direct
-        urls = _gift_value(item, 'url_list', 'urlList', 'urls')
+        urls = _gift_value(item, 'url_list', 'urlList', 'urls', 'webp_urls', 'webpUrls')
         if isinstance(urls, (list, tuple)):
             for url in urls:
                 if isinstance(url, str) and url.startswith(('http://', 'https://')):
@@ -406,7 +409,7 @@ def gacha_record_detail(item):
 def normalize_ranking_view(raw, history=False):
     raw=raw if isinstance(raw,dict) else {};view={}
     blank_templates=all(not str(raw.get(key) or '').strip() for key in ('nameTemplate','patternTemplate','scoreTemplate'))
-    for key,default,low,high in (('limit',10,1,100),('columns',1,1,8),('rows',5,1,10),('pageSeconds',8,2,60),('scrollSpeed',40,10,300),('avatarSize',44,20,160),('nameSize',20,8,96),('patternSize',16,8,96),('scoreSize',20,8,96),('cardOpacity',93,0,100)):
+    for key,default,low,high in (('limit',10,1,100),('columns',1,1,8),('rows',5,1,10),('pageSeconds',8,2,60),('scrollSpeed',40,10,300),('avatarSize',44,20,160),('nameSize',20,8,96),('patternSize',16,8,96),('scoreSize',20,8,96),('cardOpacity',93,0,100),('titleOpacity',93,0,100)):
         view[key]=max(low,min(high,safe_int(raw.get(key,default),default)))
     if history: view['limit']=max(1,min(200,safe_int(raw.get('limit',200),200)))
     view['direction']='horizontal' if raw.get('direction')=='horizontal' else 'vertical'
@@ -415,7 +418,7 @@ def normalize_ranking_view(raw, history=False):
     view['nameScroll']=raw.get('nameScroll',True) is not False
     view['textScrollSpeed']=max(10,min(150,safe_int(raw.get('textScrollSpeed',30),30)))
     view['fontFamily']=raw.get('fontFamily') if raw.get('fontFamily') in ('global','system','yuGothic','meiryo','gothic','serif','mono') else 'global'
-    for key,default in (('cardBg','#17181e'),('cardBorder','#ffcf59'),('textColor','#ffffff')): view[key]=default if blank_templates else (valid_hex(raw.get(key)) or default)
+    for key,default in (('cardBg','#17181e'),('cardBorder','#ffcf59'),('textColor','#ffffff'),('titleBg','#17181e')): view[key]=default if blank_templates else (valid_hex(raw.get(key)) or default)
     view['title']=str(raw.get('title') or '')[:160]
     for key,default in (('nameTemplate','{name}'),('patternTemplate','{gacha}'),('scoreTemplate','{set}SET {win}WIN')):
         value=str(raw.get(key) or '').strip();view[key]=(value or default)[:160]
@@ -3069,13 +3072,16 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のスロットが見つかりません')
                 field=str(data.get('field') or '');role_id=str(data.get('roleId') or '')
-                allowed={'cabinetUrl':'visual','monitorUrl':'visual','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','startAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','stop1AudioUrl':'audio','stop2AudioUrl':'audio','stop3AudioUrl':'audio','bigEffectUrl':'visual','bigEffectAudioUrl':'audio','symbolImageUrl':'image','imageUrl':'image','animationUrl':'visual','audioUrl':'audio'}
+                allowed={'cabinetUrl':'visual','monitorUrl':'visual','atMonitorUrl':'visual','upperMonitorUrl':'visual','atAudioUrl':'audio','upperAudioUrl':'audio','upperEntryUrl':'visual','upperEntryAudioUrl':'audio','freezeUrl':'visual','freezeAudioUrl':'audio','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','startAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','stop1AudioUrl':'audio','stop2AudioUrl':'audio','stop3AudioUrl':'audio','bigEffectUrl':'visual','bigEffectAudioUrl':'audio','symbolImageUrl':'image','imageUrl':'image','animationUrl':'visual','audioUrl':'audio'}
                 media_type=allowed.get(field)
                 if not media_type: raise ValueError('素材の設定先を確認してください')
                 target=pattern
                 if role_id.startswith('catalog:'):
                     symbol_id=role_id.split(':',1)[1];target=next((x for x in pattern.get('symbols',[]) if x.get('id')==symbol_id),None)
                     if not target or field!='imageUrl': raise ValueError('図柄の設定先を確認してください')
+                elif role_id.startswith('cz:'):
+                    cz_id=role_id.split(':',1)[1];target=next((x for x in pattern.get('czPatterns',[]) if x.get('id')==cz_id),None)
+                    if not target or field not in ('animationUrl','audioUrl'): raise ValueError('CZ素材の設定先を確認してください')
                 elif role_id:
                     target=next((x for x in pattern.get('smallRoles',[]) if x.get('id')==role_id),None)
                     if not target or field not in ('symbolImageUrl','animationUrl','audioUrl'): raise ValueError('小役の設定先を確認してください')
