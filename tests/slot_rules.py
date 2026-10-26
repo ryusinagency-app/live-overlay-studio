@@ -54,7 +54,13 @@ def check_cz_patterns_and_at_entry():
                          'expectation': 5, 'weight': 100, 'atEntryRate': 100,
                          'spinSeconds': 2.2, 'stopInterval': .6, 'resultSeconds': 1.7,
                          'seconds': 4.5, 'animationUrl': '/cz.mp4',
-                         'audioUrl': '/cz.mp3', 'audioVolume': 63, 'videoVolume': 47},
+                         'audioUrl': '/cz.mp3', 'audioVolume': 63, 'videoVolume': 47,
+                         'entryEnabled': True, 'entryUrl': '/cz-entry.mp4',
+                         'entryAudioUrl': '/cz-entry.mp3', 'entrySeconds': 2.1,
+                         'successEnabled': True, 'successUrl': '/cz-success.mp4',
+                         'successAudioUrl': '/cz-success.mp3', 'successSeconds': 2.2,
+                         'failureEnabled': True, 'failureUrl': '/cz-failure.mp4',
+                         'failureAudioUrl': '/cz-failure.mp3', 'failureSeconds': 2.3},
                     ]})
     normalized = normalize_slot_machine({'patterns': [pattern]})['patterns'][0]
     assert normalized['czEnabled'] and normalized['czEntryRate'] == 100
@@ -65,8 +71,49 @@ def check_cz_patterns_and_at_entry():
     assert cz['kind'] == 'cz' and cz['czSuccess'] is True
     assert cz['roleName'] == '激熱CZ' and cz['addedSpins'] == 3
     assert cz['animationUrl'] == '/cz.mp4' and cz['audioVolume'] == 63
+    assert cz['entryEnabled'] and cz['entryUrl'] == '/cz-entry.mp4'
+    assert cz['successEnabled'] and cz['successAudioUrl'] == '/cz-success.mp3'
+    assert cz['failureEnabled'] and cz['failureSeconds'] == 2.3
     assert (cz['spinSeconds'], cz['stopInterval'], cz['resultSeconds']) == (2.2, .6, 1.7)
     assert all(spin['mode'] == 'at' for spin in event['spins'][1:])
+
+
+def check_at_continuation_scene_result():
+    base = {'machineType': 'at', 'atEnabled': True, 'giftSpins': 1,
+            'hitDenominator': 1, 'atHitDenominator': 1, 'atSpins': 1,
+            'replayEnabled': False, 'smallRoles': [],
+            'atContinueSuccessEnabled': True, 'atContinueSuccessUrl': '/continue.mp4',
+            'atContinueFailureEnabled': True, 'atContinueFailureAudioUrl': '/end.mp3'}
+    success = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 100}]})['patterns'][0]
+    event = build_event(success, 'テスト', '成功', initial_spins=1)
+    continued_hits = [spin for spin in event['spins'] if spin.get('mode') == 'at' and spin['kind'] == 'hit']
+    assert continued_hits and continued_hits[0]['atContinuationResult'] == 'success'
+    assert success['atContinueSuccessUrl'] == '/continue.mp4'
+
+    failure = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 0}]})['patterns'][0]
+    event = build_event(failure, 'テスト', '失敗', initial_spins=1)
+    failed_hits = [spin for spin in event['spins'] if spin.get('mode') == 'at' and spin['kind'] == 'hit']
+    assert failed_hits and failed_hits[0]['atContinuationResult'] == 'failure'
+    assert failure['atContinueFailureAudioUrl'] == '/end.mp3'
+
+    upper_success = normalize_slot_machine({'patterns': [{**base, 'atContinuationRate': 0,
+        'upperAtContinuationRate': 100}]})['patterns'][0]
+    assert upper_success['atContinuationRate'] == 0
+    assert upper_success['upperAtContinuationRate'] == 100
+
+
+def check_at_entry_grant_is_not_cut_to_twenty():
+    pattern = normalize_slot_machine({'patterns': [{
+        'machineType': 'at', 'atEnabled': True, 'giftSpins': 1,
+        'hitDenominator': 1, 'atSpins': 30, 'atHitDenominator': 1_000_000,
+        'upperAtEnabled': False, 'replayEnabled': False, 'smallRoles': [],
+        'bigSymbolImageUrl': '/configured-seven.png',
+    }]})['patterns'][0]
+    event = build_event(pattern, 'テスト', 'AT追加回転テスト', initial_spins=1)
+    first = event['spins'][0]
+    assert first['kind'] == 'hit' and first['addedSpins'] == 30
+    assert len(event['spins']) == 31
+    assert first['reelImages'] == ['/configured-seven.png'] * 3
 
 
 def check_direct_and_rare_role_freeze():
@@ -141,6 +188,11 @@ def check_image_catalog_sizes_and_test_completion():
                     'bigEffectMode': 'audio-only',
                     'bigEffectSize': 125, 'bigEffectUrl': '/slot_big.mp4',
                     'bigEffectAudioUrl': '/slot_big.mp3',
+                    'upperBigEffectEnabled': True, 'upperBigEffectMode': 'audio-only',
+                    'upperBigEffectSeconds': 6.5, 'upperBigEffectSize': 135,
+                    'upperBigEffectUrl': '/upper_big.mp4',
+                    'upperBigEffectAudioUrl': '/upper_big.mp3',
+                    'upperBigEffectVideoVolume': 66, 'upperBigEffectAudioVolume': 88,
                     'monitorTextEnabled': False, 'spinText': '抽選中',
                     'bonusText': '光った！', 'missText': '残念',
                     'winResultText': '{win}枚獲得', 'monitorTextColor': '#12ab34',
@@ -161,6 +213,11 @@ def check_image_catalog_sizes_and_test_completion():
             normalized['missText'], normalized['winResultText']) == (False, '抽選中', '光った！', '残念', '{win}枚獲得')
     assert (normalized['monitorTextColor'], normalized['monitorTextSize']) == ('#12ab34', 88)
     assert normalized['bigEffectUrl'] == '/slot_big.mp4'
+    assert normalized['upperBigEffectEnabled'] and normalized['upperBigEffectMode'] == 'audio-only'
+    assert (normalized['upperBigEffectSeconds'], normalized['upperBigEffectSize']) == (6.5, 135)
+    assert normalized['upperBigEffectUrl'] == '/upper_big.mp4'
+    assert normalized['upperBigEffectAudioUrl'] == '/upper_big.mp3'
+    assert (normalized['upperBigEffectVideoVolume'], normalized['upperBigEffectAudioVolume']) == (66, 88)
     assert [normalized[f'stop{i}AudioUrl'] for i in range(1, 4)] == [f'/slot_stop{i}.mp3' for i in range(1, 4)]
     event = build_event(normalized, 'テスト', 'テスト', is_test=True)
     state = {'slotMachine': {'patterns': [normalized], 'queue': [], 'history': [], 'event': event},
@@ -262,6 +319,8 @@ if __name__ == '__main__':
     check_multiple_gifts_and_combo_spin_budget()
     check_gift_spins_and_hit_continuation()
     check_cz_patterns_and_at_entry()
+    check_at_continuation_scene_result()
+    check_at_entry_grant_is_not_cut_to_twenty()
     check_direct_and_rare_role_freeze()
     check_at_phase_timing_and_audio_settings()
     check_small_role_bonus_and_normalization()
