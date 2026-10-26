@@ -10,6 +10,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 root = Path(__file__).resolve().parents[1]
+control_source = (root / 'control.html').read_text(encoding='utf-8')
+assert "querySelectorAll('.overlayUrl[data-view]')" in control_source
+assert "const path=paths[input.dataset.view];if(!path)return" in control_source
 tree = ast.parse((root / 'server.py').read_text(encoding='utf-8'))
 nodes = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.ClassDef))
          or (isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'DEFAULT' for target in node.targets))]
