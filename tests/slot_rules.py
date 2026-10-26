@@ -315,6 +315,27 @@ def check_daily_stats_and_hit_reset():
     assert styled['textColor'] == '#123456' and styled['valueSize'] == 72
 
 
+def check_dedicated_machine_events_can_advance_independently():
+    first_pattern = default_pattern(1)
+    second_pattern = default_pattern(2)
+    for pattern in (first_pattern, second_pattern):
+        pattern.update({'giftSpins': 1, 'hitDenominator': 1, 'sign': 'plus'})
+    first = build_event(first_pattern, 'ギフト1', 'A', is_test=True)
+    second = build_event(second_pattern, 'ギフト2', 'B', is_test=True)
+    first['id'], second['id'] = 1001, 1002
+    state = {'slotMachine': {'patterns': [first_pattern, second_pattern], 'queue': [second],
+                             'history': [], 'statsByDate': {}, 'event': first},
+             'winCounter': {'currentWin': 0}}
+    assert apply_spin(state, second['id'], 0)
+    assert complete_event(state, second['id'])
+    assert state['slotMachine']['event']['id'] == first['id']
+    assert state['slotMachine']['event']['appliedSpins'] == 0
+    assert state['slotMachine']['queue'] == []
+    assert apply_spin(state, first['id'], 0)
+    assert complete_event(state, first['id'])
+    assert not state['slotMachine']['event']['active']
+
+
 if __name__ == '__main__':
     check_multiple_gifts_and_combo_spin_budget()
     check_gift_spins_and_hit_continuation()
@@ -328,4 +349,5 @@ if __name__ == '__main__':
     check_choice_only_for_win_and_queue_gap()
     check_visible_reels_always_match_the_result()
     check_daily_stats_and_hit_reset()
-    print('PASS slot rules: gifts, CZ/AT flow, combo spins, reels, daily stats and signed WIN')
+    check_dedicated_machine_events_can_advance_independently()
+    print('PASS slot rules: gifts, CZ/AT flow, combo spins, reels, independent machines, daily stats and signed WIN')
