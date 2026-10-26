@@ -24,7 +24,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.58'
+APP_VERSION = '0.66.59'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -188,6 +188,9 @@ DEFAULT = {
         {'id': 'mission-1', 'title': 'ギフトミッション', 'giftValue': 0, 'giftGoal': 10, 'unit': '個', 'achievements': 0, 'dailyLimit': 10, 'lastDate': '', 'showAchievements': True, 'noticeUntil': 0, 'textScale': 100, 'shortcutAdd': 'CTRL+ALT+0', 'shortcutSub': 'CTRL+ALT+SHIFT+0'}
     ],
     'giftRules': [],
+    # TikTokから取得したギフトは受信を止めても、アプリを再起動しても残す。
+    # aliasesには利用者が設定した日本語名などの別名も保存する。
+    'giftCatalog': [],
     'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'scrollDirection':'vertical', 'scrollStyle':'page', 'scrollSpeed':40, 'loop':True, 'newestFirst':True, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
     'tiktokUsername': '',
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
@@ -256,29 +259,79 @@ def normalize_gift_catalog(raw):
         name = str(_gift_value(item, 'name', 'gift_name', 'giftName') or '').strip()
         if not name:
             continue
+        gift_id = str(_gift_value(item, 'id', 'gift_id', 'giftId') or '').strip()[:120]
+        aliases = []
+        raw_aliases = _gift_value(item, 'aliases')
+        if isinstance(raw_aliases, (list, tuple, set)):
+            aliases.extend(str(value).strip() for value in raw_aliases)
+        # TikTokLiveのバージョンや地域によって日本語名の格納先が異なるため、
+        # 取得できる表示名はすべて別名として保持する。
+        for field in ('display_name', 'displayName', 'localized_name', 'localizedName', 'title'):
+            value = str(_gift_value(item, field) or '').strip()
+            if value:
+                aliases.append(value)
+        seen = {normalize_gift_name(name)}
+        unique_aliases = []
+        for value in aliases:
+            key = normalize_gift_name(value)
+            if value and key not in seen:
+                seen.add(key)
+                unique_aliases.append(value[:120])
+        aliases = unique_aliases
         raw_price = _gift_value(item, 'diamond_count', 'diamondCount', 'price', 'coin_count', 'coinCount')
         try:
             price = max(0, int(raw_price or 0))
         except (TypeError, ValueError):
             price = 0
-        result[normalize_gift_name(name)] = {'name': name, 'price': price, 'imageUrl': _gift_image_url(item)}
+        result[gift_id or normalize_gift_name(name)] = {'id': gift_id, 'name': name, 'aliases': aliases, 'price': price, 'imageUrl': _gift_image_url(item)}
     return sorted(result.values(), key=lambda gift: (gift['price'], gift['name'].casefold()))
+
+def merge_gift_catalog(*catalogs):
+    merged = []
+    for catalog in catalogs:
+        for item in normalize_gift_catalog(catalog):
+            item_names = {normalize_gift_name(item.get('name')), *(normalize_gift_name(x) for x in item.get('aliases', []))}
+            match = next((saved for saved in merged if
+                          (item.get('id') and saved.get('id') == item.get('id')) or
+                          item_names.intersection({normalize_gift_name(saved.get('name')), *(normalize_gift_name(x) for x in saved.get('aliases', []))})), None)
+            if match is None:
+                merged.append(copy.deepcopy(item)); continue
+            names = [match.get('name'), *match.get('aliases', []), item.get('name'), *item.get('aliases', [])]
+            match['aliases'] = []
+            seen = {normalize_gift_name(match.get('name'))}
+            for value in names:
+                value = str(value or '').strip()
+                key = normalize_gift_name(value)
+                if value and key not in seen:
+                    seen.add(key); match['aliases'].append(value[:120])
+            for key in ('id', 'price', 'imageUrl'):
+                if item.get(key): match[key] = item[key]
+    return sorted(merged, key=lambda gift: (gift.get('price', 0), gift.get('name', '').casefold()))[:2000]
+
+def persist_gift_catalog(gifts):
+    with STATE_LOCK:
+        try:
+            data = json.loads(STATE.read_text(encoding='utf-8'))
+        except Exception:
+            data = copy.deepcopy(DEFAULT)
+        merged = merge_gift_catalog(data.get('giftCatalog', []), gifts)
+        data['giftCatalog'] = merged
+        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    with TIKTOK_GIFT_CATALOG_LOCK:
+        TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(merged)
+    return merged
 
 def update_gift_catalog(raw):
     gifts = normalize_gift_catalog(raw)
     if gifts:
-        with TIKTOK_GIFT_CATALOG_LOCK:
-            TIKTOK_GIFT_CATALOG[:] = gifts
+        persist_gift_catalog(gifts)
     return gifts
 
 def remember_gift(gift):
     gifts = normalize_gift_catalog([gift])
     if not gifts:
         return
-    with TIKTOK_GIFT_CATALOG_LOCK:
-        merged = {normalize_gift_name(item['name']): item for item in TIKTOK_GIFT_CATALOG}
-        merged[normalize_gift_name(gifts[0]['name'])] = gifts[0]
-        TIKTOK_GIFT_CATALOG[:] = sorted(merged.values(), key=lambda item: (item['price'], item['name'].casefold()))
+    persist_gift_catalog(gifts)
 
 def today_jst():
     return datetime.now(JST).date().isoformat()
@@ -434,6 +487,9 @@ def normalize_state(data):
     gm_event={'id':max(0,safe_int(raw_gm_event.get('id') or 0)),'type':'gift-media' if raw_gm_event.get('type')=='gift-media' else '', 'active':gm_active,'ruleId':str(raw_gm_event.get('ruleId') or '')[:80], 'ruleName':str(raw_gm_event.get('ruleName') or '')[:60], 'giftName':str(raw_gm_event.get('giftName') or '')[:120], 'senderName':str(raw_gm_event.get('senderName') or '')[:80], 'count':max(1,min(1000000,safe_int(raw_gm_event.get('count',1)))), 'imageUrl':str(raw_gm_event.get('imageUrl') or '')[:2000], 'videoUrl':str(raw_gm_event.get('videoUrl') or '')[:2000], 'audioUrl':str(raw_gm_event.get('audioUrl') or '')[:2000], 'audioVolume':max(0,min(100,safe_int(raw_gm_event.get('audioVolume',75)))), 'videoVolume':max(0,min(100,safe_int(raw_gm_event.get('videoVolume',75)))), 'width':max(80,min(3840,safe_int(raw_gm_event.get('width',800)))), 'height':max(60,min(2160,safe_int(raw_gm_event.get('height',450)))), 'duration':max(0,min(600,safe_int(raw_gm_event.get('duration',6)))), 'createdAt':gm_created}
     merged['giftMedia']={'rules':gm_rules,'queue':[x for x in (raw_gift_media.get('queue') or []) if isinstance(x,dict)][:100] if gm_active else [],'event':gm_event}
     changed = False
+    merged['giftCatalog'] = merge_gift_catalog(merged.get('giftCatalog', []))
+    if merged['giftCatalog'] != data.get('giftCatalog', []):
+        changed = True
     raw_card_defaults = merged.get('cardDefaults') if isinstance(merged.get('cardDefaults'), dict) else {}
     merged['cardDefaults'] = {'background': valid_hex(raw_card_defaults.get('background')), 'border': valid_hex(raw_card_defaults.get('border'))}
     merged['compCardBg'] = valid_hex(merged.get('compCardBg'))
@@ -594,12 +650,15 @@ def normalize_state(data):
         image_url = str(item.get('giftImageUrl') or item.get('imageUrl') or '')[:2000]
         if not image_url.startswith(('http://', 'https://')):
             image_url = ''
+        original_gift_name = str(item.get('canonicalGiftName') or item.get('giftName') or 'ギフト')[:120]
+        catalog_gift = gift_catalog_item(original_gift_name, merged.get('giftCatalog', []))
         gift_history.append({
             'id': max(0, safe_int(item.get('id') or index + 1)),
             'senderName': str(item.get('senderName') or 'ゲスト')[:80],
             'avatarUrl': str(item.get('avatarUrl') or '')[:2000] if str(item.get('avatarUrl') or '').startswith(('http://','https://')) else '',
             'giftImageUrl': image_url,
-            'giftName': str(item.get('giftName') or 'ギフト')[:80],
+            'giftName': preferred_gift_name(catalog_gift, item.get('giftName') or 'ギフト'),
+            'canonicalGiftName': str((catalog_gift or {}).get('name') or original_gift_name)[:120],
             'imageUrl': image_url,
             'price': max(0, min(100000000, safe_int(item.get('price') or 0))),
             'count': max(1, min(1000000, safe_int(item.get('count') or 1))),
@@ -1309,6 +1368,31 @@ def normalize_gift_name(value):
     value = unicodedata.normalize('NFKC', str(value or '')).casefold()
     return ''.join(value.split())
 
+def gift_name_matches(configured, incoming, catalog):
+    """Match canonical TikTok names and saved Japanese/custom aliases."""
+    configured_key = normalize_gift_name(configured)
+    incoming_key = normalize_gift_name(incoming)
+    if not configured_key or not incoming_key:
+        return False
+    if configured_key == incoming_key:
+        return True
+    for gift in catalog if isinstance(catalog, list) else []:
+        names = {normalize_gift_name(gift.get('name'))}
+        names.update(normalize_gift_name(alias) for alias in gift.get('aliases', []) if alias)
+        if configured_key in names and incoming_key in names:
+            return True
+    return False
+
+def gift_catalog_item(value, catalog):
+    return next((gift for gift in catalog if gift_name_matches(value, gift.get('name'), [gift])), None)
+
+def preferred_gift_name(gift, fallback='ギフト'):
+    """Use a saved Japanese/localized alias for viewer-facing labels."""
+    gift = gift if isinstance(gift, dict) else {}
+    aliases = [str(value or '').strip() for value in gift.get('aliases', [])]
+    japanese = next((value for value in aliases if re.search(r'[ぁ-んァ-ヶ一-龠々ー]', value)), '')
+    return (japanese or str(gift.get('name') or '').strip() or str(fallback or 'ギフト'))[:80]
+
 def sync_active_profile_other_gacha(data):
     """Keep server-side Other Gacha changes in the active profile snapshot.
 
@@ -1789,8 +1873,8 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         count=max(1,int(count or 1))
         item_info = normalize_gift_catalog([gift_info])[0] if gift_info else None
         if item_info is None or not item_info.get('price') or not item_info.get('imageUrl'):
-            with TIKTOK_GIFT_CATALOG_LOCK:
-                cached = next((copy.deepcopy(item) for item in TIKTOK_GIFT_CATALOG if normalize_gift_name(item.get('name')) == name), None)
+            cached = next((copy.deepcopy(item) for item in data.get('giftCatalog', [])
+                           if gift_name_matches(item.get('name'), gift_name, [item])), None)
             if cached:
                 item_info = {**(item_info or {}), **{k:v for k,v in cached.items() if not (item_info or {}).get(k)}}
         item_info = item_info or {'name':gift_name, 'price':0, 'imageUrl':''}
@@ -1800,24 +1884,27 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         if price>0 and total_coins>=wall['minCoins']:
             gift_id=wall['nextId']
             wall['nextId']+=1
-            gift_entry={'id':gift_id,'senderName':str(sender_name or 'ゲスト')[:80],'giftName':str(item_info.get('name') or gift_name)[:80],'imageUrl':str(item_info.get('imageUrl') or '')[:2000],'giftImageUrl':str(item_info.get('imageUrl') or '')[:2000],'avatarUrl':str(avatar_url or '')[:2000] if str(avatar_url or '').startswith(('http://','https://')) else '', 'price':price,'count':count,'totalCoins':total_coins,'createdAt':time.time()}
+            canonical_name=str(item_info.get('name') or gift_name)[:120]
+            gift_entry={'id':gift_id,'senderName':str(sender_name or 'ゲスト')[:80],'giftName':preferred_gift_name(item_info,canonical_name),'canonicalGiftName':canonical_name,'imageUrl':str(item_info.get('imageUrl') or '')[:2000],'giftImageUrl':str(item_info.get('imageUrl') or '')[:2000],'avatarUrl':str(avatar_url or '')[:2000] if str(avatar_url or '').startswith(('http://','https://')) else '', 'price':price,'count':count,'totalCoins':total_coins,'createdAt':time.time()}
             wall['history'].insert(0, gift_entry)
             wall['history']=wall['history'][:200]
             wall.setdefault('displayHistory',[]).insert(0,copy.deepcopy(gift_entry))
             wall['displayHistory']=wall['displayHistory'][:200]
             recorded=True
-        rule = next((r for r in data.get('giftRules', []) if normalize_gift_name(r.get('giftName')) == name), None)
+        catalog = data.get('giftCatalog', [])
+        matches = lambda configured: gift_name_matches(configured, gift_name, catalog)
+        rule = next((r for r in data.get('giftRules', []) if matches(r.get('giftName'))), None)
         if rule:
             data['timer'] = {**data.get('timer', {}), 'endAt': 0, 'seconds': rule['seconds'], 'giftName': rule['giftName'], 'currentText': rule.get('text') or f"カウント：{rule['seconds']}秒"}
             matched = True
         gacha=data['gacha']; win=data['winCounter']
-        pattern=next((p for p in gacha['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
-        smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
-        other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
-        pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
-        slot_pattern=next((p for p in data['slotMachine']['patterns'] if p['enabled'] and p['giftName'] and normalize_gift_name(p['giftName'])==name),None)
-        media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and normalize_gift_name(r['giftName'])==name and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
-        gift_rule=next((x for x in win['giftRules'] if x['giftName'] and normalize_gift_name(x['giftName'])==name),None)
+        pattern=next((p for p in gacha['patterns'] if p['giftName'] and matches(p['giftName'])),None)
+        smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and matches(p['giftName'])),None)
+        other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
+        pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
+        slot_pattern=next((p for p in data['slotMachine']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
+        media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and matches(r['giftName']) and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
+        gift_rule=next((x for x in win['giftRules'] if x['giftName'] and matches(x['giftName'])),None)
         # WIN adjustment gifts only change the counter, even if the same gift
         # name was also entered as a gacha trigger.
         if gift_rule:
@@ -2452,14 +2539,15 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.dumps(get_gta_watch_status(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/gifts':
+            gifts = read_state().get('giftCatalog', [])
             with TIKTOK_GIFT_CATALOG_LOCK:
-                gifts = copy.deepcopy(TIKTOK_GIFT_CATALOG)
+                TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(gifts)
             status = get_tiktok_status()
             body = json.dumps({'gifts': gifts, 'connected': status.get('status') == 'connected', 'enabled': status.get('enabled', False)}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -2541,6 +2629,8 @@ class Handler(SimpleHTTPRequestHandler):
                             'history':copy.deepcopy(live_wall.get('history',[])),
                             'displayHistory':copy.deepcopy(live_wall.get('displayHistory',[])),
                             'nextId':live_wall.get('nextId',1)}
+                    # 接続中に取得・追加されたカタログを、古い操作画面の保存で消さない。
+                    data['giftCatalog']=copy.deepcopy(current.get('giftCatalog',[]))
                     merged,_=normalize_state({**copy.deepcopy(DEFAULT),**data})
                     STATE.write_text(json.dumps(merged,ensure_ascii=False,indent=2),encoding='utf-8')
                 result = {'ok': True}
@@ -2993,6 +3083,24 @@ class Handler(SimpleHTTPRequestHandler):
                 pattern[keys[0]]='';pattern[keys[1]]=''
                 write_state(state)
                 result={'ok':True,'gacha':read_state()['gacha']}
+            elif self.path == '/api/tiktok/gift-alias':
+                if self.client_address[0] not in ('127.0.0.1', '::1'):
+                    self.send_error(403); return
+                canonical=str(data.get('name') or '').strip()
+                alias=str(data.get('alias') or '').strip()[:120]
+                if not canonical or not alias:
+                    raise ValueError('ギフト名と日本語名を入力してください')
+                state=read_state();catalog=state.get('giftCatalog',[])
+                gift=next((item for item in catalog if normalize_gift_name(item.get('name'))==normalize_gift_name(canonical)),None)
+                if gift is None:
+                    raise ValueError('保存するギフトが一覧に見つかりません')
+                if normalize_gift_name(alias)!=normalize_gift_name(gift.get('name')) and all(normalize_gift_name(alias)!=normalize_gift_name(x) for x in gift.get('aliases',[])):
+                    gift.setdefault('aliases',[]).append(alias)
+                write_state(state)
+                saved_catalog=read_state().get('giftCatalog',[])
+                with TIKTOK_GIFT_CATALOG_LOCK:
+                    TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(saved_catalog)
+                result={'ok':True,'gifts':saved_catalog}
             elif self.path == '/api/tiktok/connect':
                 result = start_tiktok_gift_listener(read_state().get('tiktokUsername', ''))
                 if result.get('status') == 'error':
