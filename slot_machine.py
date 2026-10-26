@@ -1,6 +1,10 @@
 import copy
 import random
 import time
+from datetime import datetime, timezone, timedelta
+
+
+JST = timezone(timedelta(hours=9))
 
 
 EMPTY_EVENT = {
@@ -44,6 +48,7 @@ def default_pattern(index=1):
     return {
         'id': f'slot-pattern-{index}', 'name': f'スロット{index}', 'enabled': True,
         'machineType': 'normal', 'giftName': '', 'giftSpins': 1,
+        'giftRules': [{'id': 'slot-gift-1', 'giftName': '', 'spins': 1}],
         'sign': 'plus', 'hitDenominator': 199, 'replayEnabled': True,
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
@@ -99,6 +104,22 @@ def normalize_pattern(raw, index=1):
     result['machineType'] = 'at' if raw.get('machineType') == 'at' else 'normal'
     result['giftName'] = str(raw.get('giftName') or '').strip()[:120]
     result['giftSpins'] = _int(raw.get('giftSpins'), 1, 1, 10000)
+    gift_rules = []
+    raw_gift_rules = raw.get('giftRules') if isinstance(raw.get('giftRules'), list) else None
+    if raw_gift_rules is None:
+        raw_gift_rules = [{'giftName': result['giftName'], 'spins': result['giftSpins']}]
+    for gift_index, rule in enumerate(raw_gift_rules[:100]):
+        if not isinstance(rule, dict):
+            continue
+        gift_rules.append({
+            'id': str(rule.get('id') or f'slot-gift-{gift_index + 1}')[:80],
+            'giftName': str(rule.get('giftName') or '').strip()[:120],
+            'spins': _int(rule.get('spins', rule.get('giftSpins')), 1, 1, 10000),
+        })
+    result['giftRules'] = gift_rules or copy.deepcopy(base['giftRules'])
+    # Keep the legacy pair populated for older saved builds and test tools.
+    result['giftName'] = result['giftRules'][0]['giftName']
+    result['giftSpins'] = result['giftRules'][0]['spins']
     result['sign'] = raw.get('sign') if raw.get('sign') in ('plus', 'minus', 'both') else 'plus'
     result['hitDenominator'] = _int(raw.get('hitDenominator'), 199, 1, 1000000)
     result['replayEnabled'] = raw.get('replayEnabled', True) is not False
@@ -209,7 +230,25 @@ def normalize_slot_machine(raw, server_started_at=0):
         cleaned_event['appliedSpins'] = _int(event.get('appliedSpins'), 0, 0, len(cleaned_event['spins']))
         cleaned_event['total'] = _int(event.get('total'), 0, 0, 999999999)
     queue = [x for x in (raw.get('queue') or []) if isinstance(x, dict)][:200] if active else []
+    stats_by_date = {}
+    raw_stats = raw.get('statsByDate') if isinstance(raw.get('statsByDate'), dict) else {}
+    for date_key in sorted(raw_stats.keys(), reverse=True)[:370]:
+        if not isinstance(raw_stats.get(date_key), dict):
+            continue
+        day = {}
+        for pattern_id, row in raw_stats[date_key].items():
+            if not isinstance(row, dict):
+                continue
+            day[str(pattern_id)[:80]] = {
+                'patternName': str(row.get('patternName') or '')[:60],
+                'currentSpins': _int(row.get('currentSpins'), 0, 0, 999999999),
+                'hitCount': _int(row.get('hitCount'), 0, 0, 999999999),
+                'totalSpins': _int(row.get('totalSpins'), 0, 0, 999999999),
+            }
+        stats_by_date[str(date_key)[:10]] = day
+    today = datetime.now(JST).date().isoformat()
     return {'patterns': patterns, 'queue': queue, 'history': [x for x in (raw.get('history') or []) if isinstance(x, dict)][:200],
+            'statsByDate': stats_by_date, 'statsDate': today,
             'shortcutChoicePlus': str(raw.get('shortcutChoicePlus') or 'CTRL+ALT+6').upper()[:80],
             'shortcutChoiceMinus': str(raw.get('shortcutChoiceMinus') or 'CTRL+ALT+SHIFT+6').upper()[:80],
             'event': cleaned_event}
@@ -247,8 +286,9 @@ def _miss_reels(pattern):
     return [x.get('name','') for x in picked],[x.get('imageUrl','') for x in picked]
 
 
-def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
-    budget = pattern['giftSpins']
+def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, initial_spins=None):
+    configured_spins = pattern['giftSpins'] if initial_spins is None else _int(initial_spins, pattern['giftSpins'], 1, 20000)
+    budget = configured_spins
     max_spins = min(20000, max(budget, budget * 20, budget + 20))
     mode = 'normal'
     spins = []
@@ -265,8 +305,10 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
         if hit:
             win = _weighted_payout(pattern)
             symbol = pattern['bigSymbolText']
+            pre_reels, pre_reel_images = _miss_reels(pattern)
             spins.append({'kind': 'hit', 'roleName': '大当たり', 'reels': [symbol] * 3,
                           'reelImages': [pattern['bigSymbolImageUrl']] * 3,
+                          'preReels': pre_reels, 'preReelImages': pre_reel_images,
                           'symbolImageUrl': pattern['bigSymbolImageUrl'], 'win': win,
                           'addedSpins': 0, 'mode': mode})
             if pattern['machineType'] == 'at' and pattern['atEnabled']:
@@ -314,16 +356,16 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False):
         'id': int(now * 1000), 'type': 'slot', 'active': True,
         'patternId': pattern['id'], 'patternName': pattern['name'],
         'senderName': str(sender_name or 'ゲスト')[:80], 'avatarUrl': str(avatar_url or '')[:2000],
-        'giftName': str(gift_name or '')[:120], 'initialSpins': pattern['giftSpins'],
+        'giftName': str(gift_name or '')[:120], 'initialSpins': configured_spins,
         'spins': spins, 'appliedSpins': 0, 'total': 0, 'choice': '',
         'choiceReady': False, 'winApplied': False, 'sign': pattern['sign'],
         'pattern': copy.deepcopy(pattern), 'isTest': bool(is_test), 'createdAt': now,
     }
 
 
-def run_slot_draw(state, pattern, gift_name='', sender_name='', avatar_url='', is_test=False):
+def run_slot_draw(state, pattern, gift_name='', sender_name='', avatar_url='', is_test=False, initial_spins=None):
     machine = state['slotMachine']
-    event = build_event(pattern, gift_name, sender_name, avatar_url, is_test)
+    event = build_event(pattern, gift_name, sender_name, avatar_url, is_test, initial_spins)
     if machine.get('event', {}).get('active'):
         machine.setdefault('queue', []).append(event)
     else:
@@ -339,6 +381,20 @@ def apply_spin(state, event_id, spin_index):
     if index != _int(event.get('appliedSpins')) or not 0 <= index < len(event.get('spins') or []):
         return False
     spin = event['spins'][index]
+    if not event.get('isTest'):
+        machine = state['slotMachine']
+        date_key = datetime.now(JST).date().isoformat()
+        day = machine.setdefault('statsByDate', {}).setdefault(date_key, {})
+        pattern_id = str(event.get('patternId') or '')[:80]
+        stats = day.setdefault(pattern_id, {'patternName': str(event.get('patternName') or '')[:60],
+                                            'currentSpins': 0, 'hitCount': 0, 'totalSpins': 0})
+        stats['patternName'] = str(event.get('patternName') or stats.get('patternName') or '')[:60]
+        stats['totalSpins'] = min(999999999, _int(stats.get('totalSpins')) + 1)
+        stats['currentSpins'] = min(999999999, _int(stats.get('currentSpins')) + 1)
+        if spin.get('kind') == 'hit':
+            stats['hitCount'] = min(999999999, _int(stats.get('hitCount')) + 1)
+            stats['currentSpins'] = 0
+        machine['statsDate'] = date_key
     event['total'] = min(999999999, _int(event.get('total')) + _int(spin.get('win')))
     event['appliedSpins'] = index + 1
     if event['appliedSpins'] >= len(event['spins']):

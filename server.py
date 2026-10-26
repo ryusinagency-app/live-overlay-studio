@@ -24,7 +24,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.59'
+APP_VERSION = '0.66.60'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1350,7 +1350,9 @@ def dispatch_hotkey_action(action):
         elif action['type'] == 'slotChoice':
             event=data['slotMachine']['event']
             if event.get('active'):
-                choose_slot_sign(data,event.get('id'),action['choice'])
+                event_id=event.get('id')
+                if choose_slot_sign(data,event_id,action['choice']):
+                    complete_slot_event(data,event_id)
         elif action['type'] == 'smokingTimer':
             timer=data['smokingTimer']; now=time.time(); remain=max(0,int((timer.get('endAt') or 0)-now)) if timer.get('endAt') else max(0,int(timer.get('remainingSeconds') or 0)); next_value=max(0,remain+int(action['delta']))
             timer['remainingSeconds']=next_value; timer['endAt']=now+next_value if next_value else 0
@@ -1902,7 +1904,10 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and matches(p['giftName'])),None)
         other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
         pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
-        slot_pattern=next((p for p in data['slotMachine']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
+        slot_match=next(((p, gift_binding) for p in data['slotMachine']['patterns'] if p['enabled']
+                         for gift_binding in p.get('giftRules', [])
+                         if gift_binding.get('giftName') and matches(gift_binding.get('giftName'))),None)
+        slot_pattern=slot_match[0] if slot_match else None
         media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and matches(r['giftName']) and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
         gift_rule=next((x for x in win['giftRules'] if x['giftName'] and matches(x['giftName'])),None)
         # WIN adjustment gifts only change the counter, even if the same gift
@@ -1922,9 +1927,11 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             run_pachinko_draw(data,pachinko_pattern,sender_name,avatar_url=avatar_url)
             matched=True
         if slot_pattern:
-            # A gift maps to its configured number of spins. TikTok combo count
-            # intentionally does not multiply or merge the spin allocation.
-            run_slot_draw(data,slot_pattern,gift_name,sender_name,avatar_url=avatar_url)
+            # TikTok sends the final repeat count for combo gifts.  Multiply the
+            # selected gift's allocation so a 50-spin gift sent three times is
+            # queued as 150 spins instead of being mistaken for one gift.
+            spins=min(20000,max(1,int(slot_match[1].get('spins') or 1))*count)
+            run_slot_draw(data,slot_pattern,gift_name,sender_name,avatar_url=avatar_url,initial_spins=spins)
             matched=True
         if media_rule:
             queue_gift_media_event(data,media_rule,gift_name,sender_name,count)
@@ -2616,6 +2623,8 @@ class Handler(SimpleHTTPRequestHandler):
                         data['slotMachine']['event']=copy.deepcopy(live_slot.get('event',{}))
                         data['slotMachine']['queue']=copy.deepcopy(live_slot.get('queue',[]))
                         data['slotMachine']['history']=copy.deepcopy(live_slot.get('history',[]))
+                        data['slotMachine']['statsByDate']=copy.deepcopy(live_slot.get('statsByDate',{}))
+                        data['slotMachine']['statsDate']=str(live_slot.get('statsDate') or '')
                     if isinstance(data.get('giftMedia'),dict):
                         live_media=current.get('giftMedia',{})
                         data['giftMedia']['event']=copy.deepcopy(live_media.get('event',{}))
@@ -2941,8 +2950,10 @@ class Handler(SimpleHTTPRequestHandler):
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
                     state,_=normalize_state(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
-                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
-                result={'ok':ok}
+                    if ok:
+                        complete_slot_event(state,safe_int(data.get('eventId')))
+                        STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                result={'ok':ok,'completed':ok}
             elif self.path == '/api/slot/complete':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))

@@ -719,7 +719,7 @@ let selectedWinProfileId='';
 const $=id=>document.getElementById(id);
 async function get(){try{const r=await fetch('/api/state',{cache:'no-store'});
 return await r.json()}catch(e){return null}}
-function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift,.pGift,.otherPatternGift,.gmGiftName')].map(input=>giftKey(input.value)).filter(Boolean))}
+function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift,.pGift,.otherPatternGift,.gmGiftName,.slotGiftName')].map(input=>giftKey(input.value)).filter(Boolean))}
 function giftKey(value){return String(value||'').normalize('NFKC').replace(/\s/g,'').toLocaleLowerCase()}
 function renderGiftPicker(){const grid=$('giftPickerGrid'),query=giftKey($('giftPickerSearch').value),used=usedGiftNames(),current=giftKey(giftPickerTarget?.value),hide=$('giftPickerHideUsed').checked;
 grid.innerHTML='';
