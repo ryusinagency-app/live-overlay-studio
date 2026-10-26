@@ -440,14 +440,47 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     if pattern.get('machineType') == 'at' and pattern.get('upperAtEnabled'):
         entry_grants.append(_int(pattern.get('upperAtSpins'), 50, 1, 10000))
     largest_entry_grant = max(entry_grants)
+    at_continuation_allowance = (largest_entry_grant * 100
+                                 if pattern.get('machineType') == 'at' and pattern.get('atEnabled')
+                                 else largest_entry_grant)
     max_spins = min(20000, max(budget, budget * 20, budget + 20,
-                               budget + largest_entry_grant))
+                               budget + at_continuation_allowance))
     mode = 'normal'
+    phase_remaining = 0
     spins = []
     safety = 0
+
+    def finish_at_spin(spin, spin_mode):
+        """Run AT continuation once, after the current AT block is exhausted."""
+        nonlocal budget, mode, phase_remaining
+        if spin_mode not in ('at', 'upper'):
+            return
+        # Replay/small-role additions extend the current block before its end
+        # check, just as they extend the visible remaining-spin counter.
+        phase_remaining += max(0, _int(spin.get('addedSpins'), 0))
+        phase_remaining = max(0, phase_remaining - 1)
+        if phase_remaining > 0:
+            return
+        continuation_rate = (pattern['upperAtContinuationRate']
+                             if spin_mode == 'upper' else pattern['atContinuationRate'])
+        continued = random.random() * 100 < continuation_rate
+        spin['atContinuationResult'] = 'success' if continued else 'failure'
+        if continued:
+            requested = pattern['upperAtSpins'] if spin_mode == 'upper' else pattern['atSpins']
+            added = min(requested, max(0, max_spins - len(spins) - budget))
+            budget += added
+            spin['addedSpins'] = max(0, _int(spin.get('addedSpins'), 0)) + added
+            phase_remaining = added
+            if added <= 0:
+                spin['atContinuationResult'] = 'failure'
+                mode = 'normal'
+        else:
+            mode = 'normal'
+
     while budget > 0 and safety < max_spins:
         safety += 1
         budget -= 1
+        spin_mode = mode
         if (mode == 'normal' and pattern['machineType'] == 'at' and pattern.get('upperAtEnabled')
                 and pattern.get('freezeEnabled') and pattern.get('freezeDirectEnabled')
                 and random.randrange(pattern.get('freezeDenominator', 8192)) == 0):
@@ -465,6 +498,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                           'resultSeconds': pattern.get('resultSeconds', 1.2),
                           'mode': 'normal', 'upperEntered': True})
             mode = 'upper'
+            phase_remaining = added
             continue
         if (mode == 'normal' and pattern['machineType'] == 'at' and pattern.get('atEnabled')
                 and pattern.get('czEnabled') and random.random() * 100 < pattern.get('czEntryRate', 0)):
@@ -478,6 +512,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                     added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
                     mode = 'at'
+                    phase_remaining = added
                 spins.append({'kind': 'cz', 'roleName': cz['name'], 'czId': cz['id'],
                               'expectation': cz['expectation'], 'czSuccess': success,
                               'reels': reel_text, 'reelImages': reel_images,
@@ -518,16 +553,9 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                     added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
                     spins[-1]['addedSpins'] = added
+                    phase_remaining = added
                 else:
-                    continuation_rate = (pattern['upperAtContinuationRate']
-                                         if mode == 'upper' else pattern['atContinuationRate'])
-                    continued = random.random() * 100 < continuation_rate
-                    spins[-1]['atContinuationResult'] = 'success' if continued else 'failure'
-                    if continued:
-                        requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
-                        added = min(requested, max(0, max_spins - len(spins) - budget))
-                        budget += added
-                        spins[-1]['addedSpins'] = added
+                    finish_at_spin(spins[-1], spin_mode)
             continue
         roles = [x for x in pattern['smallRoles'] if x['enabled'] and x['probability'] > 0]
         pick = random.random() * 100
@@ -558,6 +586,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                               'resultSeconds': pattern.get('resultSeconds', 1.2),
                               'mode': 'normal', 'upperEntered': True})
                 mode = 'upper'
+                phase_remaining = added
                 continue
             requested = chosen['addSpins'] if chosen['addSpinsEnabled'] else 0
             added = min(requested, max(0, max_spins - len(spins) - 1 - budget))
@@ -572,10 +601,12 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                           'effectSeconds': chosen['effectSeconds'],
                           'win': chosen['win'] if chosen['addWinEnabled'] else 0,
                           'addedSpins': added, 'mode': mode})
+            finish_at_spin(spins[-1], spin_mode)
         else:
             reel_text,reel_images=_miss_reels(pattern)
             spins.append({'kind': 'miss', 'roleName': 'はずれ', 'reels': reel_text,
                           'reelImages':reel_images, 'symbolImageUrl': '', 'win': 0, 'addedSpins': 0, 'mode': mode})
+            finish_at_spin(spins[-1], spin_mode)
     now = time.time()
     return {
         'id': int(now * 1000), 'type': 'slot', 'active': True,
