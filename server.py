@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.61'
+APP_VERSION = '0.66.62'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1215,6 +1215,17 @@ def normalize_state(data):
     if merged.get('smokingGacha') != data.get('smokingGacha', DEFAULT['smokingGacha']):
         changed = True
     merged['slotMachine'] = normalize_slot_machine(merged.get('slotMachine'), SERVER_STARTED_AT)
+    # Gift names can differ by TikTok display language.  Bind slot rules to
+    # TikTok's stable gift ID whenever the saved catalog can resolve the name.
+    # Existing name-only settings are upgraded automatically.
+    slot_catalog = merged.get('giftCatalog', [])
+    for slot_pattern in merged['slotMachine'].get('patterns', []):
+        for slot_rule in slot_pattern.get('giftRules', []):
+            if slot_rule.get('giftId'):
+                continue
+            catalog_gift = gift_catalog_item(slot_rule.get('giftName'), slot_catalog)
+            if catalog_gift and catalog_gift.get('id'):
+                slot_rule['giftId'] = str(catalog_gift['id'])[:120]
     if merged.get('slotMachine') != data.get('slotMachine', DEFAULT['slotMachine']):
         changed = True
     if merged.get('gaugeColor') != data.get('gaugeColor'):
@@ -1985,9 +1996,12 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
         smoke_pattern=next((p for p in data['smokingGacha']['patterns'] if p['giftName'] and matches(p['giftName'])),None)
         other_pattern=next((p for p in data['otherGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
         pachinko_pattern=next((p for p in data['pachinkoGacha']['patterns'] if p['enabled'] and p['giftName'] and matches(p['giftName'])),None)
+        incoming_gift_id=str((item_info or {}).get('id') or '')
         slot_match=next(((p, gift_binding) for p in data['slotMachine']['patterns'] if p['enabled']
                          for gift_binding in p.get('giftRules', [])
-                         if gift_binding.get('giftName') and matches(gift_binding.get('giftName'))),None)
+                         if ((gift_binding.get('giftId') and incoming_gift_id
+                              and str(gift_binding.get('giftId')) == incoming_gift_id)
+                             or (gift_binding.get('giftName') and matches(gift_binding.get('giftName'))))),None)
         slot_pattern=slot_match[0] if slot_match else None
         media_rule=next((r for r in data['giftMedia']['rules'] if r.get('enabled',True) and r['giftName'] and matches(r['giftName']) and (r.get('imageUrl') or r.get('videoUrl') or r.get('audioUrl'))),None)
         gift_rule=next((x for x in win['giftRules'] if x['giftName'] and matches(x['giftName'])),None)

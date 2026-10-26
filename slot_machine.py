@@ -138,6 +138,7 @@ def normalize_pattern(raw, index=1):
             continue
         gift_rules.append({
             'id': str(rule.get('id') or f'slot-gift-{gift_index + 1}')[:80],
+            'giftId': str(rule.get('giftId') or '')[:120],
             'giftName': str(rule.get('giftName') or '').strip()[:120],
             'spins': _int(rule.get('spins', rule.get('giftSpins')), 1, 1, 10000),
         })
