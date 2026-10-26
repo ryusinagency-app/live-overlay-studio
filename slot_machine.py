@@ -102,7 +102,8 @@ def default_pattern(index=1):
              'animationUrl': '', 'audioUrl': '', 'audioVolume': 75, 'effectSeconds': 1.2},
         ],
         'atEnabled': False, 'atSpins': 30, 'atHitDenominator': 20,
-        'atContinuationRate': 70, 'upperAtEnabled': False, 'upperAtChance': 10,
+        'atContinuationRate': 70, 'upperAtContinuationRate': 70,
+        'upperAtEnabled': False, 'upperAtChance': 10,
         'upperAtSpins': 50, 'upperAtHitDenominator': 10,
         'atSpinSeconds': 1.8, 'atStopInterval': .35, 'atResultSeconds': 1.2,
         'atEffectSeconds': 3, 'upperSpinSeconds': 1.8,
@@ -112,13 +113,25 @@ def default_pattern(index=1):
             {'id': 'cz-1', 'name': 'CZ 期待度1', 'enabled': True, 'expectation': 1,
              'weight': 20, 'atEntryRate': 20, 'spinSeconds': 1.8,
              'stopInterval': .35, 'resultSeconds': 1.2, 'seconds': 3, 'animationUrl': '',
-             'audioUrl': '', 'audioVolume': 75, 'videoVolume': 70},
+             'audioUrl': '', 'audioVolume': 75, 'videoVolume': 70,
+             'entryEnabled': False, 'entryUrl': '', 'entryAudioUrl': '', 'entrySeconds': 3,
+             'entryAudioVolume': 80, 'entryVideoVolume': 70,
+             'successEnabled': False, 'successUrl': '', 'successAudioUrl': '', 'successSeconds': 3,
+             'successAudioVolume': 80, 'successVideoVolume': 70,
+             'failureEnabled': False, 'failureUrl': '', 'failureAudioUrl': '', 'failureSeconds': 3,
+             'failureAudioVolume': 80, 'failureVideoVolume': 70},
         ],
         'cabinetUrl': '', 'monitorUrl': '', 'atMonitorUrl': '', 'upperMonitorUrl': '',
         'atAudioUrl': '', 'upperAudioUrl': '', 'atAudioVolume': 70, 'upperAudioVolume': 70,
         'upperEntryUrl': '', 'upperEntryAudioUrl': '', 'upperEntrySeconds': 3,
         'atMonitorVideoVolume': 70, 'upperMonitorVideoVolume': 70,
         'upperEntryVideoVolume': 70, 'upperEntryAudioVolume': 80,
+        'atContinueSuccessEnabled': False, 'atContinueSuccessUrl': '',
+        'atContinueSuccessAudioUrl': '', 'atContinueSuccessSeconds': 3,
+        'atContinueSuccessVideoVolume': 70, 'atContinueSuccessAudioVolume': 80,
+        'atContinueFailureEnabled': False, 'atContinueFailureUrl': '',
+        'atContinueFailureAudioUrl': '', 'atContinueFailureSeconds': 3,
+        'atContinueFailureVideoVolume': 70, 'atContinueFailureAudioVolume': 80,
         'freezeEnabled': False, 'freezeDirectEnabled': True,
         'freezeAfterMode': 'upper-direct',
         'freezeDenominator': 8192, 'freezeSeconds': 6,
@@ -233,7 +246,8 @@ def normalize_pattern(raw, index=1):
                 role['enabled'] = False
     for key, default, low, high in (
         ('atSpins', 30, 1, 10000), ('atHitDenominator', 20, 1, 1000000),
-        ('atContinuationRate', 70, 0, 100), ('upperAtChance', 10, 0, 100),
+        ('atContinuationRate', 70, 0, 100), ('upperAtContinuationRate', 70, 0, 100),
+        ('upperAtChance', 10, 0, 100),
         ('upperAtSpins', 50, 1, 10000), ('upperAtHitDenominator', 10, 1, 1000000),
         ('smallRoleAudioVolume', 75, 0, 100), ('gogoAudioVolume', 80, 0, 100),
         ('startAudioVolume', 65, 0, 100), ('spinAudioVolume', 55, 0, 100), ('stopAudioVolume', 65, 0, 100),
@@ -286,13 +300,26 @@ def normalize_pattern(raw, index=1):
             'audioUrl': _media(cz.get('audioUrl')),
             'audioVolume': _int(cz.get('audioVolume'), 75, 0, 100),
             'videoVolume': _int(cz.get('videoVolume'), 70, 0, 100),
+            **{key + 'Enabled': bool(cz.get(key + 'Enabled', False)) for key in ('entry', 'success', 'failure')},
+            **{key + 'Url': _media(cz.get(key + 'Url')) for key in ('entry', 'success', 'failure')},
+            **{key + 'AudioUrl': _media(cz.get(key + 'AudioUrl')) for key in ('entry', 'success', 'failure')},
+            **{key + 'Seconds': _float(cz.get(key + 'Seconds'), 3, .1, 60) for key in ('entry', 'success', 'failure')},
+            **{key + 'AudioVolume': _int(cz.get(key + 'AudioVolume'), 80, 0, 100) for key in ('entry', 'success', 'failure')},
+            **{key + 'VideoVolume': _int(cz.get(key + 'VideoVolume'), 70, 0, 100) for key in ('entry', 'success', 'failure')},
         })
     result['czPatterns'] = cz_patterns or copy.deepcopy(base['czPatterns'])
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
     result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
+    for key in ('atContinueSuccess', 'atContinueFailure'):
+        result[key + 'Enabled'] = bool(raw.get(key + 'Enabled', False))
+        result[key + 'Seconds'] = _float(raw.get(key + 'Seconds'), 3, .1, 60)
+        result[key + 'VideoVolume'] = _int(raw.get(key + 'VideoVolume'), 70, 0, 100)
+        result[key + 'AudioVolume'] = _int(raw.get(key + 'AudioVolume'), 80, 0, 100)
     for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'atMonitorUrl',
                 'upperMonitorUrl', 'atAudioUrl', 'upperAudioUrl',
                 'upperEntryUrl', 'upperEntryAudioUrl',
+                'atContinueSuccessUrl', 'atContinueSuccessAudioUrl',
+                'atContinueFailureUrl', 'atContinueFailureAudioUrl',
                 'freezeUrl', 'freezeAudioUrl', 'gogoUrl',
                 'gogoAudioUrl', 'startAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
                 'stop1AudioUrl', 'stop2AudioUrl', 'stop3AudioUrl',
@@ -438,7 +465,14 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                               'audioVolume': cz['audioVolume'], 'videoVolume': cz['videoVolume'],
                               'spinSeconds': cz['spinSeconds'], 'stopInterval': cz['stopInterval'],
                               'resultSeconds': cz['resultSeconds'],
-                              'effectSeconds': cz['seconds'], 'mode': 'normal'})
+                              'effectSeconds': cz['seconds'], 'mode': 'normal',
+                              **{key: cz.get(key) for key in (
+                                  'entryEnabled', 'entryUrl', 'entryAudioUrl', 'entrySeconds',
+                                  'entryAudioVolume', 'entryVideoVolume',
+                                  'successEnabled', 'successUrl', 'successAudioUrl', 'successSeconds',
+                                  'successAudioVolume', 'successVideoVolume',
+                                  'failureEnabled', 'failureUrl', 'failureAudioUrl', 'failureSeconds',
+                                  'failureAudioVolume', 'failureVideoVolume')}})
                 continue
         denominator = pattern['hitDenominator']
         if mode == 'at':
@@ -463,11 +497,16 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                     added = min(requested, max(0, max_spins - len(spins) - budget))
                     budget += added
                     spins[-1]['addedSpins'] = added
-                elif random.random() * 100 < pattern['atContinuationRate']:
-                    requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
-                    added = min(requested, max(0, max_spins - len(spins) - budget))
-                    budget += added
-                    spins[-1]['addedSpins'] = added
+                else:
+                    continuation_rate = (pattern['upperAtContinuationRate']
+                                         if mode == 'upper' else pattern['atContinuationRate'])
+                    continued = random.random() * 100 < continuation_rate
+                    spins[-1]['atContinuationResult'] = 'success' if continued else 'failure'
+                    if continued:
+                        requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                        added = min(requested, max(0, max_spins - len(spins) - budget))
+                        budget += added
+                        spins[-1]['addedSpins'] = added
             continue
         roles = [x for x in pattern['smallRoles'] if x['enabled'] and x['probability'] > 0]
         pick = random.random() * 100
