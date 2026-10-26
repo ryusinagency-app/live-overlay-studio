@@ -78,6 +78,8 @@ def default_pattern(index=1):
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
         'bigEffectEnabled': True, 'bigEffectMode': 'visual-audio', 'bigEffectSeconds': 3.0,
+        'upperBigEffectEnabled': False, 'upperBigEffectMode': 'visual-audio',
+        'upperBigEffectSeconds': 3.0,
         'monitorTextEnabled': True, 'spinText': '回転中', 'bonusText': 'BONUS!',
         'missText': 'はずれ', 'winResultText': '+{win} WIN',
         'monitorTextColor': '#ffffff', 'monitorTextSize': 70,
@@ -141,14 +143,17 @@ def default_pattern(index=1):
         'startAudioUrl': '', 'spinAudioUrl': '', 'stopAudioUrl': '',
         'stop1AudioUrl': '', 'stop2AudioUrl': '', 'stop3AudioUrl': '',
         'bigEffectUrl': '', 'bigEffectAudioUrl': '', 'smallRoleAudioVolume': 75,
+        'upperBigEffectUrl': '', 'upperBigEffectAudioUrl': '',
         'gogoAudioVolume': 80, 'startAudioVolume': 65, 'spinAudioVolume': 55, 'stopAudioVolume': 65,
         'stop1AudioVolume': 65, 'stop2AudioVolume': 65, 'stop3AudioVolume': 65,
         'bigEffectAudioVolume': 80, 'bigEffectVideoVolume': 70,
+        'upperBigEffectAudioVolume': 80, 'upperBigEffectVideoVolume': 70,
         'videoVolume': 70, 'background': '#08090d', 'accent': '#ffcf59',
         'textColor': '#ffffff', 'reelColor': '#f7f2df',
         'cabinetSize': 100, 'monitorSize': 100, 'gogoSize': 100,
         'gogoX': 50, 'gogoY': 76, 'gogoWidth': 240, 'gogoHeight': 120,
         'symbolSize': 88, 'bigEffectSize': 100, 'defaultGogoEnabled': True,
+        'upperBigEffectSize': 100,
     }
 
 
@@ -191,6 +196,7 @@ def normalize_pattern(raw, index=1):
         result[key] = _float(raw.get(key), default, low, high)
     result['bigSymbolText'] = str(raw.get('bigSymbolText') or '7')[:30]
     result['bigEffectMode'] = 'audio-only' if raw.get('bigEffectMode') == 'audio-only' else 'visual-audio'
+    result['upperBigEffectMode'] = 'audio-only' if raw.get('upperBigEffectMode') == 'audio-only' else 'visual-audio'
     result['monitorTextEnabled'] = raw.get('monitorTextEnabled', True) is not False
     for key, default in (('spinText', '回転中'), ('bonusText', 'BONUS!'),
                          ('missText', 'はずれ'), ('winResultText', '+{win} WIN')):
@@ -254,6 +260,8 @@ def normalize_pattern(raw, index=1):
         ('stop1AudioVolume', 65, 0, 100), ('stop2AudioVolume', 65, 0, 100),
         ('stop3AudioVolume', 65, 0, 100), ('bigEffectAudioVolume', 80, 0, 100),
         ('bigEffectVideoVolume', 70, 0, 100),
+        ('upperBigEffectAudioVolume', 80, 0, 100),
+        ('upperBigEffectVideoVolume', 70, 0, 100),
         ('atMonitorVideoVolume', 70, 0, 100), ('upperMonitorVideoVolume', 70, 0, 100),
         ('upperEntryVideoVolume', 70, 0, 100), ('upperEntryAudioVolume', 80, 0, 100),
         ('atAudioVolume', 70, 0, 100), ('upperAudioVolume', 70, 0, 100),
@@ -265,9 +273,11 @@ def normalize_pattern(raw, index=1):
         ('gogoX', 50, 0, 100), ('gogoY', 76, 0, 100),
         ('gogoWidth', 240, 20, 1920), ('gogoHeight', 120, 20, 1080),
         ('bigEffectSize', 100, 10, 200),
+        ('upperBigEffectSize', 100, 10, 200),
     ):
         result[key] = _int(raw.get(key), default, low, high)
     result['upperEntrySeconds'] = _float(raw.get('upperEntrySeconds'), 3, 0, 60)
+    result['upperBigEffectSeconds'] = _float(raw.get('upperBigEffectSeconds'), result['upperEffectSeconds'], .1, 60)
     result['freezeSeconds'] = _float(raw.get('freezeSeconds'), 6, 0, 120)
     for prefix in ('at', 'upper'):
         result[prefix + 'SpinSeconds'] = _float(raw.get(prefix + 'SpinSeconds'), result['spinSeconds'], .2, 30)
@@ -310,6 +320,7 @@ def normalize_pattern(raw, index=1):
     result['czPatterns'] = cz_patterns or copy.deepcopy(base['czPatterns'])
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
     result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
+    result['upperBigEffectEnabled'] = bool(raw.get('upperBigEffectEnabled', False))
     for key in ('atContinueSuccess', 'atContinueFailure'):
         result[key + 'Enabled'] = bool(raw.get(key + 'Enabled', False))
         result[key + 'Seconds'] = _float(raw.get(key + 'Seconds'), 3, .1, 60)
@@ -323,7 +334,8 @@ def normalize_pattern(raw, index=1):
                 'freezeUrl', 'freezeAudioUrl', 'gogoUrl',
                 'gogoAudioUrl', 'startAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
                 'stop1AudioUrl', 'stop2AudioUrl', 'stop3AudioUrl',
-                'bigEffectUrl', 'bigEffectAudioUrl'):
+                'bigEffectUrl', 'bigEffectAudioUrl',
+                'upperBigEffectUrl', 'upperBigEffectAudioUrl'):
         result[key] = _media(raw.get(key))
     for key, default in (('background', '#08090d'), ('accent', '#ffcf59'),
                          ('textColor', '#ffffff'), ('reelColor', '#f7f2df'),
