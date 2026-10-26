@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.63'
+
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1734,7 +1734,7 @@ def complete_gift_media_event(event_id):
         return True
 
 def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test=False, avatar_url=''):
-    gacha=data['gacha']; win=data['winCounter']; rounds=[]; total=win['currentWin']
+    gacha=data['gacha']; win=data['winCounter']; rounds=[]; total=win['currentWin']APP_VERSION = '0.66.64'
     mode=pattern.get('mode',gacha['mode']); rate=max(0,min(100,int(pattern.get('continuationRate',gacha['continuationRate']))))
     low,high=pattern['minWin'],pattern['maxWin']; sign=pattern.get('winSign','both')
     magnitude_low,magnitude_high=sorted((abs(low),abs(high)))
