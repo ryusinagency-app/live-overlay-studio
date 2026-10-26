@@ -112,7 +112,30 @@ def default_pattern(index=1):
             {'id': 'cz-1', 'name': 'CZ 期待度1', 'enabled': True, 'expectation': 1,
              'weight': 20, 'atEntryRate': 20, 'spinSeconds': 1.8,
              'stopInterval': .35, 'resultSeconds': 1.2, 'seconds': 3, 'animationUrl': '',
-             'audioUrl': '', 'audioVolume': 75, 'videoVolume': 70},
+             'audioUrl': '', 'audioVolume': 75, 'videoVolume': 70,
+             'entryEnabled': False, 'entryUrl': '', 'entryAudioUrl': '', 'entrySeconds': 3,
+             'entryAudioVolume': 80, 'entryVideoVolume': 70,
+             'successEnabled': False, 'successUrl': '', 'successAudioUrl': '', 'successSeconds': 3,
+             'successAudioVolume': 80, 'successVideoVolume': 70,
+             'failureEnabled': False, 'failureUrl': '', 'failureAudioUrl': '', 'failureSeconds': 3,
+             'failureAudioVolume': 80, 'failureVideoVolume': 70},result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
+    for key in ('atContinueSuccess', 'atContinueFailure'):
+        result[key + 'Enabled'] = bool(raw.get(key + 'Enabled', False))
+        result[key + 'Seconds'] = _float(raw.get(key + 'Seconds'), 3, .1, 60)
+        result[key + 'VideoVolume'] = _int(raw.get(key + 'VideoVolume'), 70, 0, 100)
+        result[key + 'AudioVolume'] = _int(raw.get(key + 'AudioVolume'), 80, 0, 100)
+            **{key + 'Enabled': bool(cz.get(key + 'Enabled', False)) for key in ('entry', 'success', 'failure')},
+            **{key + 'Url': _media(cz.get(key + 'Url')) for key in ('entry', 'success', 'failure')},
+            **{key + 'AudioUrl': _media(cz.get(key + 'AudioUrl')) for key in ('entry', 'success', 'failure')},
+            **{key + 'Seconds': _float(cz.get(key + 'Seconds'), 3, .1, 60) for key in ('entry', 'success', 'failure')},
+            **{key + 'AudioVolume': _int(cz.get(key + 'AudioVolume'), 80, 0, 100) for key in ('entry', 'success', 'failure')},
+            **{key + 'VideoVolume': _int(cz.get(key + 'VideoVolume'), 70, 0, 100) for key in ('entry', 'success', 'failure')},
+        'atContinueSuccessEnabled': False, 'atContinueSuccessUrl': '',
+        'atContinueSuccessAudioUrl': '', 'atContinueSuccessSeconds': 3,
+        'atContinueSuccessVideoVolume': 70, 'atContinueSuccessAudioVolume': 80,
+        'atContinueFailureEnabled': False, 'atContinueFailureUrl': '',
+        'atContinueFailureAudioUrl': '', 'atContinueFailureSeconds': 3,
+        'atContinueFailureVideoVolume': 70, 'atContinueFailureAudioVolume': 80,
         ],
         'cabinetUrl': '', 'monitorUrl': '', 'atMonitorUrl': '', 'upperMonitorUrl': '',
         'atAudioUrl': '', 'upperAudioUrl': '', 'atAudioVolume': 70, 'upperAudioVolume': 70,
@@ -289,9 +312,25 @@ def normalize_pattern(raw, index=1):
         })
     result['czPatterns'] = cz_patterns or copy.deepcopy(base['czPatterns'])
     result['defaultGogoEnabled'] = raw.get('defaultGogoEnabled', True) is not False
-    result['bigEffectEnabled'] = raw.get('bigEffectEnabled', True) is not False
+    'effectSeconds': cz['seconds'], 'mode': 'normal',
+                              **{key: cz.get(key) for key in (
+                                  'entryEnabled', 'entryUrl', 'entryAudioUrl', 'entrySeconds',
+                                  'entryAudioVolume', 'entryVideoVolume',
+                                  'successEnabled', 'successUrl', 'successAudioUrl', 'successSeconds',
+                                  'successAudioVolume', 'successVideoVolume',
+                                  'failureEnabled', 'failureUrl', 'failureAudioUrl', 'failureSeconds',
+                                  'failureAudioVolume', 'failureVideoVolume')}})
+                'atContinueSuccessUrl', 'atContinueSuccessAudioUrl',
+                'atContinueFailureUrl', 'atContinueFailureAudioUrl',
     for key in ('bigSymbolImageUrl', 'cabinetUrl', 'monitorUrl', 'atMonitorUrl',
-                'upperMonitorUrl', 'atAudioUrl', 'upperAudioUrl',
+                'upperMonitorUrl', 'atAudioUrl', 'upperAudioUrl',else:
+                    continued = random.random() * 100 < pattern['atContinuationRate']
+                    spins[-1]['atContinuationResult'] = 'success' if continued else 'failure'
+                    if continued:
+                        requested = pattern['upperAtSpins'] if mode == 'upper' else pattern['atSpins']
+                        added = min(requested, max(0, max_spins - len(spins) - budget))
+                        budget += added
+                        spins[-1]['addedSpins'] = added
                 'upperEntryUrl', 'upperEntryAudioUrl',
                 'freezeUrl', 'freezeAudioUrl', 'gogoUrl',
                 'gogoAudioUrl', 'startAudioUrl', 'spinAudioUrl', 'stopAudioUrl',
