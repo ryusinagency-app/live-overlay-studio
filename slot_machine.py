@@ -598,16 +598,26 @@ def run_slot_draw(state, pattern, gift_name='', sender_name='', avatar_url='', i
     return event
 
 
+def _event_location(machine, event_id):
+    event = machine.get('event', {})
+    if event.get('active') and _int(event.get('id')) == _int(event_id):
+        return event, None
+    for index, queued in enumerate(machine.get('queue') or []):
+        if queued.get('active') and _int(queued.get('id')) == _int(event_id):
+            return queued, index
+    return None, None
+
+
 def apply_spin(state, event_id, spin_index):
-    event = state['slotMachine']['event']
-    if not event.get('active') or _int(event.get('id')) != _int(event_id):
+    machine = state['slotMachine']
+    event, _ = _event_location(machine, event_id)
+    if not event:
         return False
     index = _int(spin_index, -1)
     if index != _int(event.get('appliedSpins')) or not 0 <= index < len(event.get('spins') or []):
         return False
     spin = event['spins'][index]
     if not event.get('isTest'):
-        machine = state['slotMachine']
         date_key = datetime.now(JST).date().isoformat()
         day = machine.setdefault('statsByDate', {}).setdefault(date_key, {})
         pattern_id = str(event.get('patternId') or '')[:80]
@@ -637,9 +647,9 @@ def apply_spin(state, event_id, spin_index):
 
 
 def choose_sign(state, event_id, choice):
-    event = state['slotMachine']['event']
-    if (not event.get('active') or _int(event.get('id')) != _int(event_id)
-            or not event.get('choiceReady') or event.get('choice') or choice not in ('plus', 'minus')):
+    event, _ = _event_location(state['slotMachine'], event_id)
+    if (not event or not event.get('choiceReady') or event.get('choice')
+            or choice not in ('plus', 'minus')):
         return False
     event['choice'] = choice
     event['choiceReady'] = False
@@ -652,8 +662,8 @@ def choose_sign(state, event_id, choice):
 
 def complete_event(state, event_id):
     machine = state['slotMachine']
-    event = machine['event']
-    if not event.get('active') or _int(event.get('id')) != _int(event_id):
+    event, queue_index = _event_location(machine, event_id)
+    if not event:
         return False
     if _int(event.get('appliedSpins')) < len(event.get('spins') or []) or event.get('choiceReady'):
         return False
@@ -665,7 +675,9 @@ def complete_event(state, event_id):
             'sign': event.get('choice') or event.get('sign', 'plus'), 'createdAt': time.time(),
         })
         machine['history'] = machine['history'][:200]
-    if machine.get('queue'):
+    if queue_index is not None:
+        machine.setdefault('queue', []).pop(queue_index)
+    elif machine.get('queue'):
         next_event = machine.setdefault('queue', []).pop(0)
         # Leave a visible blank gap between queued players.  Without it the
         # previous result and the next spin are one atomic snapshot, which

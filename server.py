@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.69'
+APP_VERSION = '0.66.70'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1284,7 +1284,7 @@ def read_cached_overlay_source():
             cache['at'] = time.monotonic()
         return cache['state']
 
-def read_overlay_state(kind):
+def read_overlay_state(kind, pattern_id=''):
     """Small, consistent playback snapshots; never expose profiles/history to renderers."""
     state = read_cached_overlay_source()
     common = ('fontFamily', 'accent', 'panelColor', 'panelOpacity', 'textColor', 'gaugeColor',
@@ -1327,6 +1327,8 @@ def read_overlay_state(kind):
         result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
     elif kind == 'slot':
         machine=state['slotMachine'];event=machine.get('event',{})
+        if pattern_id and str(event.get('patternId') or '') != str(pattern_id):
+            event=next((item for item in machine.get('queue',[]) if item.get('active') and str(item.get('patternId') or '')==str(pattern_id)),copy.deepcopy(SLOT_EMPTY_EVENT))
         pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
         result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
     else:
@@ -2627,9 +2629,10 @@ class Handler(SimpleHTTPRequestHandler):
             if machine_type not in ('slot','pachinko'): machine_type='slot'
             body=json.dumps(read_machine_stats_overlay(machine_type,pattern_id),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
-        if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
-            kind = self.path.rsplit('/', 1)[-1]
-            body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        if parsed.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+            kind = parsed.path.rsplit('/', 1)[-1]
+            query=parse_qs(parsed.query);pattern_id=str((query.get('id') or [''])[0]) if kind=='slot' else ''
+            body = json.dumps(read_overlay_state(kind,pattern_id), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.send_header('Cache-Control', 'no-store'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/network':
             body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'localBaseUrl': 'http://127.0.0.1:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
@@ -3035,13 +3038,9 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('テストするスロットが見つかりません')
                 if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
-                # Repeated preview clicks must not build an invisible backlog.  A
-                # running live gift remains authoritative, but stale queued tests
-                # are discarded and a running test is replaced immediately.
-                machine=state['slotMachine']
-                machine['queue']=[item for item in machine.get('queue',[]) if not item.get('isTest')]
-                if machine.get('event',{}).get('active') and machine['event'].get('isTest'):
-                    machine['event']=copy.deepcopy(SLOT_EMPTY_EVENT)
+                # A different machine must never replace the test currently on
+                # screen. Dedicated overlays may consume their own queued event
+                # concurrently; the common overlay continues in FIFO order.
                 run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                 write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
             elif self.path == '/api/slot/apply-spin':
