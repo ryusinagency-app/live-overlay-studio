@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.63'
+APP_VERSION = '0.66.64'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -3072,7 +3072,7 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のスロットが見つかりません')
                 field=str(data.get('field') or '');role_id=str(data.get('roleId') or '')
-                allowed={'cabinetUrl':'visual','monitorUrl':'visual','atMonitorUrl':'visual','upperMonitorUrl':'visual','atAudioUrl':'audio','upperAudioUrl':'audio','upperEntryUrl':'visual','upperEntryAudioUrl':'audio','freezeUrl':'visual','freezeAudioUrl':'audio','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','startAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','stop1AudioUrl':'audio','stop2AudioUrl':'audio','stop3AudioUrl':'audio','bigEffectUrl':'visual','bigEffectAudioUrl':'audio','symbolImageUrl':'image','imageUrl':'image','animationUrl':'visual','audioUrl':'audio'}
+                allowed={'cabinetUrl':'visual','monitorUrl':'visual','atMonitorUrl':'visual','upperMonitorUrl':'visual','atAudioUrl':'audio','upperAudioUrl':'audio','upperEntryUrl':'visual','upperEntryAudioUrl':'audio','atContinueSuccessUrl':'visual','atContinueSuccessAudioUrl':'audio','atContinueFailureUrl':'visual','atContinueFailureAudioUrl':'audio','freezeUrl':'visual','freezeAudioUrl':'audio','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','startAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','stop1AudioUrl':'audio','stop2AudioUrl':'audio','stop3AudioUrl':'audio','bigEffectUrl':'visual','bigEffectAudioUrl':'audio','symbolImageUrl':'image','imageUrl':'image','animationUrl':'visual','audioUrl':'audio','entryUrl':'visual','entryAudioUrl':'audio','successUrl':'visual','successAudioUrl':'audio','failureUrl':'visual','failureAudioUrl':'audio'}
                 media_type=allowed.get(field)
                 if not media_type: raise ValueError('素材の設定先を確認してください')
                 target=pattern
@@ -3081,7 +3081,7 @@ class Handler(SimpleHTTPRequestHandler):
                     if not target or field!='imageUrl': raise ValueError('図柄の設定先を確認してください')
                 elif role_id.startswith('cz:'):
                     cz_id=role_id.split(':',1)[1];target=next((x for x in pattern.get('czPatterns',[]) if x.get('id')==cz_id),None)
-                    if not target or field not in ('animationUrl','audioUrl'): raise ValueError('CZ素材の設定先を確認してください')
+                    if not target or field not in ('animationUrl','audioUrl','entryUrl','entryAudioUrl','successUrl','successAudioUrl','failureUrl','failureAudioUrl'): raise ValueError('CZ素材の設定先を確認してください')
                 elif role_id:
                     target=next((x for x in pattern.get('smallRoles',[]) if x.get('id')==role_id),None)
                     if not target or field not in ('symbolImageUrl','animationUrl','audioUrl'): raise ValueError('小役の設定先を確認してください')
