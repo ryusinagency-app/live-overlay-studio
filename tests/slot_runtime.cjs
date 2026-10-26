@@ -2,6 +2,8 @@ const fs=require('fs'),path=require('path');
 const {JSDOM}=require(process.env.WIN_GACHA_TEST_JSDOM||'jsdom');
 const root=path.resolve(__dirname,'..');
 const overlay=fs.readFileSync(path.join(root,'overlay_slot.html'),'utf8');
+for(const expected of ['id="choiceWin"','Math.abs(Number(event.total)||0)+\' WIN\''])
+  if(!overlay.includes(expected))throw Error('slot choice screen does not show unsigned WIN: '+expected);
 for(const expected of ["releaseMedia(document.getElementById('monitorHost'),true)","releaseMedia(document.getElementById('cabinetHost'),true)","releaseMedia(bigEffectHost,true)"])
   if(!overlay.includes(expected))throw Error('slot shutdown does not release media: '+expected);
 const html=fs.readFileSync(path.join(root,'control.html'),'utf8').replace(/<script[\s\S]*?<\/script>/g,'');
