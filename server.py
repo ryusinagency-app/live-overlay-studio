@@ -18,13 +18,14 @@ import subprocess
 import hashlib
 import tempfile
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 import socket
 from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_slot_spin,
                           choose_sign as choose_slot_sign, complete_event as complete_slot_event,
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.60'
+APP_VERSION = '0.66.61'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -86,7 +87,7 @@ def prepare_app_root():
         'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gacha_set_ranking.html',
         'overlay_gacha_win_ranking.html', 'overlay_gacha_rankings.html', 'overlay_gift_history.html',
         'overlay_missions.html', 'overlay_gift_media.html', 'overlay_smoking.html',
-        'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html', 'overlay_slot.html',
+        'overlay_smoking_gacha.html', 'overlay_timer.html', 'overlay_pachinko.html', 'overlay_slot.html', 'overlay_machine_stats.html',
         'overlay_win_gacha_best_set.html', 'overlay_win_gacha_best_win.html', 'overlay_pachinko_best_win.html', 'overlay_best_ranking.js',
         'overlay_best_ranking.css', 'ranking_controls.js', 'slot_controls.js',
         'overlay_win.html', 'v6608.js', 'README.txt', 'update_config.json', 'app_icon.ico'
@@ -345,6 +346,27 @@ def safe_int(value, default=0):
             return int(float(value))
         except (TypeError, ValueError, OverflowError):
             return default
+
+def normalize_stats_overlay(value):
+    raw=value if isinstance(value,dict) else {}
+    def color(key,default):
+        item=str(raw.get(key) or '')
+        return item.lower() if len(item)==7 and item.startswith('#') else default
+    return {
+        'showName':raw.get('showName',True) is not False,
+        'showCurrent':raw.get('showCurrent',True) is not False,
+        'showInitialHits':raw.get('showInitialHits',True) is not False,
+        'showHitCount':raw.get('showHitCount',True) is not False,
+        'showTotal':raw.get('showTotal',True) is not False,
+        'showBestStreak':raw.get('showBestStreak',True) is not False,
+        'showState':raw.get('showState',False) is True,
+        'layout':'vertical' if raw.get('layout')=='vertical' else 'horizontal',
+        'textColor':color('textColor','#ffffff'),'accentColor':color('accentColor','#ffcf59'),
+        'background':color('background','#111219'),'backgroundOpacity':max(0,min(100,safe_int(raw.get('backgroundOpacity'),85))),
+        'nameSize':max(12,min(160,safe_int(raw.get('nameSize'),30))),
+        'labelSize':max(10,min(100,safe_int(raw.get('labelSize'),18))),
+        'valueSize':max(14,min(200,safe_int(raw.get('valueSize'),46))),
+    }
 
 def pachinko_boundary_stages():
     return tuple(phase+edge for phase in ('reach','cz','hit','at','upper','lt') for edge in ('Enter','Exit'))
@@ -1015,9 +1037,26 @@ def normalize_state(data):
         configured['timeShortDisplaySeconds']=max(.2,min(120,safe_float(item.get('timeShortDisplaySeconds',item.get('stopSeconds',3)),3)))
         for prefix,stage in (('at','at'),('upper','upper'),('luckyTrigger','lt')):
             configured[prefix+'ResultSeconds']=max(.2,min(120,safe_float(item.get(prefix+'ResultSeconds',item.get(stage+'Seconds',3)),3)))
+        configured['statsOverlay']=normalize_stats_overlay(item.get('statsOverlay'))
     raw_p_event=raw_pachinko.get('event') if isinstance(raw_pachinko.get('event'),dict) else {}
     p_created=max(0,safe_float(raw_p_event.get('createdAt') or 0));p_active=bool(raw_p_event.get('active',False)) and p_created>=SERVER_STARTED_AT
     merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'timeShortSpins':max(0,min(10000,safe_int(raw_p_event.get('timeShortSpins',0),0))),'timeShortHitSpin':max(0,min(10000,safe_int(raw_p_event.get('timeShortHitSpin',0),0))),'route':str(raw_p_event.get('route') or '')[:30],'preAlertIndex':max(-1,min(2,safe_int(raw_p_event.get('preAlertIndex',-1),-1))),'preAlertTiming':raw_p_event.get('preAlertTiming') if raw_p_event.get('preAlertTiming') in ('spin-start','during-spin','before-result') else 'before-result','rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
+    p_stats={}
+    raw_p_stats=raw_pachinko.get('statsByDate') if isinstance(raw_pachinko.get('statsByDate'),dict) else {}
+    for date_key in sorted(raw_p_stats.keys(),reverse=True)[:370]:
+        if not isinstance(raw_p_stats.get(date_key),dict): continue
+        day={}
+        for pattern_id,row in raw_p_stats[date_key].items():
+            if not isinstance(row,dict): continue
+            day[str(pattern_id)[:80]]={'patternName':str(row.get('patternName') or '')[:60],
+                'currentSpins':max(0,min(999999999,safe_int(row.get('currentSpins')))),
+                'initialHits':max(0,min(999999999,safe_int(row.get('initialHits')))),
+                'hitCount':max(0,min(999999999,safe_int(row.get('hitCount')))),
+                'totalSpins':max(0,min(999999999,safe_int(row.get('totalSpins')))),
+                'bestStreak':max(0,min(999999999,safe_int(row.get('bestStreak'))))}
+        p_stats[str(date_key)[:10]]=day
+    merged['pachinkoGacha']['statsByDate']=p_stats
+    merged['pachinkoGacha']['statsDate']=today_jst()
 
     for key in ('initialWin','timeShortWin'):
         if key in raw_p_event:
@@ -1212,8 +1251,8 @@ def read_state():
             STATE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
         return merged
 
-def read_overlay_state(kind):
-    """Small, consistent playback snapshots; never expose profiles/history to renderers."""
+def read_cached_overlay_source():
+    """Share one normalized disk read across every browser-source poll."""
     def signature():
         try:
             stat = STATE.stat()
@@ -1229,52 +1268,70 @@ def read_overlay_state(kind):
             # earlier signature so the next request invalidates this snapshot.
             cache['signature'] = current_signature
             cache['at'] = time.monotonic()
-        state = cache['state']
-        common = ('fontFamily', 'accent', 'panelColor', 'panelOpacity', 'textColor', 'gaugeColor',
-                  'textGlowEnabled', 'textGlowColor', 'textGlowStrength', 'cardDefaults',
-                  'textOutlineEnabled', 'textOutlineColor', 'textOutlineWidth',
-                  'textBackgroundEnabled', 'textBackgroundColor', 'textBackgroundOpacity')
-        result = {key: state[key] for key in common if key in state}
-        if kind == 'win':
-            result['winCounter'] = {key: value for key, value in state['winCounter'].items()
-                                    if key != 'giftRules' and not key.startswith('shortcut')}
-            result['textEffects'] = {'win': state.get('textEffects', {}).get('win', {})}
-        elif kind == 'gacha':
-            gacha = state['gacha']
-            event = gacha.get('event', {})
-            pattern = next((p for p in gacha.get('patterns', [])
-                            if (event.get('patternId') and p.get('id') == event['patternId'])
-                            or (not event.get('patternId') and p.get('name') == event.get('patternName'))), None)
-            result['gacha'] = {key: value for key, value in gacha.items()
-                               if key not in ('patterns', 'queue', 'history', 'bestRecords', 'rankingViews')}
-            result['gacha']['patterns'] = [pattern] if pattern else []
-            effect_key = 'gacha:' + str(event.get('patternId') or '')
-            result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
-        elif kind == 'gacha-history':
-            machine=state['gacha'];view=machine['rankingViews']['history']
-            rows=sorted(machine.get('history',[]),key=lambda row:row.get('createdAt',0),reverse=True)[:view['limit']]
-            result={'fontFamily':state.get('fontFamily','system'),'boards':{'winHistory':{'rows':rows,'view':view}}}
-        elif kind == 'rankings':
-            result={'fontFamily':state.get('fontFamily','system'),'boards':{}}
-            for key,scope,metric in (('winSet','gacha','bestSet'),('winBest','gacha','bestWin'),('pachinkoBest','pachinkoGacha','bestWin')):
-                machine=state[scope]
-                view=machine['rankingViews']['set' if metric=='bestSet' else 'win']
-                rows=[]
-                for record in gacha_best_board(machine,metric)[:view['limit']]:
-                    detail=record.get('setRecord' if metric=='bestSet' else 'winRecord',{})
-                    rows.append({'senderName':record['senderName'],'bestSet':record['bestSet'],'bestWin':record['bestWin'],**detail})
-                result['boards'][key]={'rows':rows,'metric':metric,'view':view}
-        elif kind == 'pachinko':
-            machine=state['pachinkoGacha'];event=machine.get('event',{})
-            pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
-            result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
-        elif kind == 'slot':
-            machine=state['slotMachine'];event=machine.get('event',{})
-            pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
-            result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
-        else:
-            raise ValueError('Unknown overlay snapshot')
-        return copy.deepcopy(result)
+        return cache['state']
+
+def read_overlay_state(kind):
+    """Small, consistent playback snapshots; never expose profiles/history to renderers."""
+    state = read_cached_overlay_source()
+    common = ('fontFamily', 'accent', 'panelColor', 'panelOpacity', 'textColor', 'gaugeColor',
+              'textGlowEnabled', 'textGlowColor', 'textGlowStrength', 'cardDefaults',
+              'textOutlineEnabled', 'textOutlineColor', 'textOutlineWidth',
+              'textBackgroundEnabled', 'textBackgroundColor', 'textBackgroundOpacity')
+    result = {key: state[key] for key in common if key in state}
+    if kind == 'win':
+        result['winCounter'] = {key: value for key, value in state['winCounter'].items()
+                                if key != 'giftRules' and not key.startswith('shortcut')}
+        result['textEffects'] = {'win': state.get('textEffects', {}).get('win', {})}
+    elif kind == 'gacha':
+        gacha = state['gacha']
+        event = gacha.get('event', {})
+        pattern = next((p for p in gacha.get('patterns', [])
+                        if (event.get('patternId') and p.get('id') == event['patternId'])
+                        or (not event.get('patternId') and p.get('name') == event.get('patternName'))), None)
+        result['gacha'] = {key: value for key, value in gacha.items()
+                           if key not in ('patterns', 'queue', 'history', 'bestRecords', 'rankingViews')}
+        result['gacha']['patterns'] = [pattern] if pattern else []
+        effect_key = 'gacha:' + str(event.get('patternId') or '')
+        result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+    elif kind == 'gacha-history':
+        machine=state['gacha'];view=machine['rankingViews']['history']
+        rows=sorted(machine.get('history',[]),key=lambda row:row.get('createdAt',0),reverse=True)[:view['limit']]
+        result={'fontFamily':state.get('fontFamily','system'),'boards':{'winHistory':{'rows':rows,'view':view}}}
+    elif kind == 'rankings':
+        result={'fontFamily':state.get('fontFamily','system'),'boards':{}}
+        for key,scope,metric in (('winSet','gacha','bestSet'),('winBest','gacha','bestWin'),('pachinkoBest','pachinkoGacha','bestWin')):
+            machine=state[scope]
+            view=machine['rankingViews']['set' if metric=='bestSet' else 'win']
+            rows=[]
+            for record in gacha_best_board(machine,metric)[:view['limit']]:
+                detail=record.get('setRecord' if metric=='bestSet' else 'winRecord',{})
+                rows.append({'senderName':record['senderName'],'bestSet':record['bestSet'],'bestWin':record['bestWin'],**detail})
+            result['boards'][key]={'rows':rows,'metric':metric,'view':view}
+    elif kind == 'pachinko':
+        machine=state['pachinkoGacha'];event=machine.get('event',{})
+        pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
+        result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
+    elif kind == 'slot':
+        machine=state['slotMachine'];event=machine.get('event',{})
+        pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
+        result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
+    else:
+        raise ValueError('Unknown overlay snapshot')
+    return copy.deepcopy(result)
+
+def read_machine_stats_overlay(machine_type,pattern_id):
+    state=read_cached_overlay_source();is_pachinko=machine_type=='pachinko';machine=state['pachinkoGacha' if is_pachinko else 'slotMachine']
+    pattern=next((item for item in machine.get('patterns',[]) if str(item.get('id'))==str(pattern_id)),None)
+    if not pattern:
+        return {'ok':False,'type':machine_type,'patternId':str(pattern_id),'message':'機種が見つかりません'}
+    date_key=today_jst();row=copy.deepcopy(machine.get('statsByDate',{}).get(date_key,{}).get(pattern.get('id'),{}))
+    defaults={'currentSpins':0,'hitCount':0,'totalSpins':0}
+    if is_pachinko: defaults.update(initialHits=0,bestStreak=0)
+    defaults.update(row)
+    event=machine.get('event',{});active=bool(event.get('active') and event.get('patternId')==pattern.get('id'))
+    state_name='抽選中' if active else '通常'
+    return {'ok':True,'type':machine_type,'date':date_key,'patternId':pattern.get('id'),'patternName':pattern.get('name',''),
+            'stats':defaults,'state':state_name,'style':normalize_stats_overlay(pattern.get('statsOverlay'))}
 
 def write_state(data):
     allowed = {**copy.deepcopy(DEFAULT), **data}
@@ -1603,6 +1660,29 @@ def pachinko_choice_action(event_id,choice=None,created_at=None):
         STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
         return True
 
+def update_pachinko_stats(data,event):
+    if event.get('isTest'): return
+    machine=data['pachinkoGacha'];date_key=today_jst();pattern_id=str(event.get('patternId') or '')[:80]
+    day=machine.setdefault('statsByDate',{}).setdefault(date_key,{})
+    row=day.setdefault(pattern_id,{'patternName':str(event.get('patternName') or '')[:60],
+        'currentSpins':0,'initialHits':0,'hitCount':0,'totalSpins':0,'bestStreak':0})
+    normal_spins=max(0,safe_int(event.get('hitSpin') or event.get('spins')))
+    time_short_spins=max(0,safe_int(event.get('timeShortHitSpin') or event.get('timeShortSpins')))
+    phase_spins=sum(max(0,safe_int(round_.get('hitSpin') or round_.get('spins'))) for round_ in event.get('rounds',[]) if isinstance(round_,dict))
+    row['patternName']=str(event.get('patternName') or row.get('patternName') or '')[:60]
+    row['totalSpins']=min(999999999,safe_int(row.get('totalSpins'))+normal_spins+time_short_spins+phase_spins)
+    initial_hit=bool(safe_int(event.get('hitSpin')))
+    if initial_hit:
+        row['initialHits']=min(999999999,safe_int(row.get('initialHits'))+1)
+        row['currentSpins']=0
+    else:
+        row['currentSpins']=min(999999999,safe_int(row.get('currentSpins'))+normal_spins)
+    phase_hits=sum(1 for round_ in event.get('rounds',[]) if isinstance(round_,dict) and round_.get('resultKind')=='win')
+    hit_count=(1 if initial_hit else 0)+(1 if safe_int(event.get('timeShortHitSpin')) else 0)+phase_hits
+    row['hitCount']=min(999999999,safe_int(row.get('hitCount'))+hit_count)
+    row['bestStreak']=max(safe_int(row.get('bestStreak')),hit_count)
+    machine['statsDate']=date_key
+
 def complete_pachinko_event(event_id):
     with STATE_LOCK:
         try: data=json.loads(STATE.read_text(encoding='utf-8'))
@@ -1613,6 +1693,7 @@ def complete_pachinko_event(event_id):
         if not event.get('isTest'):
             if not event.get('winApplied'): data['winCounter']['currentWin']=max(-999999,min(999999,data['winCounter']['currentWin']+pachinko_signed_total(event)))
             record_pachinko_history(data,event)
+            update_pachinko_stats(data,event)
         event['active']=False;queue=machine.setdefault('queue',[])
         if queue:
             nxt=queue.pop(0);nxt['active']=True;nxt['createdAt']=time.time();machine['event']=nxt
@@ -2523,6 +2604,12 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
+        parsed=urlsplit(self.path)
+        if parsed.path == '/api/overlay/machine-stats':
+            query=parse_qs(parsed.query);machine_type=str((query.get('type') or ['slot'])[0]);pattern_id=str((query.get('id') or [''])[0])
+            if machine_type not in ('slot','pachinko'): machine_type='slot'
+            body=json.dumps(read_machine_stats_overlay(machine_type,pattern_id),ensure_ascii=False,separators=(',',':')).encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if self.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = self.path.rsplit('/', 1)[-1]
             body = json.dumps(read_overlay_state(kind), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
@@ -2618,6 +2705,8 @@ class Handler(SimpleHTTPRequestHandler):
                         data['pachinkoGacha']['queue']=copy.deepcopy(live_pachinko.get('queue',[]))
                         data['pachinkoGacha']['history']=copy.deepcopy(live_pachinko.get('history',[]))
                         data['pachinkoGacha']['bestRecords']=copy.deepcopy(live_pachinko.get('bestRecords',[]))
+                        data['pachinkoGacha']['statsByDate']=copy.deepcopy(live_pachinko.get('statsByDate',{}))
+                        data['pachinkoGacha']['statsDate']=str(live_pachinko.get('statsDate') or '')
                     if isinstance(data.get('slotMachine'),dict):
                         live_slot=current.get('slotMachine',{})
                         data['slotMachine']['event']=copy.deepcopy(live_slot.get('event',{}))

@@ -47,6 +47,7 @@ if errorlevel 1 (
   --add-data "overlay_gift_media.html;." ^
   --add-data "overlay_pachinko.html;." ^
   --add-data "overlay_slot.html;." ^
+  --add-data "overlay_machine_stats.html;." ^
   --add-data "overlay_missions.html;." ^
   --add-data "overlay_smoking.html;." ^
   --add-data "overlay_smoking_gacha.html;." ^

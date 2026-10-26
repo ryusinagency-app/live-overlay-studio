@@ -44,11 +44,36 @@ def _media(value):
     return text[:2000] if text.startswith('/') else ''
 
 
+def _stats_overlay(value):
+    raw = value if isinstance(value, dict) else {}
+    def color(key, default):
+        item = str(raw.get(key) or '')
+        return item.lower() if len(item) == 7 and item.startswith('#') else default
+    return {
+        'showName': raw.get('showName', True) is not False,
+        'showCurrent': raw.get('showCurrent', True) is not False,
+        'showInitialHits': raw.get('showInitialHits', True) is not False,
+        'showHitCount': raw.get('showHitCount', True) is not False,
+        'showTotal': raw.get('showTotal', True) is not False,
+        'showBestStreak': raw.get('showBestStreak', True) is not False,
+        'showState': raw.get('showState', False) is True,
+        'layout': 'vertical' if raw.get('layout') == 'vertical' else 'horizontal',
+        'textColor': color('textColor', '#ffffff'),
+        'accentColor': color('accentColor', '#ffcf59'),
+        'background': color('background', '#111219'),
+        'backgroundOpacity': _int(raw.get('backgroundOpacity'), 85, 0, 100),
+        'nameSize': _int(raw.get('nameSize'), 30, 12, 160),
+        'labelSize': _int(raw.get('labelSize'), 18, 10, 100),
+        'valueSize': _int(raw.get('valueSize'), 46, 14, 200),
+    }
+
+
 def default_pattern(index=1):
     return {
         'id': f'slot-pattern-{index}', 'name': f'スロット{index}', 'enabled': True,
         'machineType': 'normal', 'giftName': '', 'giftSpins': 1,
         'giftRules': [{'id': 'slot-gift-1', 'giftName': '', 'spins': 1}],
+        'statsOverlay': _stats_overlay({}),
         'sign': 'plus', 'hitDenominator': 199, 'replayEnabled': True,
         'spinSeconds': 1.8, 'stopInterval': .35, 'resultSeconds': 1.2,
         'hitNoticeSeconds': 2.0, 'hitAlignSeconds': 2.4,
@@ -120,6 +145,7 @@ def normalize_pattern(raw, index=1):
     # Keep the legacy pair populated for older saved builds and test tools.
     result['giftName'] = result['giftRules'][0]['giftName']
     result['giftSpins'] = result['giftRules'][0]['spins']
+    result['statsOverlay'] = _stats_overlay(raw.get('statsOverlay'))
     result['sign'] = raw.get('sign') if raw.get('sign') in ('plus', 'minus', 'both') else 'plus'
     result['hitDenominator'] = _int(raw.get('hitDenominator'), 199, 1, 1000000)
     result['replayEnabled'] = raw.get('replayEnabled', True) is not False
