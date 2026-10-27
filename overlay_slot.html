@@ -6,7 +6,7 @@
  if(!/(?:^|[?&])diagnostic=1(?:&|$)/.test(search))return;
  var state=window.__slotDiag={mode:'起動待ち',api:'未通信',event:'未確認',error:'なし'};
  var panel=null;
- function update(){if(!panel||!panel.parentNode)return;panel.textContent='SLOT診断\\nプレイヤー: '+state.mode+'\\nAPI: '+state.api+'\\nイベント: '+state.event+'\\nエラー: '+state.error}
+ function update(){if(!panel||!panel.parentNode)return;panel.textContent='SLOT診断\nプレイヤー: '+state.mode+'\nAPI: '+state.api+'\nイベント: '+state.event+'\nエラー: '+state.error}
  window.addEventListener('error',function(e){state.error=String(e.message||'JavaScriptエラー').slice(0,220);update()});
  window.addEventListener('unhandledrejection',function(e){state.error=String(e.reason&&e.reason.message||e.reason||'非同期エラー').slice(0,220);update()});
  document.addEventListener('DOMContentLoaded',function(){panel=document.createElement('pre');panel.id='slotDiagnostic';panel.style.cssText='position:fixed;left:8px;top:8px;z-index:2147483647;margin:0;padding:10px;background:#000e;color:#fff;font:14px/1.4 monospace;white-space:pre-wrap;max-width:95vw;pointer-events:none';document.body.appendChild(panel);update();setInterval(update,500)});
