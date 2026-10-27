@@ -1396,7 +1396,7 @@ def read_overlay_state(kind, pattern_id=''):
             event=next((item for item in machine.get('queue',[]) if item.get('active') and str(item.get('patternId') or '')==str(pattern_id)),copy.deepcopy(SLOT_EMPTY_EVENT))
         event=dict(event)
         spins=event.get('spins') or []
-        event['spinCount']=len(spins)
+        event.pop('spinCount',None)
         applied=safe_int(event.get('appliedSpins'),0)
         event['currentSpin']=spins[applied] if applied<len(spins) else None
         event['spins']=[]
@@ -3132,24 +3132,29 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
-                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
+                    if ok:
+                        _externalize_slot_spin_plans(state)
+                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok}
             elif self.path == '/api/slot/choose-sign':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
-                        STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                        _externalize_slot_spin_plans(state)
+                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok,'completed':ok}
             elif self.path == '/api/slot/complete':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
-                    if ok: STATE.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding='utf-8')
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
+                    if ok:
+                        _externalize_slot_spin_plans(state)
+                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok}
             elif self.path == '/api/slot/media':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
