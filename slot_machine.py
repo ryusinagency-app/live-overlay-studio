@@ -437,14 +437,17 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     configured_spins = pattern['giftSpins'] if initial_spins is None else _int(initial_spins, pattern['giftSpins'], 1, 20000)
     budget = configured_spins
     # Keep runaway replay/continuation chains bounded, but never let the
-    # safety cap silently shorten one configured AT/upper-AT entry grant.
+    # safety cap silently shorten a configured AT/upper-AT entry grant.
     entry_grants = [20]
     if pattern.get('machineType') == 'at' and pattern.get('atEnabled'):
         entry_grants.append(_int(pattern.get('atSpins'), 30, 1, 10000))
     if pattern.get('machineType') == 'at' and pattern.get('upperAtEnabled'):
         entry_grants.append(_int(pattern.get('upperAtSpins'), 50, 1, 10000))
     largest_entry_grant = max(entry_grants)
-    at_continuation_allowance = (largest_entry_grant * 100
+    # The plan is generated before playback. Allow at most two entry-sized AT
+    # blocks beyond the starting spins, rather than expanding
+    # a high-continuation-rate AT into hundreds of blocks (e.g. 1 + 30*100).
+    at_continuation_allowance = (largest_entry_grant * 2
                                  if pattern.get('machineType') == 'at' and pattern.get('atEnabled')
                                  else largest_entry_grant)
     max_spins = min(20000, max(budget, budget * 20, budget + 20,
