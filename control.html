@@ -720,7 +720,7 @@ let activeGachaPreview=null,previewAlertAudio=null,previewAlertTimers=[];let act
 let currentWinEdited=false;
 let selectedWinProfileId='';
 const $=id=>document.getElementById(id);
-let sharedStatePromise=null,sharedStateValue=null,sharedStateAt=0;async function get(){const now=Date.now();if(sharedStateValue&&now-sharedStateAt<300)return sharedStateValue;if(sharedStatePromise)return sharedStatePromise;sharedStatePromise=(async()=>{try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)return null;const value=await r.json();sharedStateValue=value;sharedStateAt=Date.now();return value}catch(e){return null}finally{sharedStatePromise=null}})();return sharedStatePromise}
+let sharedStatePromise=null,sharedStateValue=null,sharedStateAt=0;async function get(){const now=Date.now();if(sharedStateValue&&now-sharedStateAt<1500)return sharedStateValue;if(sharedStatePromise)return sharedStatePromise;sharedStatePromise=(async()=>{try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)return null;const value=await r.json();sharedStateValue=value;sharedStateAt=Date.now();return value}catch(e){return null}finally{sharedStatePromise=null}})();return sharedStatePromise}
 function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift,.pGift,.otherPatternGift,.gmGiftName,.slotGiftName')].map(input=>giftKey(input.value)).filter(Boolean))}
 function giftKey(value){return String(value||'').normalize('NFKC').replace(/\s/g,'').toLocaleLowerCase()}
 function renderGiftPicker(){const grid=$('giftPickerGrid'),query=giftKey($('giftPickerSearch').value),used=usedGiftNames(),current=giftKey(giftPickerTarget?.value),hide=$('giftPickerHideUsed').checked;
@@ -1863,7 +1863,7 @@ renderGachaSettings();
 renderSmokingGacha();
 renderMissions();
 renderCounters();
-renderGiftRules()}},1800);
+renderGiftRules()}},8000);
 setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},1500);
 setInterval(refreshGiftWallHistory,2400);
 setInterval(refreshGiftStatus,3000);
