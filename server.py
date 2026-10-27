@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.79'
+APP_VERSION = '0.66.80'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1413,7 +1413,14 @@ def read_overlay_state(kind, pattern_id=''):
         applied=safe_int(event.get('appliedSpins'),0)
         current_spin=spins[applied] if applied<len(spins) else None
         event['currentMode']=str(current_spin.get('mode') or '') if isinstance(current_spin,dict) else ''
-        event.pop('currentSpin',None)
+        # The embedded LIVE Studio browser can fail its first follow-up POST
+        # while the test overlay is starting. Include only the test's current
+        # result in the initial snapshot so the first frame can render without
+        # exposing future production outcomes or depending on that POST.
+        if event.get('isTest') and isinstance(current_spin,dict):
+            event['currentSpin']=copy.deepcopy(current_spin)
+        else:
+            event.pop('currentSpin',None)
         event['spins']=[]
         pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
         result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
@@ -3135,19 +3142,32 @@ class Handler(SimpleHTTPRequestHandler):
                 result={'ok':complete_gift_media_event(safe_int(data.get('eventId') or 0))}
             elif self.path == '/api/slot/test':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
-                state=read_state();pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
-                if not pattern: raise ValueError('テストするスロットが見つかりません')
-                if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
-                # A different machine must never replace the test currently on
-                # screen. Dedicated overlays may consume their own queued event
-                # concurrently; the common overlay continues in FIFO order.
-                run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
-                write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
+                # Create the test event under the same lock as its state write.
+                # Otherwise a concurrent settings save can replace the state
+                # between event creation and persistence, leaving the overlay
+                # with an event whose spin plan was never committed.
+                with STATE_LOCK:
+                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception: state=copy.deepcopy(DEFAULT)
+                    _hydrate_slot_spin_plans(state)
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state)
+                    pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                    if not pattern: raise ValueError('テストするスロットが見つかりません')
+                    if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
+                    # A different machine must never replace the test currently on
+                    # screen. Dedicated overlays may consume their own queued event
+                    # concurrently; the common overlay continues in FIFO order.
+                    run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
+                    _externalize_slot_spin_plans(state)
+                    STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+                result={'ok':True,'slotMachine':read_state()['slotMachine']}
             elif self.path == '/api/slot/current-spin':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state)
+                    # This is a read-only reveal request. Avoid normalizing and
+                    # rewriting the event here; use its persisted plan directly.
+                    _hydrate_slot_spin_plans(state)
                     machine=state['slotMachine'];event_id=safe_int(data.get('eventId'));spin_index=safe_int(data.get('spinIndex'),-1)
                     candidates=[machine.get('event') or {},*(machine.get('queue') or [])]
                     event=next((item for item in candidates if item.get('active') and safe_int(item.get('id'))==event_id),None)
