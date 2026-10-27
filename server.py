@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.83'
+APP_VERSION = '0.66.82'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2722,19 +2722,7 @@ class Handler(SimpleHTTPRequestHandler):
         return
 
     def end_headers(self):
-        request_url = urlsplit(getattr(self, 'path', ''))
-        filename = Path(request_url.path).name
-        is_versioned_slot_media = (
-            filename.startswith('slot_')
-            and bool(parse_qs(request_url.query).get('v'))
-            and Path(self.translate_path(request_url.path)).is_file()
-        )
-        if is_versioned_slot_media:
-            # Uploaded slot images/videos use a unique ?v= cache-buster each
-            # time they are replaced. Cache them so embedded browser sources do
-            # not repeatedly redownload every reel symbol during animation.
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-        elif getattr(self, 'path', '') != '/api/state':
+        if getattr(self, 'path', '') != '/api/state':
             self.send_header('Cache-Control', 'no-store, max-age=0')
         super().end_headers()
     def __init__(self, *args, **kwargs):
