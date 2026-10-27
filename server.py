@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.66.98'
+APP_VERSION = '0.66.99'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2745,6 +2745,9 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def do_GET(self):
         parsed=urlsplit(self.path)
+        if parsed.path == '/api/health':
+            body=json.dumps({'ok':True,'version':APP_VERSION},separators=(',',':')).encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if parsed.path == '/api/overlay/machine-stats':
             query=parse_qs(parsed.query);machine_type=str((query.get('type') or ['slot'])[0]);pattern_id=str((query.get('id') or [''])[0])
             if machine_type not in ('slot','pachinko'): machine_type='slot'
@@ -3443,7 +3446,7 @@ def run_desktop_app(server):
             last_error = ''
             for _ in range(30):
                 try:
-                    with urllib.request.urlopen('http://127.0.0.1:8765/api/state', timeout=.5) as response:
+                    with urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=2) as response:
                         if response.status == 200:
                             window.after(0, lambda: status.configure(text=f'● 起動中  v{APP_VERSION}  ポート 8765', fg='#6ee7a8'))
                             window.after(0, lambda: launch_browser(url))
