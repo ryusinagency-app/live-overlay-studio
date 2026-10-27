@@ -1371,7 +1371,7 @@ def read_cached_overlay_source():
     with OVERLAY_SNAPSHOT_LOCK:
         cache = OVERLAY_SNAPSHOT_CACHE
         current_signature = signature()
-        if cache['state'] is None or cache['signature'] != current_signature or time.monotonic() - cache['at'] >= .2:
+        if cache['state'] is None or cache['signature'] != current_signature or time.monotonic() - cache['at'] >= 1.0:
             cache['state'] = read_state()
             # If a writer races us after read_state releases STATE_LOCK, keep the
             # earlier signature so the next request invalidates this snapshot.
@@ -2765,7 +2765,7 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'localBaseUrl': 'http://127.0.0.1:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/state':
-            body = json.dumps(read_state(), ensure_ascii=False).encode('utf-8')
+            body = json.dumps(read_cached_overlay_source(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/status':
             body = json.dumps(get_tiktok_status(), ensure_ascii=False).encode('utf-8')
