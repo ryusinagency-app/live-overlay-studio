@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.75'
+APP_VERSION = '0.66.76'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -140,6 +140,8 @@ if FROZEN_APP and os.name == 'nt':
         raise SystemExit(0)
 STATE = ROOT / 'state.json'
 STATE_LOCK = threading.Lock()
+SLOT_SPIN_PLAN_LOCK = threading.Lock()
+SLOT_SPIN_PLAN_CACHE = {}
 OVERLAY_SNAPSHOT_LOCK = threading.Lock()
 OVERLAY_SNAPSHOT_CACHE = {'signature': None, 'at': 0, 'state': None}
 JST = timezone(timedelta(hours=9))
@@ -1278,8 +1280,55 @@ def read_state():
             print(f'Saved settings could not be normalized: {error}')
             merged, changed = copy.deepcopy(DEFAULT), False
         if changed or not STATE.exists():
-            STATE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
+            _externalize_slot_spin_plans(merged)
+            STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+        _hydrate_slot_spin_plans(merged)
         return merged
+
+def _slot_events(machine):
+    yield machine.get('event') if isinstance(machine.get('event'),dict) else {}
+    yield from (event for event in (machine.get('queue') or []) if isinstance(event,dict))
+
+def _slot_plan_filename(event):
+    name=str(event.get('spinsFile') or '')
+    if re.fullmatch(r'slot_plan_\d+_\d+\.json',name): return name
+    event_id=max(0,safe_int(event.get('id') or 0));created=max(0,int(safe_float(event.get('createdAt') or 0)*1000))
+    return f'slot_plan_{event_id}_{created}.json'
+
+def _externalize_slot_spin_plans(state):
+    machine=state.get('slotMachine') if isinstance(state.get('slotMachine'),dict) else {}
+    referenced=set()
+    for event in _slot_events(machine):
+        spins=event.get('spins')
+        filename=str(event.get('spinsFile') or '')
+        if not isinstance(spins,list) or not spins:
+            if re.fullmatch(r'slot_plan_\d+_\d+\.json',filename): referenced.add(filename)
+            continue
+        filename=_slot_plan_filename(event);referenced.add(filename);path=ROOT/filename
+        if not path.exists():
+            payload=json.dumps(spins,ensure_ascii=False,separators=(',',':'))
+            temp=path.with_suffix('.tmp')
+            temp.write_text(payload,encoding='utf-8');temp.replace(path)
+        event['spinsFile']=filename;event['spins']=[]
+    for path in ROOT.glob('slot_plan_*.json'):
+        if path.name not in referenced:
+            try: path.unlink()
+            except OSError: pass
+            with SLOT_SPIN_PLAN_LOCK: SLOT_SPIN_PLAN_CACHE.pop(path.name,None)
+
+def _hydrate_slot_spin_plans(state):
+    machine=state.get('slotMachine') if isinstance(state.get('slotMachine'),dict) else {}
+    for event in _slot_events(machine):
+        filename=str(event.get('spinsFile') or '')
+        if not re.fullmatch(r'slot_plan_\d+_\d+\.json',filename): continue
+        with SLOT_SPIN_PLAN_LOCK:
+            spins=SLOT_SPIN_PLAN_CACHE.get(filename)
+            if spins is None:
+                try: spins=json.loads((ROOT/filename).read_text(encoding='utf-8'))
+                except (OSError,ValueError): spins=[]
+                if not isinstance(spins,list): spins=[]
+                SLOT_SPIN_PLAN_CACHE[filename]=spins
+        event['spins']=spins
 
 def read_cached_overlay_source():
     """Share one normalized disk read across every browser-source poll."""
@@ -1345,11 +1394,25 @@ def read_overlay_state(kind, pattern_id=''):
         machine=state['slotMachine'];event=machine.get('event',{})
         if pattern_id and str(event.get('patternId') or '') != str(pattern_id):
             event=next((item for item in machine.get('queue',[]) if item.get('active') and str(item.get('patternId') or '')==str(pattern_id)),copy.deepcopy(SLOT_EMPTY_EVENT))
+        event=dict(event)
+        spins=event.get('spins') or []
+        event['spinCount']=len(spins)
+        applied=safe_int(event.get('appliedSpins'),0)
+        event['currentSpin']=spins[applied] if applied<len(spins) else None
+        event['spins']=[]
         pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
         result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
     else:
         raise ValueError('Unknown overlay snapshot')
     return copy.deepcopy(result)
+
+def read_slot_live_status():
+    state=read_cached_overlay_source();machine=state['slotMachine'];event=machine.get('event') or {}
+    event_status={key:event.get(key) for key in ('id','active','senderName','patternId','appliedSpins','total','choiceReady','choice')}
+    event_status['spinCount']=len(event.get('spins') or [])
+    return {'slotMachine':{'event':event_status,'queueCount':len(machine.get('queue') or []),
+                           'history':machine.get('history',[]),'statsByDate':machine.get('statsByDate',{}),
+                           'statsDate':machine.get('statsDate','')}}
 
 def read_machine_stats_overlay(machine_type,pattern_id):
     state=read_cached_overlay_source();is_pachinko=machine_type=='pachinko';machine=state['pachinkoGacha' if is_pachinko else 'slotMachine']
@@ -1369,7 +1432,8 @@ def write_state(data):
     allowed = {**copy.deepcopy(DEFAULT), **data}
     merged, _ = normalize_state(allowed)
     with STATE_LOCK:
-        STATE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
+        _externalize_slot_spin_plans(merged)
+        STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
 
 def change_mission_gift(mission, delta):
     goal = max(1, int(mission.get('giftGoal', 1)))
@@ -2644,6 +2708,9 @@ class Handler(SimpleHTTPRequestHandler):
             query=parse_qs(parsed.query);machine_type=str((query.get('type') or ['slot'])[0]);pattern_id=str((query.get('id') or [''])[0])
             if machine_type not in ('slot','pachinko'): machine_type='slot'
             body=json.dumps(read_machine_stats_overlay(machine_type,pattern_id),ensure_ascii=False,separators=(',',':')).encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
+        if parsed.path == '/api/slot/status':
+            body=json.dumps(read_slot_live_status(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if parsed.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = parsed.path.rsplit('/', 1)[-1]

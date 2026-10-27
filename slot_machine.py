@@ -353,9 +353,13 @@ def normalize_slot_machine(raw, server_started_at=0):
     event = raw.get('event') if isinstance(raw.get('event'), dict) else {}
     created = _float(event.get('createdAt'), 0, 0)
     active = bool(event.get('active')) and created >= server_started_at
-    cleaned_event = copy.deepcopy(event) if active else copy.deepcopy(EMPTY_EVENT)
+    cleaned_event = ({key: copy.deepcopy(value) for key, value in event.items() if key != 'spins'}
+                     if active else copy.deepcopy(EMPTY_EVENT))
     if active:
-        cleaned_event['spins'] = [x for x in (event.get('spins') or []) if isinstance(x, dict)][:20000]
+        if event.get('spinsFile') and isinstance(event.get('spins'), list):
+            cleaned_event['spins'] = event['spins']
+        else:
+            cleaned_event['spins'] = [x for x in (event.get('spins') or []) if isinstance(x, dict)][:20000]
         cleaned_event['appliedSpins'] = _int(event.get('appliedSpins'), 0, 0, len(cleaned_event['spins']))
         cleaned_event['total'] = _int(event.get('total'), 0, 0, 999999999)
     queue = [x for x in (raw.get('queue') or []) if isinstance(x, dict)][:200] if active else []
