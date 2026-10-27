@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.66.92'
+APP_VERSION = '0.66.93'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -98,16 +98,30 @@ def prepare_app_root():
         if source.exists():
             shutil.copy2(source, target)
 
-    # An existing portable-folder state is imported only on the first launch.
-    # This lets the owner move from the ZIP version to the EXE without losing data.
+    # Import a portable-folder state only when the managed app has no state yet.
+    # Media files are migrated independently: older launches could already have
+    # copied state.json while leaving the actual slot and overlay assets beside
+    # the original executable.
     executable_root = Path(sys.executable).resolve().parent
     old_state = executable_root / 'state.json'
     if not (app_root / 'state.json').exists() and old_state.exists():
         shutil.copy2(old_state, app_root / 'state.json')
-        media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_image.')
-        for item in executable_root.iterdir():
-            if item.is_file() and item.name.startswith(media_prefixes):
-                shutil.copy2(item, app_root / item.name)
+
+    media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_',
+                      'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
+    legacy_roots = [executable_root, SOURCE_ROOT]
+    app_root_resolved = app_root.resolve()
+    for legacy_root in legacy_roots:
+        try:
+            if legacy_root.resolve() == app_root_resolved:
+                continue
+            for item in legacy_root.iterdir():
+                target = app_root / item.name
+                if (item.is_file() and item.name.startswith(media_prefixes)
+                        and not target.exists()):
+                    shutil.copy2(item, target)
+        except OSError as error:
+            print(f'Could not import legacy media from {legacy_root}: {error}')
     return app_root
 
 ROOT = prepare_app_root()
