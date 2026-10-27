@@ -719,9 +719,9 @@ let giftCatalog=[];
 let activeGachaPreview=null,previewAlertAudio=null,previewAlertTimers=[];let activeGachaPatternId='';
 let currentWinEdited=false;
 let selectedWinProfileId='';
+let stateReadInFlight=null;
 const $=id=>document.getElementById(id);
-async function get(){try{const r=await fetch('/api/state',{cache:'no-store'});
-return await r.json()}catch(e){return null}}
+async function get(){if(stateReadInFlight)return stateReadInFlight;stateReadInFlight=(async()=>{try{const r=await fetch('/api/state',{cache:'no-store'});return await r.json()}catch(e){return null}finally{stateReadInFlight=null}})();return stateReadInFlight}
 function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift,.pGift,.otherPatternGift,.gmGiftName,.slotGiftName')].map(input=>giftKey(input.value)).filter(Boolean))}
 function giftKey(value){return String(value||'').normalize('NFKC').replace(/\s/g,'').toLocaleLowerCase()}
 function renderGiftPicker(){const grid=$('giftPickerGrid'),query=giftKey($('giftPickerSearch').value),used=usedGiftNames(),current=giftKey(giftPickerTarget?.value),hide=$('giftPickerHideUsed').checked;
@@ -1865,8 +1865,8 @@ renderSmokingGacha();
 renderMissions();
 renderCounters();
 renderGiftRules()}},1000);
-setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},600);
-setInterval(refreshGiftWallHistory,1200);
+setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},2500);
+setInterval(refreshGiftWallHistory,3000);
 setInterval(refreshGiftStatus,3000);
 setInterval(refreshHotkeyStatus,3000);
 setInterval(updateSmokeDisplay,500)}
@@ -1901,7 +1901,7 @@ function bindHitWinConditionFields(){document.querySelectorAll('#gachaPatterns >
 const renderGachaSettingsBeforeHitWin=renderGachaSettings;renderGachaSettings=function(){renderGachaSettingsBeforeHitWin();document.querySelectorAll('#gachaPatterns > .gachaPattern').forEach((el,i)=>{const p=state.gacha?.patterns?.[i]||{};el.dataset.hitConditionMode=p.hitConditionMode||'flow';el.dataset.hitWinMode=p.hitWinMode||'exact';el.dataset.hitWinValue=String(p.hitWinValue??100)});bindHitWinConditionFields()};
 
 async function refreshGachaLiveState(){try{const fresh=await get(),live=fresh?.gacha;if(!live)return;state.gacha=state.gacha||{};state.gacha.event=live.event||{};state.gacha.queue=live.queue||[];state.gacha.history=live.history||state.gacha.history||[];state.gacha.bestRecords=live.bestRecords||[];const profile=activeWinProfile();if(profile?.gacha){profile.gacha.event=cloneWinProfileValue(state.gacha.event);profile.gacha.queue=cloneWinProfileValue(state.gacha.queue);profile.gacha.bestRecords=cloneWinProfileValue(state.gacha.bestRecords);profile.gacha.history=cloneWinProfileValue(state.gacha.history)}updateGachaLiveStatus(state.gacha)}catch(error){}}
-setInterval(refreshGachaLiveState,500);
+setInterval(refreshGachaLiveState,3000);
 
 </script>
 <script src="v6608.js?build=6645"></script>
