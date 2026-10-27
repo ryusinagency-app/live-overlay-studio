@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.72'
+APP_VERSION = '0.66.73'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1672,7 +1672,7 @@ def record_pachinko_history(data,event):
 
 def choose_pachinko_sign_in_state(data,choice):
     event=data['pachinkoGacha']['event']
-    if choice not in ('plus','minus') or event.get('type')!='pachinko-gacha' or not event.get('active') or event.get('winSign')!='both' or not event.get('choiceReady') or event.get('choice') or event.get('winApplied'): return False
+    if choice not in ('plus','minus') or event.get('type')!='pachinko-gacha' or not event.get('active') or event.get('winSign')!='both' or safe_int(event.get('total'))<=0 or not event.get('choiceReady') or event.get('choice') or event.get('winApplied'): return False
     event['choice']=choice
     if not event.get('isTest'):
         win=data['winCounter'];win['currentWin']=max(-999999,min(999999,win['currentWin']+pachinko_signed_total(event)))
@@ -1685,7 +1685,7 @@ def pachinko_choice_action(event_id,choice=None,created_at=None):
         try: data=json.loads(STATE.read_text(encoding='utf-8'))
         except Exception: return False
         data,_=normalize_state(data);event=data['pachinkoGacha']['event']
-        if safe_int(event.get('id'))!=event_id or not event.get('active') or event.get('winSign')!='both': return False
+        if safe_int(event.get('id'))!=event_id or not event.get('active') or event.get('winSign')!='both' or safe_int(event.get('total'))<=0: return False
         if created_at is not None and safe_float(event.get('createdAt'))!=safe_float(created_at): return False
         if choice is None: event['choiceReady']=True
         elif not choose_pachinko_sign_in_state(data,choice): return False
@@ -1721,7 +1721,7 @@ def complete_pachinko_event(event_id):
         except Exception: data=copy.deepcopy(DEFAULT)
         data,_=normalize_state(data);machine=data['pachinkoGacha'];event=machine['event']
         if safe_int(event.get('id') or 0)!=safe_int(event_id) or not event.get('active'): return False
-        if event.get('winSign')=='both' and not event.get('choice'): return False
+        if event.get('winSign')=='both' and safe_int(event.get('total'))>0 and not event.get('choice'): return False
         if not event.get('isTest'):
             if not event.get('winApplied'): data['winCounter']['currentWin']=max(-999999,min(999999,data['winCounter']['currentWin']+pachinko_signed_total(event)))
             record_pachinko_history(data,event)
