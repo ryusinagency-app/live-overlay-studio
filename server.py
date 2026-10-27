@@ -1396,7 +1396,7 @@ def read_overlay_state(kind, pattern_id=''):
             event=next((item for item in machine.get('queue',[]) if item.get('active') and str(item.get('patternId') or '')==str(pattern_id)),copy.deepcopy(SLOT_EMPTY_EVENT))
         event=dict(event)
         spins=event.get('spins') or []
-        event['spinCount']=len(spins)
+        event.pop('spinCount',None)
         applied=safe_int(event.get('appliedSpins'),0)
         event['currentSpin']=spins[applied] if applied<len(spins) else None
         event['spins']=[]
