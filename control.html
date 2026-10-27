@@ -719,9 +719,9 @@ let giftCatalog=[];
 let activeGachaPreview=null,previewAlertAudio=null,previewAlertTimers=[];let activeGachaPatternId='';
 let currentWinEdited=false;
 let selectedWinProfileId='';
-let stateReadInFlight=null;
+let stateReadInFlight=null,stateReadRetryAfter=0,stateReadBackoff=1000;
 const $=id=>document.getElementById(id);
-async function get(){if(stateReadInFlight)return stateReadInFlight;stateReadInFlight=(async()=>{try{const r=await fetch('/api/state',{cache:'no-store'});return await r.json()}catch(e){return null}finally{stateReadInFlight=null}})();return stateReadInFlight}
+async function get(){if(stateReadInFlight)return stateReadInFlight;if(Date.now()<stateReadRetryAfter)return null;stateReadInFlight=(async()=>{try{const r=await fetch('/api/state',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json();stateReadRetryAfter=0;stateReadBackoff=1000;return data}catch(e){stateReadRetryAfter=Date.now()+stateReadBackoff;stateReadBackoff=Math.min(stateReadBackoff*2,15000);return null}finally{stateReadInFlight=null}})();return stateReadInFlight}
 function usedGiftNames(){return new Set([...document.querySelectorAll('.giftName,.winGiftName,.patternGift,.pGift,.otherPatternGift,.gmGiftName,.slotGiftName')].map(input=>giftKey(input.value)).filter(Boolean))}
 function giftKey(value){return String(value||'').normalize('NFKC').replace(/\s/g,'').toLocaleLowerCase()}
 function renderGiftPicker(){const grid=$('giftPickerGrid'),query=giftKey($('giftPickerSearch').value),used=usedGiftNames(),current=giftKey(giftPickerTarget?.value),hide=$('giftPickerHideUsed').checked;
