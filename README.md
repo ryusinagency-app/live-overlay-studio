@@ -1,6 +1,6 @@
 # Live Overlay Studio
 
-最新バージョン: **v0.66.92**
+最新バージョン: **v0.66.93**
 
 TikTok LIVE Studio向けの配信用オーバーレイ管理アプリです。
 
