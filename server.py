@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.77'
+APP_VERSION = '0.66.78'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1265,6 +1265,10 @@ def read_state():
             data = json.loads(STATE.read_text(encoding='utf-8'))
         except Exception:
             data = copy.deepcopy(DEFAULT)
+        # Spin plans are stored outside state.json to keep overlay snapshots
+        # small. Hydrate them before normalization so appliedSpins is clamped
+        # against the real plan length instead of an empty externalized list.
+        _hydrate_slot_spin_plans(data)
         try:
             merged, changed = normalize_state(data)
         except Exception as error:
@@ -1396,9 +1400,11 @@ def read_overlay_state(kind, pattern_id=''):
             event=next((item for item in machine.get('queue',[]) if item.get('active') and str(item.get('patternId') or '')==str(pattern_id)),copy.deepcopy(SLOT_EMPTY_EVENT))
         event=dict(event)
         spins=event.get('spins') or []
-        event.pop('spinCount',None)
+        event['spinCount']=len(spins)
         applied=safe_int(event.get('appliedSpins'),0)
-        event['currentSpin']=spins[applied] if applied<len(spins) else None
+        current_spin=spins[applied] if applied<len(spins) else None
+        event['currentMode']=str(current_spin.get('mode') or '') if isinstance(current_spin,dict) else ''
+        event.pop('currentSpin',None)
         event['spins']=[]
         pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
         result['slotMachine']={'event':event,'patterns':[pattern] if pattern else []}
@@ -2744,7 +2750,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -3128,11 +3134,24 @@ class Handler(SimpleHTTPRequestHandler):
                 # concurrently; the common overlay continues in FIFO order.
                 run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                 write_state(state);result={'ok':True,'slotMachine':read_state()['slotMachine']}
+            elif self.path == '/api/slot/current-spin':
+                with STATE_LOCK:
+                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
+                    except Exception: state=copy.deepcopy(DEFAULT)
+                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state)
+                    machine=state['slotMachine'];event_id=safe_int(data.get('eventId'));spin_index=safe_int(data.get('spinIndex'),-1)
+                    candidates=[machine.get('event') or {},*(machine.get('queue') or [])]
+                    event=next((item for item in candidates if item.get('active') and safe_int(item.get('id'))==event_id),None)
+                    if (event and spin_index==safe_int(event.get('appliedSpins'),0)
+                            and 0<=spin_index<len(event.get('spins') or [])):
+                        result={'ok':True,'spin':copy.deepcopy(event['spins'][spin_index])}
+                    else:
+                        result={'ok':False}
             elif self.path == '/api/slot/apply-spin':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
+                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
@@ -3141,7 +3160,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
+                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
                         _externalize_slot_spin_plans(state)
@@ -3151,7 +3170,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
+                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
