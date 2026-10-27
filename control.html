@@ -864,7 +864,7 @@ $('duplicateWinProfile').onclick=async()=>{if(winGachaBusy()){$('winProfileStatu
 $('toggleWinProfile').onclick=async()=>{const profile=selectedWinProfile();if(!profile)return;if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は変更できません';return}clearTimeout(timer);timer=null;if(!profile.enabled){const current=activeWinProfile();if(current){collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();current.enabled=false}loadWinProfile(profile);renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を再開しました。ほかのプロファイルは停止中です';save();return}if(profile.id!==state.activeWinProfileId){$('winProfileStatus').textContent='停止・再開できるのは選択中のプロファイルです';return}if(state.winProfiles.length<=1){$('winProfileStatus').textContent='プロファイルが1つだけのため停止できません';return}collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();profile.enabled=false;const next=state.winProfiles.find(item=>item.id!==profile.id);if(!next){profile.enabled=true;$('winProfileStatus').textContent='切り替え先のプロファイルがありません';return}loadWinProfile(next);selectedWinProfileId=next.id;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を停止し、「'+(next.name||'名称なし')+'」だけを稼働させました';save()};
 $('deleteWinProfile').onclick=async()=>{if(state.winProfiles.length<=1){$('winProfileStatus').textContent='最後のプロファイルは削除できません';return}if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は削除できません';return}const profile=selectedWinProfile();if(!profile)return;const wasActive=profile.id===state.activeWinProfileId;if(wasActive){clearTimeout(timer);timer=null;collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist()}state.winProfiles=state.winProfiles.filter(item=>item.id!==profile.id);if(wasActive){const next=state.winProfiles[0];loadWinProfile(next);selectedWinProfileId=next.id;renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings()}else selectedWinProfileId=state.activeWinProfileId;renderWinProfiles();save()}
 }
-async function persist(){if(!controlReady){$('status').textContent='設定の読み込みが完了していないため、保存を停止しています。';return}collect();
+async function persist(){if(!controlReady){$('status').textContent='設定の読み込みが完了していないため、保存を停止しています。';return false}collect();
 collectOtherGacha();
 saveActiveWinProfileSnapshot();
 const version=editVersion;
@@ -873,8 +873,8 @@ try{const payload={...state,_manualWinCounterValue:currentWinEdited};const r=awa
 if(!r.ok)throw Error();
 if(editVersion===version){dirty=false;currentWinEdited=false;}
 $('status').textContent='保存しました';broadcastPreviewSettings();
-setTimeout(()=>$('status').textContent='',1700)}catch(e){dirty=true;
-$('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください'}finally{saving=false;
+setTimeout(()=>$('status').textContent='',1700);return true}catch(e){dirty=true;
+$('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください';return false}finally{saving=false;
 if(dirty&&editVersion!==version)save()}}function save(){if(!controlReady)return;editVersion++;
 dirty=true;
 clearTimeout(timer);
