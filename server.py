@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.78'
+APP_VERSION = '0.66.79'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -464,7 +464,13 @@ def clean_local_path(value):
 
 def normalize_state(data):
     data = data if isinstance(data, dict) else {}
-    merged = {**copy.deepcopy(DEFAULT), **data}
+    original_data = data
+    normalized_source = copy.deepcopy(data)
+    # Active slot progress is stored in state.json while the spin plan itself
+    # lives in a sidecar file. Load that plan before normalizing so any state
+    # update (including a second dedicated-overlay gift) preserves appliedSpins.
+    _hydrate_slot_spin_plans(normalized_source)
+    merged = {**copy.deepcopy(DEFAULT), **normalized_source}
     valid_hex = lambda value: str(value or '').lower() if re.fullmatch(r'#[0-9a-fA-F]{6}', str(value or '')) else ''
     raw_other = merged.get('otherGacha') if isinstance(merged.get('otherGacha'), dict) else {}
     raw_other_event = raw_other.get('event') if isinstance(raw_other.get('event'), dict) else {}
@@ -1236,6 +1242,8 @@ def normalize_state(data):
     if merged.get('smokingGacha') != data.get('smokingGacha', DEFAULT['smokingGacha']):
         changed = True
     merged['slotMachine'] = normalize_slot_machine(merged.get('slotMachine'), SERVER_STARTED_AT)
+    # Keep the normalized state compact for callers that write it directly.
+    _externalize_slot_spin_plans(merged, cleanup=False)
     # Gift names can differ by TikTok display language.  Bind slot rules to
     # TikTok's stable gift ID whenever the saved catalog can resolve the name.
     # Existing name-only settings are upgraded automatically.
@@ -1247,7 +1255,7 @@ def normalize_state(data):
             catalog_gift = gift_catalog_item(slot_rule.get('giftName'), slot_catalog)
             if catalog_gift and catalog_gift.get('id'):
                 slot_rule['giftId'] = str(catalog_gift['id'])[:120]
-    if merged.get('slotMachine') != data.get('slotMachine', DEFAULT['slotMachine']):
+    if merged.get('slotMachine') != original_data.get('slotMachine', DEFAULT['slotMachine']):
         changed = True
     if merged.get('gaugeColor') != data.get('gaugeColor'):
         changed = True
@@ -1299,7 +1307,7 @@ def _slot_plan_filename(event):
     event_id=max(0,safe_int(event.get('id') or 0));created=max(0,int(safe_float(event.get('createdAt') or 0)*1000))
     return f'slot_plan_{event_id}_{created}.json'
 
-def _externalize_slot_spin_plans(state):
+def _externalize_slot_spin_plans(state, cleanup=True):
     machine=state.get('slotMachine') if isinstance(state.get('slotMachine'),dict) else {}
     referenced=set()
     for event in _slot_events(machine):
@@ -1314,11 +1322,12 @@ def _externalize_slot_spin_plans(state):
             temp=path.with_suffix('.tmp')
             temp.write_text(payload,encoding='utf-8');temp.replace(path)
         event['spinsFile']=filename;event['spins']=[]
-    for path in ROOT.glob('slot_plan_*.json'):
-        if path.name not in referenced:
-            try: path.unlink()
-            except OSError: pass
-            with SLOT_SPIN_PLAN_LOCK: SLOT_SPIN_PLAN_CACHE.pop(path.name,None)
+    if cleanup:
+        for path in ROOT.glob('slot_plan_*.json'):
+            if path.name not in referenced:
+                try: path.unlink()
+                except OSError: pass
+                with SLOT_SPIN_PLAN_LOCK: SLOT_SPIN_PLAN_CACHE.pop(path.name,None)
 
 def _hydrate_slot_spin_plans(state):
     machine=state.get('slotMachine') if isinstance(state.get('slotMachine'),dict) else {}
@@ -3138,7 +3147,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state)
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state)
                     machine=state['slotMachine'];event_id=safe_int(data.get('eventId'));spin_index=safe_int(data.get('spinIndex'),-1)
                     candidates=[machine.get('event') or {},*(machine.get('queue') or [])]
                     event=next((item for item in candidates if item.get('active') and safe_int(item.get('id'))==event_id),None)
@@ -3151,7 +3160,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
@@ -3160,7 +3169,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
                         _externalize_slot_spin_plans(state)
@@ -3170,7 +3179,7 @@ class Handler(SimpleHTTPRequestHandler):
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
                     except Exception: state=copy.deepcopy(DEFAULT)
-                    _hydrate_slot_spin_plans(state);state,_=normalize_state(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
+                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
