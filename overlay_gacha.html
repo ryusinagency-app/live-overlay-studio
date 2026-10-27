@@ -57,7 +57,7 @@ window.__gachaLastModernPoll=0;
     if(window.__gachaLastModernPoll&&Date.now()-window.__gachaLastModernPoll<2000)return;
     request('GET','/api/overlay/gacha',null,function(s){var g=s.gacha||{},ev=g.event||{};if(ev.active&&ev.type==='gacha'&&ev.id&&ev.id!==legacyLastId){var patterns=g.patterns||[],pattern=null,settings={},key,i;for(key in g){if(Object.prototype.hasOwnProperty.call(g,key))settings[key]=g[key]}for(i=0;i<patterns.length;i++){if(String(patterns[i].id)===String(ev.patternId)){pattern=patterns[i];break}}if(pattern){for(key in pattern){if(Object.prototype.hasOwnProperty.call(pattern,key))settings[key]=pattern[key]}}var fullscreen=(ev.effectStyle||settings.effectStyle)==='fullscreen-slot';if((legacyLayout==='card'&&fullscreen)||(legacyLayout==='fullscreen'&&!fullscreen))return;legacyLastId=ev.id;legacyPlay(ev,settings)}})
   }
-  setTimeout(function(){poll();legacyPoll=setInterval(poll,400)},1800)
+  setTimeout(function(){poll();legacyPoll=setInterval(poll,800)},1800)
 })();
 </script><script>
 /* Mark the full player ready only after all setup below has completed.
@@ -221,7 +221,7 @@ play=async function(ev,token,animationUrl,g){const forced={...g};if(ev.textRoles
 // The regular state poll also updates global styling. Do not fetch all saved
 // media/history a second time each second solely for text effects.
 if(new URLSearchParams(location.search).has('preview'))gachaRequest('/api/state').then(applyGlobalTextFx).catch(()=>{});
-setInterval(syncWinTextRoles,250);
+setInterval(syncWinTextRoles,750);
 
 let previewSceneTimer=null,activePreviewScene="normal-spin",scenePreviewMode=false;
 function applyGachaScene(g,scene){const style={...(g||{})};activePreviewScene=scene;activeTextSettings=style;applyPatternText(style);refreshTextVisibility(style);setOverlayFont(style.globalFontFamily||'system');$('card').style.setProperty('--gacha-font',fontStack(style.fontFamily));const card=$('card');card.classList.remove('spinNumbers');card.classList.toggle('fullscreen',style.effectStyle==='fullscreen-slot');card.classList.toggle('setCountAlways',style.showSetCountAlways!==false);card.classList.remove('hasElementLayout');for(const key of ['pattern','sender','setCount','result','state','total']){const el=$(key);el.classList.remove('elementLayoutPiece');el.style.removeProperty('--edit-x');el.style.removeProperty('--edit-y')}return style}
@@ -234,5 +234,5 @@ window.addEventListener('message',event=>{if(event.origin!==location.origin)retu
 for(const key of ['pattern','sender','setCount','result','state','total']){$(key).addEventListener('pointerdown',event=>{if(!new URLSearchParams(location.search).has('preview')||!new URLSearchParams(location.search).has('edit')||!livePreviewG)return;const card=$('card'),el=$(key);if(getComputedStyle(el).display==='none')return;event.preventDefault();const cardRect=card.getBoundingClientRect(),elRect=el.getBoundingClientRect(),centerX=elRect.left+elRect.width/2,centerY=elRect.top+elRect.height/2,offsetX=event.clientX-centerX,offsetY=event.clientY-centerY;el.setPointerCapture&&el.setPointerCapture(event.pointerId);const position=(ev)=>{const rect=card.getBoundingClientRect(),box=el.getBoundingClientRect(),pad=10;let x=(ev.clientX-offsetX-rect.left)/rect.width*100,y=(ev.clientY-offsetY-rect.top)/rect.height*100,minX=(box.width/2+pad)/rect.width*100,maxX=100-minX,minY=(box.height/2+pad)/rect.height*100,maxY=100-minY;if(minX>maxX)minX=maxX=50;if(minY>maxY)minY=maxY=50;x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));el.style.setProperty('--edit-x',x+'%');el.style.setProperty('--edit-y',y+'%');parent.postMessage({type:'gacha-element-layout',patternId:livePreviewG.id,scene:activePreviewScene,key,x,y},location.origin)};const move=ev=>position(ev);const done=ev=>{if((ev&&ev.pointerId)!==undefined&&ev.pointerId!==event.pointerId)return;position(ev||event);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',done);el.removeEventListener('pointercancel',done)};el.addEventListener('pointermove',move);el.addEventListener('pointerup',done);el.addEventListener('pointercancel',done)})}
 
 window.__gachaMainStarted=true;
-if(!new URLSearchParams(location.search).has("preview")){update();setInterval(update,250)}
+if(!new URLSearchParams(location.search).has("preview")){update();setInterval(update,750)}
 </script></body></html>
