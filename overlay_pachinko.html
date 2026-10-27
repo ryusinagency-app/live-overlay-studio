@@ -107,7 +107,7 @@ async function waitPachinkoChoice(event){
 }
 async function playPachinkoEnd(p,event,detail=''){
  stopPachinkoBeep();startStageMedia(p,'end');showText('終了','',detail||'合計 '+pachinkoWinText(event.total,event),'');
- if(event.winSign==='both'){showText('＋か－を選んでください','± SELECT','合計 '+Math.abs(event.total||0)+' WIN','');event.choice=await waitPachinkoChoice(event);showText('確定！',pachinkoWinText(event.total,event),'合計 '+pachinkoWinText(event.total,event),'')}
+ if(event.winSign==='both'&&Math.abs(Number(event.total)||0)>0){showText('＋か－を選んでください','± SELECT','合計 '+Math.abs(event.total||0)+' WIN','');event.choice=await waitPachinkoChoice(event);showText('確定！',pachinkoWinText(event.total,event),'合計 '+pachinkoWinText(event.total,event),'')}
  await sleep(Math.max(.2,Math.min(120,Number(p.endSeconds)||3))*1000*playbackSpeed);
 }
 // Visual reels follow the server result; they never perform a second lottery.
