@@ -444,10 +444,11 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     if pattern.get('machineType') == 'at' and pattern.get('upperAtEnabled'):
         entry_grants.append(_int(pattern.get('upperAtSpins'), 50, 1, 10000))
     largest_entry_grant = max(entry_grants)
-    # The plan is generated before playback. Allow at most two entry-sized AT
-    # blocks beyond the starting spins, rather than expanding
-    # a high-continuation-rate AT into hundreds of blocks (e.g. 1 + 30*100).
-    at_continuation_allowance = (largest_entry_grant * 2
+    # Test plans should stay short enough to check without filling the queue
+    # with hundreds of AT blocks. Keep the existing production bound so real
+    # gift runs retain their configured continuation behavior.
+    continuation_blocks = 2 if is_test else 100
+    at_continuation_allowance = (largest_entry_grant * continuation_blocks
                                  if pattern.get('machineType') == 'at' and pattern.get('atEnabled')
                                  else largest_entry_grant)
     max_spins = min(20000, max(budget, budget * 20, budget + 20,
