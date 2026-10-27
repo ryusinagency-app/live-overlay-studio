@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.80'
+APP_VERSION = '0.66.81'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -194,7 +194,7 @@ DEFAULT = {
     # TikTokから取得したギフトは受信を止めても、アプリを再起動しても残す。
     # aliasesには利用者が設定した日本語名などの別名も保存する。
     'giftCatalog': [],
-    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'scrollDirection':'vertical', 'scrollStyle':'page', 'scrollSpeed':40, 'loop':True, 'newestFirst':True, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
+    'giftWall': {'minCoins':100, 'columns':4, 'rows':2, 'pageSeconds':8, 'scrollDirection':'vertical', 'scrollStyle':'page', 'scrollSpeed':40, 'loop':True, 'newestFirst':True, 'history':[], 'displayHistory':[], 'fontFamily':'global', 'textScale':100, 'avatarSize':44, 'nameSize':18, 'giftNameSize':16, 'countSize':15, 'giftImageSize':44, 'cardWidth':0, 'cardHeight':0, 'iconGap':8, 'cardBg':'#1c1c24', 'cardBorder':'#ffcf59', 'cardTextColor':'#ffffff', 'cardOpacity':93, 'nextId':1},
     'tiktokUsername': '',
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
     'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True, 'soundEnabled': False, 'addSoundUrl': '', 'addSoundName': '', 'addSoundVolume': 75, 'subSoundUrl': '', 'subSoundName': '', 'subSoundVolume': 75, 'goalSoundUrl': '', 'goalSoundName': '', 'goalSoundVolume': 75, 'soundVolume': 75},
@@ -733,6 +733,9 @@ def normalize_state(data):
         'giftNameSize': max(8, min(80, safe_int(raw_wall.get('giftNameSize', 16), 16))),
         'countSize': max(8, min(80, safe_int(raw_wall.get('countSize', 15), 15))),
         'giftImageSize': max(20, min(160, safe_int(raw_wall.get('giftImageSize', 44), 44))),
+        'cardWidth': max(0, min(2000, safe_int(raw_wall.get('cardWidth', 0), 0))),
+        'cardHeight': max(0, min(800, safe_int(raw_wall.get('cardHeight', 0), 0))),
+        'iconGap': max(0, min(80, safe_int(raw_wall.get('iconGap', 8), 8))),
         'cardBg': valid_hex(raw_wall.get('cardBg')) or '#1c1c24',
         'cardBorder': valid_hex(raw_wall.get('cardBorder')) or '#ffcf59',
         'cardTextColor': valid_hex(raw_wall.get('cardTextColor')) or '#ffffff',
