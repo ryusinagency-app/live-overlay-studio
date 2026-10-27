@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.74'
+APP_VERSION = '0.66.75'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1059,7 +1059,7 @@ def normalize_state(data):
         configured['statsOverlay']=normalize_stats_overlay(item.get('statsOverlay'))
     raw_p_event=raw_pachinko.get('event') if isinstance(raw_pachinko.get('event'),dict) else {}
     p_created=max(0,safe_float(raw_p_event.get('createdAt') or 0));p_active=bool(raw_p_event.get('active',False)) and p_created>=SERVER_STARTED_AT
-    merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'timeShortSpins':max(0,min(10000,safe_int(raw_p_event.get('timeShortSpins',0),0))),'timeShortHitSpin':max(0,min(10000,safe_int(raw_p_event.get('timeShortHitSpin',0),0))),'route':str(raw_p_event.get('route') or '')[:30],'preAlertIndex':max(-1,min(2,safe_int(raw_p_event.get('preAlertIndex',-1),-1))),'preAlertTiming':raw_p_event.get('preAlertTiming') if raw_p_event.get('preAlertTiming') in ('spin-start','during-spin','before-result') else 'before-result','rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
+    merged['pachinkoGacha']={'patterns':pachinko_patterns,'queue':[x for x in (raw_pachinko.get('queue') or []) if isinstance(x,dict)][:100],'history':[x for x in (raw_pachinko.get('history') or []) if isinstance(x,dict)][:200],'event':{'id':max(0,safe_int(raw_p_event.get('id') or 0)),'type':'pachinko-gacha' if raw_p_event.get('type')=='pachinko-gacha' else '','active':p_active,'isTest':bool(raw_p_event.get('isTest',False)),'patternId':str(raw_p_event.get('patternId') or '')[:80],'patternName':str(raw_p_event.get('patternName') or '')[:60],'senderName':str(raw_p_event.get('senderName') or '')[:80],'spins':max(0,safe_int(raw_p_event.get('spins') or 0)),'hitSpin':max(0,safe_int(raw_p_event.get('hitSpin') or 0)),'timeShortSpins':max(0,min(10000,safe_int(raw_p_event.get('timeShortSpins',0),0))),'timeShortHitSpin':max(0,min(10000,safe_int(raw_p_event.get('timeShortHitSpin',0),0))),'route':str(raw_p_event.get('route') or '')[:30],'preAlertIndex':max(-1,min(2,safe_int(raw_p_event.get('preAlertIndex',-1),-1))),'preAlertTiming':raw_p_event.get('preAlertTiming') if raw_p_event.get('preAlertTiming') in ('spin-start','during-spin','before-result') else 'before-result','preAlertAudioVolume':max(0,min(100,safe_int(raw_p_event.get('preAlertAudioVolume'),75))) if raw_p_event.get('preAlertAudioVolume') is not None else None,'rounds':raw_p_event.get('rounds') if isinstance(raw_p_event.get('rounds'),list) else [],'total':max(0,min(999999,safe_int(raw_p_event.get('total') or 0))),'createdAt':p_created}}
     p_stats={}
     raw_p_stats=raw_pachinko.get('statsByDate') if isinstance(raw_pachinko.get('statsByDate'),dict) else {}
     for date_key in sorted(raw_p_stats.keys(),reverse=True)[:370]:
@@ -1540,7 +1540,7 @@ def pachinko_payout(pattern, prefix, minimum, maximum=None):
     lo,hi=sorted((max(0,int(minimum)),max(0,int(maximum if maximum is not None else minimum))))
     return random.randint(lo,hi)
 
-def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None, avatar_url=''):
+def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, test_pre_alert_index=None, avatar_url='', test_pre_alert_audio_volume=None):
     machine=data['pachinkoGacha'];spins=max(1,int(pattern.get('spinsPerGift',10)));den=max(1,int(pattern.get('hitDenominator',199)));num=max(1,min(den,int(pattern.get('hitNumerator',1))))
     hit_spin=0
     for spin in range(1,spins+1):
@@ -1614,7 +1614,7 @@ def run_pachinko_draw(data, pattern, sender_name='テスト', is_test=False, tes
         prealert_index=random.choice(matching_alerts) if matching_alerts else -1
     prealert=pattern.get('preAlerts',[{}])[prealert_index] if prealert_index>=0 else {}
     ids=[safe_int(machine.get('event',{}).get('id') or 0)]+[safe_int(x.get('id') or 0) for x in machine.get('queue',[]) if isinstance(x,dict)]
-    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'avatarUrl':gacha_record_detail({'avatarUrl':avatar_url})['avatarUrl'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','createdAt':time.time()}
+    event={'id':max(ids,default=0)+1,'type':'pachinko-gacha','active':False,'isTest':bool(is_test),'patternId':pattern['id'],'patternName':pattern['name'],'avatarUrl':gacha_record_detail({'avatarUrl':avatar_url})['avatarUrl'],'senderName':str(sender_name or '')[:80],'spins':spins,'hitSpin':hit_spin,'timeShortSpins':short_spins if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'timeShortHitSpin':time_short_hit_spin if hit_spin and pattern.get('timeShortEnabled') and not rounds else 0,'route':route,'rounds':rounds,'total':total,'preAlertIndex':prealert_index,'preAlertTiming':prealert.get('timing','before-result') if prealert_index>=0 else 'before-result','preAlertAudioVolume':max(0,min(100,safe_int(test_pre_alert_audio_volume,prealert.get('audioVolume',75)))) if is_test and prealert_index>=0 else None,'createdAt':time.time()}
     event.update(initialWin=initial_win,timeShortWin=time_short_win)
     event.update(czUsed=bool(hit_spin and pattern.get('czEnabled')),czSuccess=bool(hit_spin and pattern.get('czEnabled') and cz_success))
     event.update(winSign=pattern.get('winSign') if pattern.get('winSign') in ('plus','minus','both') else 'plus',choice='',choiceReady=False,winApplied=False)
@@ -2964,7 +2964,9 @@ class Handler(SimpleHTTPRequestHandler):
                 requested_alert=data.get('preAlertIndex')
                 test_alert_index=None if requested_alert is None else safe_int(requested_alert,-1)
                 if test_alert_index is not None and not 0<=test_alert_index<3: raise ValueError('先バレパターンを確認してください')
-                run_pachinko_draw(state,pattern,'テスト',is_test=True,test_pre_alert_index=test_alert_index);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
+                test_alert_volume=data.get('preAlertAudioVolume')
+                if test_alert_volume is not None: test_alert_volume=max(0,min(100,safe_int(test_alert_volume,75)))
+                run_pachinko_draw(state,pattern,'テスト',is_test=True,test_pre_alert_index=test_alert_index,test_pre_alert_audio_volume=test_alert_volume);write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
             elif self.path == '/api/pachinko/preview':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 pattern=data.get('pattern')
