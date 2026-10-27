@@ -23,9 +23,9 @@ import socket
 from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_slot_spin,
                           choose_sign as choose_slot_sign, complete_event as complete_slot_event,
                           default_pattern as default_slot_pattern,
-                          normalize_slot_machine, run_slot_draw)
+                          normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.66.82'
+APP_VERSION = '0.66.83'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1413,6 +1413,7 @@ def read_overlay_state(kind, pattern_id=''):
         event=dict(event)
         spins=event.get('spins') or []
         event['spinCount']=len(spins)
+        event['visibleSpinCount']=visible_spin_count(event)
         applied=safe_int(event.get('appliedSpins'),0)
         current_spin=spins[applied] if applied<len(spins) else None
         event['currentMode']=str(current_spin.get('mode') or '') if isinstance(current_spin,dict) else ''
@@ -1435,6 +1436,7 @@ def read_slot_live_status():
     state=read_cached_overlay_source();machine=state['slotMachine'];event=machine.get('event') or {}
     event_status={key:event.get(key) for key in ('id','active','senderName','patternId','appliedSpins','total','choiceReady','choice')}
     event_status['spinCount']=len(event.get('spins') or [])
+    event_status['visibleSpinCount']=visible_spin_count(event)
     return {'slotMachine':{'event':event_status,'queueCount':len(machine.get('queue') or []),
                            'history':machine.get('history',[]),'statsByDate':machine.get('statsByDate',{}),
                            'statsDate':machine.get('statsDate','')}}

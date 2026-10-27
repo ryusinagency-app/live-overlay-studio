@@ -630,6 +630,21 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     }
 
 
+def visible_spin_count(event):
+    """Count awarded spins, excluding additions from pre-rolled future results."""
+    spins = event.get('spins') or []
+    index = _int(event.get('appliedSpins'), 0, 0)
+    if 'initialSpins' in event:
+        initial = _int(event.get('initialSpins'), 0, 0)
+    else:
+        # Compatibility for an event created by an older build.
+        initial = max(0, len(spins) - sum(
+            _int((spin or {}).get('addedSpins'), 0, 0) for spin in spins))
+    awarded_additions = sum(
+        _int((spin or {}).get('addedSpins'), 0, 0) for spin in spins[:index])
+    return max(0, initial + awarded_additions - index)
+
+
 def run_slot_draw(state, pattern, gift_name='', sender_name='', avatar_url='', is_test=False, initial_spins=None):
     global _SLOT_EVENT_ID_LAST
     machine = state['slotMachine']
