@@ -1,10 +1,13 @@
 import copy
 import random
+import threading
 import time
 from datetime import datetime, timezone, timedelta
 
 
 JST = timezone(timedelta(hours=9))
+_SLOT_EVENT_ID_LOCK = threading.Lock()
+_SLOT_EVENT_ID_LAST = 0
 
 
 EMPTY_EVENT = {
@@ -628,8 +631,20 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
 
 
 def run_slot_draw(state, pattern, gift_name='', sender_name='', avatar_url='', is_test=False, initial_spins=None):
+    global _SLOT_EVENT_ID_LAST
     machine = state['slotMachine']
     event = build_event(pattern, gift_name, sender_name, avatar_url, is_test, initial_spins)
+    # Dedicated overlays can animate different queued slots at the same time.
+    # Millisecond timestamps alone can collide for gifts received together,
+    # causing both requests to resolve to the first event and replay its count.
+    with _SLOT_EVENT_ID_LOCK:
+        existing_ids = [_int(item.get('id')) for item in
+                        [machine.get('event') or {}, *(machine.get('queue') or [])]
+                        if isinstance(item, dict)]
+        event_id = max(int(time.time() * 1000), max(existing_ids, default=0) + 1,
+                       _SLOT_EVENT_ID_LAST + 1)
+        _SLOT_EVENT_ID_LAST = event_id
+    event['id'] = event_id
     if machine.get('event', {}).get('active'):
         machine.setdefault('queue', []).append(event)
     else:
