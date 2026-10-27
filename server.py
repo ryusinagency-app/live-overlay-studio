@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw)
 
-APP_VERSION = '0.66.71'
+APP_VERSION = '0.66.72'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -234,8 +234,12 @@ def _gift_value(value, *names):
     return None
 
 def _gift_image_url(value):
-    images = [_gift_value(value, 'image', 'gift_image', 'giftImage', 'icon', 'picture',
-                          'image_url', 'imageUrl', 'icon_url', 'iconUrl'), value]
+    images = [candidate for candidate in (
+        _gift_value(value, 'image'), _gift_value(value, 'gift_image', 'giftImage'),
+        _gift_value(value, 'icon'), _gift_value(value, 'picture'),
+        _gift_value(value, 'image_url', 'imageUrl'), _gift_value(value, 'icon_url', 'iconUrl'),
+        value,
+    ) if candidate]
     for item in images:
         if not item:
             continue
@@ -253,7 +257,16 @@ def _gift_image_url(value):
 
 def normalize_gift_catalog(raw):
     if isinstance(raw, dict):
-        values = list(raw.values())
+        # TikTokLive 7.x returns client.gift_info as a response dictionary
+        # whose `gifts` key contains the actual gift records.
+        nested = _gift_value(raw, 'gifts', 'gift_list', 'giftList')
+        if isinstance(nested, (list, tuple, set)):
+            values = list(nested)
+        elif _gift_value(raw, 'name', 'gift_name', 'giftName'):
+            values = [raw]
+        else:
+            # Also accept older ID -> gift mappings.
+            values = list(raw.values())
     elif isinstance(raw, (list, tuple, set)):
         values = list(raw)
     else:
@@ -672,11 +685,14 @@ def normalize_state(data):
     for index, item in enumerate(raw_wall.get('history') or []):
         if not isinstance(item, dict):
             continue
-        image_url = str(item.get('giftImageUrl') or item.get('imageUrl') or '')[:2000]
-        if not image_url.startswith(('http://', 'https://')):
-            image_url = ''
         original_gift_name = str(item.get('canonicalGiftName') or item.get('giftName') or 'ギフト')[:120]
         catalog_gift = gift_catalog_item(original_gift_name, merged.get('giftCatalog', []))
+        # Older history rows may have been saved before the gift catalog
+        # image was resolved. Recover their icon from the persistent catalog.
+        image_url = str(item.get('giftImageUrl') or item.get('imageUrl') or
+                        (catalog_gift or {}).get('imageUrl') or '')[:2000]
+        if not image_url.startswith(('http://', 'https://')):
+            image_url = ''
         gift_history.append({
             'id': max(0, safe_int(item.get('id') or index + 1)),
             'senderName': str(item.get('senderName') or 'ゲスト')[:80],
