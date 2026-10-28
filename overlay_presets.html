@@ -1,0 +1,9 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>プリセット</title>
+<link rel="stylesheet" href="preset_board.css"><style id="customStyle"></style>
+<main id="board" class="presetBoard" aria-label="ギフト説明一覧"></main>
+<script src="preset_board.js"></script><script>
+(()=>{'use strict';const host=document.getElementById('board'),id=new URLSearchParams(location.search).get('id')||'';let etag='',busy=false;
+if(new URLSearchParams(location.search).has('preview')){window.addEventListener('message',e=>{if(e.source===window.parent&&e.data?.type==='preset-preview')renderPresetBoard(host,e.data.board,document.getElementById('customStyle'))});return}
+async function poll(){if(busy)return;busy=true;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);try{const r=await fetch('/api/overlay/presets?id='+encodeURIComponent(id),{cache:'no-cache',headers:etag?{'If-None-Match':etag}:{},signal:controller.signal});if(r.status===304)return;if(!r.ok)throw Error(r.status);const data=await r.json();renderPresetBoard(host,data.board,document.getElementById('customStyle'));etag=r.headers.get('ETag')||''}catch(e){}finally{clearTimeout(timer);busy=false}}
+poll();setInterval(poll,5000);
+})();</script></html>
