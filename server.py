@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.07'
+APP_VERSION = '0.67.08'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1497,6 +1497,23 @@ def write_state(data):
     with STATE_LOCK:
         _externalize_slot_spin_plans(merged)
         STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+
+def read_slot_mutation_state():
+    """Read only the structures needed to advance slot playback.
+
+    Normalizing the complete user configuration after every reel used to hold
+    STATE_LOCK long enough to block all other overlays and tests.
+    """
+    try:
+        state = json.loads(STATE.read_text(encoding='utf-8'))
+    except Exception:
+        state = copy.deepcopy(DEFAULT)
+    if (not isinstance(state, dict)
+            or not isinstance(state.get('slotMachine'), dict)
+            or not isinstance(state.get('winCounter'), dict)):
+        state, _ = normalize_state(state if isinstance(state, dict) else {})
+    _hydrate_slot_spin_plans(state)
+    return state
 
 def change_mission_gift(mission, delta):
     goal = max(1, int(mission.get('giftGoal', 1)))
@@ -3204,7 +3221,7 @@ class Handler(SimpleHTTPRequestHandler):
                     run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                     _externalize_slot_spin_plans(state)
                     STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-                result={'ok':True,'slotMachine':read_state()['slotMachine']}
+                result={'ok':True,'slotMachine':state['slotMachine']}
             elif self.path == '/api/slot/current-spin':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
@@ -3222,18 +3239,16 @@ class Handler(SimpleHTTPRequestHandler):
                         result={'ok':False}
             elif self.path == '/api/slot/apply-spin':
                 with STATE_LOCK:
-                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
-                    except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
+                    state=read_slot_mutation_state()
+                    ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok}
             elif self.path == '/api/slot/choose-sign':
                 with STATE_LOCK:
-                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
-                    except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
+                    state=read_slot_mutation_state()
+                    ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
                         _externalize_slot_spin_plans(state)
@@ -3241,9 +3256,8 @@ class Handler(SimpleHTTPRequestHandler):
                 result={'ok':ok,'completed':ok}
             elif self.path == '/api/slot/complete':
                 with STATE_LOCK:
-                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
-                    except Exception: state=copy.deepcopy(DEFAULT)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state);ok=complete_slot_event(state,safe_int(data.get('eventId')))
+                    state=read_slot_mutation_state()
+                    ok=complete_slot_event(state,safe_int(data.get('eventId')))
                     if ok:
                         _externalize_slot_spin_plans(state)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
