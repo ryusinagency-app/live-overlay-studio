@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.66.99'
+APP_VERSION = '0.67.04'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -856,7 +856,7 @@ def normalize_state(data):
         pre_alerts=[]
         for alert_index in range(3):
             alert=raw_alerts[alert_index] if alert_index<len(raw_alerts) and isinstance(raw_alerts[alert_index],dict) else {}
-            pre_alerts.append({'standardSoundEnabled':alert.get('standardSoundEnabled',True) is not False,'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('result-only','spin-start','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'audioSeconds':max(0,min(600,safe_float(alert.get('audioSeconds',0),0))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
+            pre_alerts.append({'standardSoundEnabled':alert.get('standardSoundEnabled',True) is not False,'enabled':bool(alert.get('enabled',False)),'displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','onContinue':bool(alert.get('onContinue',False)),'onUpper':bool(alert.get('onUpper',False)),'minWin':max(0,min(999999,safe_int(alert.get('minWin',0)))),'continueChance':max(0,min(100,safe_int(alert.get('continueChance',100),100))),'upperChance':max(0,min(100,safe_int(alert.get('upperChance',100),100))),'winChance':max(0,min(100,safe_int(alert.get('winChance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'seconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'textSeconds':max(.2,min(300,safe_float(alert.get('textSeconds',alert.get('seconds',1.2)),1.2))),'mediaSeconds':max(0,min(600,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','volume':max(0,min(100,safe_int(alert.get('volume',75)))),'animationUrl':str(alert.get('animationUrl') or '')[:2000],'animationName':str(alert.get('animationName') or '')[:120],'audioUrl':str(alert.get('audioUrl') or '')[:2000],'audioName':str(alert.get('audioName') or '')[:120],'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',75)))),'audioSeconds':max(0,min(600,safe_float(alert.get('audioSeconds',0),0))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75))))})
         patterns.append({
             'id':str(item.get('id') or f'gacha-pattern-{index+1}'), 'name':str(item.get('name') or f'パターン{index+1}')[:60], 'giftName':str(item.get('giftName') or '').strip(), 'textRoles':text_roles,
             'minWin':min(low,high), 'maxWin':max(low,high), 'outcomeMode':'weighted' if item.get('outcomeMode')=='weighted' else 'range', 'outcomes':outcomes,
@@ -1371,7 +1371,7 @@ def read_cached_overlay_source():
     with OVERLAY_SNAPSHOT_LOCK:
         cache = OVERLAY_SNAPSHOT_CACHE
         current_signature = signature()
-        if cache['state'] is None or cache['signature'] != current_signature or time.monotonic() - cache['at'] >= .2:
+        if cache['state'] is None or cache['signature'] != current_signature or time.monotonic() - cache['at'] >= 1.0:
             cache['state'] = read_state()
             # If a writer races us after read_state releases STATE_LOCK, keep the
             # earlier signature so the next request invalidates this snapshot.
@@ -1387,7 +1387,27 @@ def read_overlay_state(kind, pattern_id=''):
               'textOutlineEnabled', 'textOutlineColor', 'textOutlineWidth',
               'textBackgroundEnabled', 'textBackgroundColor', 'textBackgroundOpacity')
     result = {key: state[key] for key in common if key in state}
-    if kind == 'win':
+    if kind == 'basic':
+        for key in ('missions', 'counters', 'giftRules', 'memos', 'timer', 'showComp',
+                    'compCardBg', 'compCardBorder', 'compCardHeight', 'compCardOpacity',
+                    'compCardTextColor', 'compCardWidth', 'compFontFamily',
+                    'compText', 'compTextScale', 'compTitle', 'textScale'):
+            if key in state:
+                result[key] = state[key]
+        result['textEffects'] = state.get('textEffects', {})
+    elif kind == 'smoking':
+        result['smokingTimer'] = state.get('smokingTimer', {})
+        result['textEffects'] = {'smoking': state.get('textEffects', {}).get('smoking', {})}
+    elif kind == 'smoking-gacha':
+        machine = state.get('smokingGacha', {})
+        event = machine.get('event', {})
+        pattern = next((p for p in machine.get('patterns', []) if p.get('id') == event.get('patternId')), None)
+        result['smokingGacha'] = {key: value for key, value in machine.items()
+                                  if key not in ('patterns', 'queue', 'history')}
+        result['smokingGacha']['patterns'] = [pattern] if pattern else []
+        effect_key = 'smoking-gacha:' + str(event.get('patternId') or '')
+        result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+    elif kind == 'win':
         result['winCounter'] = {key: value for key, value in state['winCounter'].items()
                                 if key != 'giftRules' and not key.startswith('shortcut')}
         result['textEffects'] = {'win': state.get('textEffects', {}).get('win', {})}
@@ -1420,6 +1440,8 @@ def read_overlay_state(kind, pattern_id=''):
         machine=state['pachinkoGacha'];event=machine.get('event',{})
         pattern=next((p for p in machine.get('patterns',[]) if p.get('id')==event.get('patternId')),None)
         result['pachinkoGacha']={'event':event,'patterns':[pattern] if pattern else []}
+        effect_key = 'pachinko:' + str(event.get('patternId') or '')
+        result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
     elif kind == 'slot':
         machine=state['slotMachine'];event=machine.get('event',{})
         if pattern_id and str(event.get('patternId') or '') != str(pattern_id):
@@ -2756,7 +2778,7 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/slot/status':
             body=json.dumps(read_slot_live_status(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
-        if parsed.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/smoking-gacha', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = parsed.path.rsplit('/', 1)[-1]
             query=parse_qs(parsed.query);pattern_id=str((query.get('id') or [''])[0]) if kind=='slot' else ''
             body = json.dumps(read_overlay_state(kind,pattern_id), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
@@ -2765,7 +2787,7 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.dumps({'host': LAN_IP, 'baseUrl': f'http://{LAN_IP}:8765/', 'localBaseUrl': 'http://127.0.0.1:8765/', 'appVersion': APP_VERSION}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/state':
-            body = json.dumps(read_state(), ensure_ascii=False).encode('utf-8')
+            body = json.dumps(read_cached_overlay_source(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/status':
             body = json.dumps(get_tiktok_status(), ensure_ascii=False).encode('utf-8')
