@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.event.release.tag_name || inputs.tag, 'minecraft-v') }}
     runs-on: windows-latest
     steps:
       - name: Check out release source
