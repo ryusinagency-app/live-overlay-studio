@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.17'
+APP_VERSION = '0.67.18'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1059,6 +1059,8 @@ def normalize_state(data):
             for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
+            for kind in ('Image','Video','Audio'):
+                media[stage+kind+'Seconds']=max(0,min(600,safe_float(item.get(stage+kind+'Seconds',0),0)))
             media[stage+'AudioLoop']=bool(item.get(stage+'AudioLoop',stage not in ('stop','preAlert1','preAlert2','preAlert3')+pachinko_phase_media_stages()))
             media[stage+'VideoLoop']=item.get(stage+'VideoLoop',True) is not False
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
@@ -1080,7 +1082,10 @@ def normalize_state(data):
         prealerts=[]
         for alert_index in range(3):
             alert=raw_prealerts[alert_index] if alert_index<len(raw_prealerts) and isinstance(raw_prealerts[alert_index],dict) else {}
-            prealerts.append({'enabled':bool(alert.get('enabled',False)),'condition':alert.get('condition') if alert.get('condition') in ('any','hit','miss','cz-success','cz-fail','at','upper','lt') else 'any','chance':max(0,min(100,safe_int(alert.get('chance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'textSeconds':max(.2,min(120,safe_float(alert.get('textSeconds',1.2),1.2))),'mediaSeconds':max(0,min(120,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','audioSeconds':max(0,min(120,safe_float(alert.get('audioSeconds',0),0))),'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',item.get(f'preAlert{alert_index+1}AudioVolume',75)),75))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75),75))),'animationUrl':media.get(f'preAlert{alert_index+1}AnimationUrl',''),'animationName':media.get(f'preAlert{alert_index+1}AnimationName',''),'audioUrl':media.get(f'preAlert{alert_index+1}AudioUrl',''),'audioName':media.get(f'preAlert{alert_index+1}AudioName','')})
+            prealerts.append({'enabled':bool(alert.get('enabled',False)),'condition':alert.get('condition') if alert.get('condition') in ('any','hit','miss','cz-success','cz-fail','at','upper','lt') else 'any','chance':max(0,min(100,safe_int(alert.get('chance',100),100))),'timing':alert.get('timing') if alert.get('timing') in ('spin-start','during-spin','before-result') else 'before-result','displayMode':alert.get('displayMode') if alert.get('displayMode') in ('full','sound-only','sound-text') else 'full','text':str(alert.get('text') or 'チャンス！')[:80],'showText':alert.get('showText',True) is not False,'textSize':max(14,min(300,safe_int(alert.get('textSize',56),56))),'textSeconds':max(.2,min(120,safe_float(alert.get('textSeconds',1.2),1.2))),'mediaSeconds':max(0,min(120,safe_float(alert.get('mediaSeconds',0),0))),'color':valid_hex(alert.get('color')) or '#ffe05b','audioSeconds':max(0,min(600,safe_float(alert.get('audioSeconds',0),0))),'audioVolume':max(0,min(100,safe_int(alert.get('audioVolume',item.get(f'preAlert{alert_index+1}AudioVolume',75)),75))),'videoVolume':max(0,min(100,safe_int(alert.get('videoVolume',75),75))),'animationUrl':media.get(f'preAlert{alert_index+1}AnimationUrl',''),'animationName':media.get(f'preAlert{alert_index+1}AnimationName',''),'audioUrl':media.get(f'preAlert{alert_index+1}AudioUrl',''),'audioName':media.get(f'preAlert{alert_index+1}AudioName','')})
+        for alert_index,alert in enumerate(prealerts):
+            key=f'preAlert{alert_index+1}AudioSeconds'
+            media[key]=max(0,min(600,safe_float(item.get(key,alert['audioSeconds']),0)))
         raw_digits=item.get('digitSettings') if isinstance(item.get('digitSettings'),list) else []
         digit_settings=[]
         for digit in range(10):
@@ -1090,7 +1095,7 @@ def normalize_state(data):
             'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
             'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
             'reachMissChance':max(0,min(100,safe_float(item.get('reachMissChance',15),15))),
-            'spinBeepLoop':item.get('spinBeepLoop',True) is not False, 'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
+            'spinBeepAudioSeconds':max(0,min(600,safe_float(item.get('spinBeepAudioSeconds',0),0))), 'spinBeepLoop':item.get('spinBeepLoop',True) is not False, 'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
             'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
             'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))), 'timeShortSpinSeconds':max(.05,min(30,safe_float(item.get('timeShortSpinSeconds',.8),.8))), 'reachEnabled':item.get('reachEnabled',True) is not False,
             'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atSpins':at_spins, 'atHitNumerator':max(0,min(at_den,safe_int(item.get('atHitNumerator',at_default_num),at_default_num))), 'atHitDenominator':at_den, 'atSpinSeconds':max(.05,min(30,safe_float(item.get('atSpinSeconds',.8),.8))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
@@ -3818,6 +3823,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
