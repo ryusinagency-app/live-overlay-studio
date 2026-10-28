@@ -1864,7 +1864,7 @@ renderSmokingGacha();
 renderMissions();
 renderCounters();
 renderGiftRules()}},30000);
-setInterval(async()=>{try{const fresh=await get();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},1500);
+setInterval(async()=>{try{const response=await fetch('/api/overlay/win',{cache:'no-store'});if(!response.ok)return;const fresh=await response.json();if(!fresh?.winCounter)return;const value=Number(fresh.winCounter.currentWin)||0;state.winCounter={...(state.winCounter||{}),...fresh.winCounter};const active=activeWinProfile();if(active)active.winCounter=cloneWinProfileValue(state.winCounter);if(!currentWinEdited)$('gachaCurrent').value=value}catch(e){}},1500);
 setInterval(refreshGiftWallHistory,2400);
 setInterval(refreshGiftStatus,3000);
 setInterval(refreshHotkeyStatus,3000);
