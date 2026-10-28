@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.08'
+APP_VERSION = '0.67.09'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -3208,10 +3208,7 @@ class Handler(SimpleHTTPRequestHandler):
                 # between event creation and persistence, leaving the overlay
                 # with an event whose spin plan was never committed.
                 with STATE_LOCK:
-                    try: state=json.loads(STATE.read_text(encoding='utf-8'))
-                    except Exception: state=copy.deepcopy(DEFAULT)
-                    _hydrate_slot_spin_plans(state)
-                    state,_=normalize_state(state);_hydrate_slot_spin_plans(state)
+                    state=read_slot_mutation_state()
                     pattern=next((x for x in state['slotMachine']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                     if not pattern: raise ValueError('テストするスロットが見つかりません')
                     if not pattern.get('enabled',True): raise ValueError('停止中のスロットです')
@@ -3221,7 +3218,7 @@ class Handler(SimpleHTTPRequestHandler):
                     run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                     _externalize_slot_spin_plans(state)
                     STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
-                result={'ok':True,'slotMachine':state['slotMachine']}
+                result={'ok':True}
             elif self.path == '/api/slot/current-spin':
                 with STATE_LOCK:
                     try: state=json.loads(STATE.read_text(encoding='utf-8'))
