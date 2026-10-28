@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.03'
+APP_VERSION = '0.67.04'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1387,7 +1387,18 @@ def read_overlay_state(kind, pattern_id=''):
               'textOutlineEnabled', 'textOutlineColor', 'textOutlineWidth',
               'textBackgroundEnabled', 'textBackgroundColor', 'textBackgroundOpacity')
     result = {key: state[key] for key in common if key in state}
-    if kind == 'win':
+    if kind == 'basic':
+        for key in ('missions', 'counters', 'giftRules', 'memos', 'timer', 'showComp',
+                    'compCardBg', 'compCardBorder', 'compCardHeight', 'compCardOpacity',
+                    'compCardTextColor', 'compCardWidth', 'compFontFamily',
+                    'compText', 'compTextScale', 'compTitle', 'textScale'):
+            if key in state:
+                result[key] = state[key]
+        result['textEffects'] = state.get('textEffects', {})
+    elif kind == 'smoking':
+        result['smokingTimer'] = state.get('smokingTimer', {})
+        result['textEffects'] = {'smoking': state.get('textEffects', {}).get('smoking', {})}
+    elif kind == 'win':
         result['winCounter'] = {key: value for key, value in state['winCounter'].items()
                                 if key != 'giftRules' and not key.startswith('shortcut')}
         result['textEffects'] = {'win': state.get('textEffects', {}).get('win', {})}
@@ -2756,7 +2767,7 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/slot/status':
             body=json.dumps(read_slot_live_status(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
-        if parsed.path in ('/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = parsed.path.rsplit('/', 1)[-1]
             query=parse_qs(parsed.query);pattern_id=str((query.get('id') or [''])[0]) if kind=='slot' else ''
             body = json.dumps(read_overlay_state(kind,pattern_id), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
