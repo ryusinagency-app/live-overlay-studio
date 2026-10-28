@@ -89,5 +89,28 @@ const renderPatternWithoutFreezeDestination=renderPattern;
 renderPattern=function(pattern,index){renderPatternWithoutFreezeDestination(pattern,index);const card=host.lastElementChild,freezeDetails=[...card.querySelectorAll('details')].find(item=>item.querySelector('summary')?.textContent==='フリーズ・上位AT直行設定');if(!freezeDetails)return;const grid=document.createElement('div');grid.className='slotGrid';selectField(grid,'フリーズ後の移行方法',pattern.freezeAfterMode||'upper-direct',[['upper-entry','上位AT突入演出を再生してから上位AT'],['upper-direct','突入演出を飛ばして上位AT中へ']],v=>{pattern.freezeAfterMode=v;changed()});freezeDetails.appendChild(grid)};
 const renderPatternWithoutAtContinuationScenes=renderPattern;
 renderPattern=function(pattern,index){renderPatternWithoutAtContinuationScenes(pattern,index);const card=host.lastElementChild;if(!card)return;const details=document.createElement('details');details.className='slotAtFields '+(pattern.machineType==='at'?'':'hidden');details.innerHTML='<summary>AT継続成功・失敗演出</summary><p class="note">AT・上位ATの規定回転を消化した最後に行われる継続抽選の結果に合わせて再生します。</p>';for(const [key,label] of [['atContinueSuccess','AT継続成功'],['atContinueFailure','AT継続失敗']]){const scene=document.createElement('div');scene.className='slotRole';const grid=document.createElement('div');grid.className='slotGrid';toggle(grid,label+'演出を使う',pattern[key+'Enabled']===true,v=>{pattern[key+'Enabled']=v;changed()});numberField(grid,label+'演出時間（秒）',pattern[key+'Seconds']??3,.1,60,.1,v=>{pattern[key+'Seconds']=v;changed()});numberField(grid,label+'動画音量（%）',pattern[key+'VideoVolume']??70,0,100,1,v=>{pattern[key+'VideoVolume']=v;changed()});numberField(grid,label+'音源音量（%）',pattern[key+'AudioVolume']??80,0,100,1,v=>{pattern[key+'AudioVolume']=v;changed()});mediaBox(grid,pattern,label+'画像／動画',key+'Url','image/*,video/mp4,video/webm');mediaBox(grid,pattern,label+'音源',key+'AudioUrl','audio/*');scene.appendChild(grid);details.appendChild(scene)}const actions=card.querySelector('.slotActions');card.insertBefore(details,actions)};
+
+// Normal machines can opt into a separate, fixed-length post-bonus lottery window.
+const renderPatternBeforeNormalChallenge=renderPattern;
+renderPattern=function(pattern,index){
+ renderPatternBeforeNormalChallenge(pattern,index);if(pattern.machineType==='at')return;const card=host.lastElementChild;if(!card)return;
+ const details=document.createElement('details');details.innerHTML='<summary>1G連チャレンジ（ノーマルタイプ専用）</summary><p class="note">大当たり後にチャレンジへ入り、設定回転内に当たれば同じ回転数から再挑戦します。全回転はずれると通常へ戻ります。OFFなら従来どおりです。ギフトで獲得した通常回転は残ります。</p>';
+ const grid=document.createElement('div');grid.className='slotGrid';
+ toggle(grid,'1G連チャレンジを使う',pattern.challengeEnabled===true,v=>{pattern.challengeEnabled=v;changed()});
+ textField(grid,'チャレンジ名',pattern.challengeName||'1G連チャレンジ',v=>{pattern.challengeName=v;changed()});
+ for(const [key,label,value,min,max,step]of [['challengeSpins','1回のチャレンジ回転数',1,1,10000,1],['challengeHitDenominator','チャレンジ中の大当たり確率（1／○）',2,1,1000000,1],['challengeSpinSeconds','チャレンジ回転時間（秒）',pattern.spinSeconds??1.8,.2,30,.1],['challengeStopInterval','チャレンジ停止間隔（秒）',pattern.stopInterval??.35,.05,5,.05],['challengeResultSeconds','チャレンジ結果表示時間（秒）',pattern.resultSeconds??1.2,.1,30,.1]])numberField(grid,label,pattern[key]??value,min,max,step,v=>{pattern[key]=v;changed()});
+ details.appendChild(grid);
+ for(const [key,label]of [['challengeEntry','チャレンジ突入'],['challenge','チャレンジ中'],['challengeBigEffect','チャレンジ中の大当たり']]){
+  const scene=document.createElement('details');scene.innerHTML='<summary>'+label+'の専用演出</summary>';const fields=document.createElement('div');fields.className='slotGrid';
+  if(key!=='challenge')toggle(fields,label+'の専用演出を使う',pattern[key+'Enabled']??(key==='challengeBigEffect'),v=>{pattern[key+'Enabled']=v;changed()});
+  mediaBox(fields,pattern,label+'の画像／動画',key+'Url','image/*,video/mp4,video/webm');mediaBox(fields,pattern,label+'の音源',key+'AudioUrl','audio/*');
+  if(key!=='challenge')numberField(fields,'演出時間（秒）',pattern[key+'Seconds']??3,.1,600,.1,v=>{pattern[key+'Seconds']=v;changed()});
+  for(const [kind,title]of [['Image','画像の表示時間'],['Video','動画の再生時間'],['Audio','音源の再生時間']])numberField(fields,title+'（秒、0なら演出に合わせる）',pattern[key+kind+'Seconds']??0,0,600,.1,v=>{pattern[key+kind+'Seconds']=v;changed()});
+  numberField(fields,'動画音量（%）',pattern[key+'VideoVolume']??70,0,100,1,v=>{pattern[key+'VideoVolume']=v;changed()});numberField(fields,'音源音量（%）',pattern[key+'AudioVolume']??75,0,100,1,v=>{pattern[key+'AudioVolume']=v;changed()});
+  toggle(fields,'動画をループする',pattern[key+'VideoLoop']!==false,v=>{pattern[key+'VideoLoop']=v;changed()});toggle(fields,'音源をループする',pattern[key+'AudioLoop']!==false,v=>{pattern[key+'AudioLoop']=v;changed()});scene.appendChild(fields);details.appendChild(scene);
+ }
+ card.insertBefore(details,card.querySelector('.slotActions'));
+};
 })();
+
 
