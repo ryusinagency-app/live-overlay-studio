@@ -712,6 +712,7 @@ let controlReady=false;
 let timer=null;
 let dirty=false;
 let saving=false;
+let savePromise=null;
 let editVersion=0;
 let tiktokEnabled=false;
 let giftPickerTarget=null;
@@ -865,22 +866,26 @@ $('duplicateWinProfile').onclick=async()=>{if(winGachaBusy()){$('winProfileStatu
 $('toggleWinProfile').onclick=async()=>{const profile=selectedWinProfile();if(!profile)return;if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は変更できません';return}clearTimeout(timer);timer=null;if(!profile.enabled){const current=activeWinProfile();if(current){collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();current.enabled=false}loadWinProfile(profile);renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を再開しました。ほかのプロファイルは停止中です';save();return}if(profile.id!==state.activeWinProfileId){$('winProfileStatus').textContent='停止・再開できるのは選択中のプロファイルです';return}if(state.winProfiles.length<=1){$('winProfileStatus').textContent='プロファイルが1つだけのため停止できません';return}collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist();profile.enabled=false;const next=state.winProfiles.find(item=>item.id!==profile.id);if(!next){profile.enabled=true;$('winProfileStatus').textContent='切り替え先のプロファイルがありません';return}loadWinProfile(next);selectedWinProfileId=next.id;renderWinProfiles();renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings();$('winProfileStatus').textContent='「'+(profile.name||'名称なし')+'」を停止し、「'+(next.name||'名称なし')+'」だけを稼働させました';save()};
 $('deleteWinProfile').onclick=async()=>{if(state.winProfiles.length<=1){$('winProfileStatus').textContent='最後のプロファイルは削除できません';return}if(winGachaBusy()){$('winProfileStatus').textContent='ガチャ抽選中・待機中は削除できません';return}const profile=selectedWinProfile();if(!profile)return;const wasActive=profile.id===state.activeWinProfileId;if(wasActive){clearTimeout(timer);timer=null;collect();collectOtherGacha();saveActiveWinProfileSnapshot();await persist()}state.winProfiles=state.winProfiles.filter(item=>item.id!==profile.id);if(wasActive){const next=state.winProfiles[0];loadWinProfile(next);selectedWinProfileId=next.id;renderWinCounterSettings();renderGachaSettings();renderOtherGachaSettings()}else selectedWinProfileId=state.activeWinProfileId;renderWinProfiles();save()}
 }
-async function persist(){if(!controlReady){$('status').textContent='設定の読み込みが完了していないため、保存を停止しています。';return false}collect();
+async function persist(force=false){if(!controlReady){$('status').textContent='設定の読み込みが完了していないため、保存を停止しています。';return false}
+if(savePromise){const previousOk=await savePromise;if(!previousOk)return false;if(!dirty&&!force)return true}
+if(!dirty&&!force)return true;
+collect();
 collectOtherGacha();
 saveActiveWinProfileSnapshot();
 const version=editVersion;
 saving=true;
-try{const payload={...state,_manualWinCounterValue:currentWinEdited};const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+savePromise=(async()=>{try{const payload={...state,_manualWinCounterValue:currentWinEdited};const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
 if(!r.ok)throw Error();
 if(editVersion===version){dirty=false;currentWinEdited=false;}
 $('status').textContent='保存しました';broadcastPreviewSettings();
 setTimeout(()=>$('status').textContent='',1700);return true}catch(e){dirty=true;
-$('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください';return false}finally{saving=false;
+$('status').textContent='保存できませんでした。黒い画面でサーバーが起動中か確認してください';return false}})();
+try{return await savePromise}finally{savePromise=null;saving=false;
 if(dirty&&editVersion!==version)save()}}function save(){if(!controlReady)return;editVersion++;
 dirty=true;
 clearTimeout(timer);
 timer=setTimeout(()=>{timer=null;
-persist()},180)}
+persist()},700)}
 function updateMissionCard(el,m){const goal=Math.max(1,+m.giftGoal||10),limit=+m.dailyLimit||10,count=+m.achievements||0,value=+m.giftValue||0;
 el.querySelector('.missionValue').textContent=value+'/'+goal+' '+(m.unit||'個');
 el.querySelector('.achievementValue').textContent=count+'/'+limit+' 回';
@@ -1730,7 +1735,7 @@ if(id==='compCardOpacity')$('compCardOpacityVal').textContent=$('compCardOpacity
 save()}));
 $('saveNow').onclick=()=>{clearTimeout(timer);
 timer=null;
-persist()};
+persist(true)};
 $('addMission').onclick=()=>{state.missions.push(freshMission(state.missions.length));
 renderMissions();
 save()};
