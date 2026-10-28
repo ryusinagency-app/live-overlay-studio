@@ -32,6 +32,10 @@ if errorlevel 1 (
   --name "Live_Overlay_Studio_Windows_x64" ^
   --icon "app_icon.ico" ^
   --collect-all TikTokLive ^
+  --add-data "overlay_presets.html;." ^
+  --add-data "presets_controls.js;." ^
+  --add-data "preset_board.js;." ^
+  --add-data "preset_board.css;." ^
   --add-data "control.html;." ^
   --add-data "overlay.html;." ^
   --add-data "overlay_comp.html;." ^
@@ -83,3 +87,4 @@ if not defined CI (
   explorer "%~dp0dist"
   pause
 )
+

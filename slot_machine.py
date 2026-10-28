@@ -75,6 +75,8 @@ def default_pattern(index=1):
     return {
         'id': f'slot-pattern-{index}', 'name': f'スロット{index}', 'enabled': True,
         'machineType': 'normal', 'giftName': '', 'giftSpins': 1,
+        'challengeEnabled': False, 'challengeName': '1G連チャレンジ',
+        'challengeSpins': 1, 'challengeHitDenominator': 2,
         'giftRules': [{'id': 'slot-gift-1', 'giftName': '', 'spins': 1}],
         'statsOverlay': _stats_overlay({}),
         'sign': 'plus', 'hitDenominator': 199, 'replayEnabled': True,
@@ -191,6 +193,24 @@ def normalize_pattern(raw, index=1):
     result['sign'] = raw.get('sign') if raw.get('sign') in ('plus', 'minus', 'both') else 'plus'
     result['hitDenominator'] = _int(raw.get('hitDenominator'), 199, 1, 1000000)
     result['replayEnabled'] = raw.get('replayEnabled', True) is not False
+    result['challengeEnabled'] = raw.get('challengeEnabled', False) is True
+    result['challengeName'] = str(raw.get('challengeName') or '1G連チャレンジ')[:60]
+    result['challengeSpins'] = _int(raw.get('challengeSpins'), 1, 1, 10000)
+    result['challengeHitDenominator'] = _int(raw.get('challengeHitDenominator'), 2, 1, 1000000)
+    result['challengeSpinSeconds'] = _float(raw.get('challengeSpinSeconds'), _float(raw.get('spinSeconds'), 1.8, .2, 30), .2, 30)
+    result['challengeStopInterval'] = _float(raw.get('challengeStopInterval'), _float(raw.get('stopInterval'), .35, .05, 5), .05, 5)
+    result['challengeResultSeconds'] = _float(raw.get('challengeResultSeconds'), _float(raw.get('resultSeconds'), 1.2, .1, 30), .1, 30)
+    for key in ('challenge', 'challengeEntry', 'challengeBigEffect'):
+        result[key+'Enabled'] = raw.get(key+'Enabled', key=='challengeBigEffect') is True
+        result[key+'AudioUrl'] = _media(raw.get(key+'AudioUrl'))
+        result[key+'Url'] = _media(raw.get(key+'Url'))
+        result[key+'AudioVolume'] = _int(raw.get(key+'AudioVolume'), 75, 0, 100)
+        result[key+'VideoVolume'] = _int(raw.get(key+'VideoVolume'), 70, 0, 100)
+        result[key+'Seconds'] = _float(raw.get(key+'Seconds'), 3, .1, 600)
+        result[key+'AudioLoop'] = raw.get(key+'AudioLoop', True) is not False
+        result[key+'VideoLoop'] = raw.get(key+'VideoLoop', True) is not False
+        for kind in ('Image','Video','Audio'):
+            result[key+kind+'Seconds'] = _float(raw.get(key+kind+'Seconds'), 0, 0, 600)
     for key, default, low, high in (
         ('spinSeconds', 1.8, .2, 30), ('stopInterval', .35, .05, 5),
         ('resultSeconds', 1.2, .1, 30), ('hitNoticeSeconds', 2, .1, 30),
@@ -283,9 +303,9 @@ def normalize_pattern(raw, index=1):
     result['upperBigEffectSeconds'] = _float(raw.get('upperBigEffectSeconds'), result['upperEffectSeconds'], .1, 60)
     result['freezeSeconds'] = _float(raw.get('freezeSeconds'), 6, 0, 120)
     for prefix in ('at', 'upper'):
-        result[prefix + 'SpinSeconds'] = _float(raw.get(prefix + 'SpinSeconds'), result['spinSeconds'], .2, 30)
-        result[prefix + 'StopInterval'] = _float(raw.get(prefix + 'StopInterval'), result['stopInterval'], .05, 5)
-        result[prefix + 'ResultSeconds'] = _float(raw.get(prefix + 'ResultSeconds'), result['resultSeconds'], .1, 30)
+        result[prefix + 'SpinSeconds'] = _float(raw.get(prefix + 'SpinSeconds'), _float(raw.get('spinSeconds'), 1.8, .2, 30), .2, 30)
+        result[prefix + 'StopInterval'] = _float(raw.get(prefix + 'StopInterval'), _float(raw.get('stopInterval'), .35, .05, 5), .05, 5)
+        result[prefix + 'ResultSeconds'] = _float(raw.get(prefix + 'ResultSeconds'), _float(raw.get('resultSeconds'), 1.2, .1, 30), .1, 30)
         result[prefix + 'EffectSeconds'] = _float(raw.get(prefix + 'EffectSeconds'), result['bigEffectSeconds'], .1, 60)
     result['atEnabled'] = bool(raw.get('atEnabled', result['machineType'] == 'at'))
     result['upperAtEnabled'] = bool(raw.get('upperAtEnabled', False))
@@ -305,9 +325,9 @@ def normalize_pattern(raw, index=1):
             'expectation': _int(cz.get('expectation'), min(5, cz_index + 1), 1, 5),
             'weight': _float(cz.get('weight'), 20, 0, 1000000),
             'atEntryRate': _float(cz.get('atEntryRate'), 20, 0, 100),
-            'spinSeconds': _float(cz.get('spinSeconds'), result['spinSeconds'], .2, 30),
-            'stopInterval': _float(cz.get('stopInterval'), result['stopInterval'], .05, 5),
-            'resultSeconds': _float(cz.get('resultSeconds'), result['resultSeconds'], .1, 30),
+            'spinSeconds': _float(cz.get('spinSeconds'), _float(raw.get('spinSeconds'), 1.8, .2, 30), .2, 30),
+            'stopInterval': _float(cz.get('stopInterval'), _float(raw.get('stopInterval'), .35, .05, 5), .05, 5),
+            'resultSeconds': _float(cz.get('resultSeconds'), _float(raw.get('resultSeconds'), 1.2, .1, 30), .1, 30),
             'seconds': _float(cz.get('seconds'), 3, .1, 60),
             'animationUrl': _media(cz.get('animationUrl')),
             'audioUrl': _media(cz.get('audioUrl')),
@@ -442,6 +462,8 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     # Keep runaway replay/continuation chains bounded, but never let the
     # safety cap silently shorten a configured AT/upper-AT entry grant.
     entry_grants = [20]
+    if pattern.get('machineType') == 'normal' and pattern.get('challengeEnabled'):
+        entry_grants.append(pattern['challengeSpins'])
     if pattern.get('machineType') == 'at' and pattern.get('atEnabled'):
         entry_grants.append(_int(pattern.get('atSpins'), 30, 1, 10000))
     if pattern.get('machineType') == 'at' and pattern.get('upperAtEnabled'):
@@ -452,7 +474,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     # gift runs retain their configured continuation behavior.
     continuation_blocks = 2 if is_test else 100
     at_continuation_allowance = (largest_entry_grant * continuation_blocks
-                                 if pattern.get('machineType') == 'at' and pattern.get('atEnabled')
+                                 if (pattern.get('machineType') == 'at' and pattern.get('atEnabled')) or (pattern.get('machineType') == 'normal' and pattern.get('challengeEnabled'))
                                  else largest_entry_grant)
     max_spins = min(20000, max(budget, budget * 20, budget + 20,
                                budget + at_continuation_allowance))
@@ -460,6 +482,32 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
     phase_remaining = 0
     spins = []
     safety = 0
+
+    def finish_challenge_spin(spin, spin_mode):
+        nonlocal budget, mode, phase_remaining
+        if pattern['machineType'] != 'normal' or not pattern.get('challengeEnabled'):
+            return
+        remaining = max(0, phase_remaining-1) if spin_mode == 'challenge' else 0
+        if spin_mode == 'challenge':
+            spin['challengeGame'] = pattern['challengeSpins']-phase_remaining+1
+        if spin['kind'] == 'hit':
+            # Reset the window rather than stacking a fresh full window on top
+            # of the unspent challenge games; gift-funded normal games remain.
+            requested = max(0, pattern['challengeSpins']-remaining)
+            added = min(requested, max(0, max_spins-len(spins)-budget))
+            budget += added
+            spin['addedSpins'] += added
+            phase_remaining = remaining+added
+            mode = 'challenge' if phase_remaining else 'normal'
+            spin['challengeEntered'] = phase_remaining > 0
+            if added < requested:
+                spin['challengeCapped'] = True
+        elif spin_mode == 'challenge':
+            phase_remaining = remaining
+            if remaining == 0:
+                mode = 'normal'
+                spin['challengeEnded'] = True
+        spin['challengeRemaining'] = phase_remaining if mode == 'challenge' else 0
 
     def finish_at_spin(spin, spin_mode):
         """Run AT continuation once, after the current AT block is exhausted."""
@@ -546,6 +594,8 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
             denominator = pattern['atHitDenominator']
         elif mode == 'upper':
             denominator = pattern['upperAtHitDenominator']
+        elif mode == 'challenge':
+            denominator = pattern['challengeHitDenominator']
         hit = random.randrange(denominator) == 0
         if hit:
             win = _weighted_payout(pattern)
@@ -567,6 +617,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
                     phase_remaining = added
                 else:
                     finish_at_spin(spins[-1], spin_mode)
+            finish_challenge_spin(spins[-1], spin_mode)
             continue
         roles = [x for x in pattern['smallRoles'] if x['enabled'] and x['probability'] > 0]
         pick = random.random() * 100
@@ -618,6 +669,7 @@ def build_event(pattern, gift_name, sender_name, avatar_url='', is_test=False, i
             spins.append({'kind': 'miss', 'roleName': 'はずれ', 'reels': reel_text,
                           'reelImages':reel_images, 'symbolImageUrl': '', 'win': 0, 'addedSpins': 0, 'mode': mode})
             finish_at_spin(spins[-1], spin_mode)
+        finish_challenge_spin(spins[-1], spin_mode)
     now = time.time()
     return {
         'id': int(now * 1000), 'type': 'slot', 'active': True,
@@ -760,4 +812,5 @@ def complete_event(state, event_id):
     else:
         machine['event'] = copy.deepcopy(EMPTY_EVENT)
     return True
+
 
