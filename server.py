@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.11'
+APP_VERSION = '0.67.12'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1512,7 +1512,8 @@ def read_machine_stats_overlay(machine_type,pattern_id):
     defaults={'currentSpins':0,'hitCount':0,'totalSpins':0}
     if is_pachinko: defaults.update(initialHits=0,bestStreak=0)
     defaults.update(row)
-    event=machine.get('event',{});active=bool(event.get('active') and event.get('patternId')==pattern.get('id'))
+    events=[machine.get('event',{}),*(machine.get('queue') or [])] if not is_pachinko else [machine.get('event',{})]
+    active=any(event.get('active') and event.get('patternId')==pattern.get('id') for event in events)
     state_name='抽選中' if active else '通常'
     return {'ok':True,'type':machine_type,'date':date_key,'patternId':pattern.get('id'),'patternName':pattern.get('name',''),
             'stats':defaults,'state':state_name,'style':normalize_stats_overlay(pattern.get('statsOverlay'))}
@@ -1523,6 +1524,18 @@ def write_state(data):
     with STATE_LOCK:
         _externalize_slot_spin_plans(merged)
         STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+
+def read_playback_mutation_state():
+    """Read saved runtime state under STATE_LOCK without loading slot plans.
+
+    WIN gacha transitions only change gacha and winCounter. Keeping sidecar
+    references intact avoids copying every slot spin into each gacha write.
+    Callers hold STATE_LOCK across this read and the subsequent write.
+    """
+    state = json.loads(STATE.read_text(encoding='utf-8'))
+    if not isinstance(state, dict):
+        raise ValueError('保存された設定を読み込めません')
+    return state
 
 def read_slot_mutation_state():
     """Read only the structures needed to advance slot playback.
@@ -2039,11 +2052,7 @@ def complete_smoking_gacha_event(event_id):
 
 def complete_gacha_event(event_id):
     with STATE_LOCK:
-        try:
-            data=json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data=copy.deepcopy(DEFAULT)
-        data,_=normalize_state(data); gacha=data['gacha']; event=gacha['event']
+        data=read_playback_mutation_state(); gacha=data['gacha']; event=gacha['event']
         if int(event.get('id') or 0)!=event_id or not event.get('active'):
             return False
         if event.get('winSign')=='both' and not event.get('choice'): return False
@@ -2059,17 +2068,13 @@ def complete_gacha_event(event_id):
         if queue:
             next_event=queue.pop(0); next_event['active']=True; next_event['createdAt']=time.time()
             gacha['event']=next_event
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
         return True
 
 def skip_gacha_event(event_id):
     """Release a stuck active draw without applying it to WIN or history."""
     with STATE_LOCK:
-        try:
-            data=json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data=copy.deepcopy(DEFAULT)
-        data,_=normalize_state(data)
+        data=read_playback_mutation_state()
         gacha=data['gacha'];event=gacha['event']
         queue=gacha.setdefault('queue',[])
         if event.get('active'):
@@ -2081,7 +2086,7 @@ def skip_gacha_event(event_id):
         if queue:
             next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time()
             gacha['event']=next_event
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
         return True
 
 def choose_gacha_sign_in_state(data, choice):
@@ -2098,36 +2103,24 @@ def choose_gacha_sign_in_state(data, choice):
 
 def choose_gacha_sign(event_id, choice):
     with STATE_LOCK:
-        try:
-            data=json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data=copy.deepcopy(DEFAULT)
-        data,_=normalize_state(data)
+        data=read_playback_mutation_state()
         if int(data['gacha']['event'].get('id') or 0)!=event_id or not choose_gacha_sign_in_state(data,choice):
             return False
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
         return True
 
 def mark_gacha_choice_ready(event_id):
     with STATE_LOCK:
-        try:
-            data=json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data=copy.deepcopy(DEFAULT)
-        data,_=normalize_state(data); event=data['gacha']['event']
+        data=read_playback_mutation_state(); event=data['gacha']['event']
         if int(event.get('id') or 0)!=event_id or event.get('winSign')!='both':
             return False
         event['choiceReady']=True
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
         return True
 
 def apply_gacha_round(event_id, round_index):
     with STATE_LOCK:
-        try:
-            data=json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data=copy.deepcopy(DEFAULT)
-        data,_=normalize_state(data); event=data['gacha']['event']
+        data=read_playback_mutation_state(); event=data['gacha']['event']
         if event.get('type')!='gacha' or int(event.get('id') or 0)!=event_id:
             return False
         rounds=event.get('rounds') or []; applied=event.setdefault('appliedRounds',[])
@@ -2140,7 +2133,7 @@ def apply_gacha_round(event_id, round_index):
         if not event.get('isTest'):
             win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
         applied.append(round_index); event['currentWin']=win['currentWin']
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
         return True
 
 def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avatar_url=''):
@@ -3106,16 +3099,17 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == '/api/gacha/test':
                 if self.client_address[0] not in ('127.0.0.1', '::1'):
                     self.send_error(403); return
-                state=read_state();pattern=next((x for x in state['gacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
-                if not pattern:
-                    raise ValueError('テストするパターンを選べません')
-                current_event=state['gacha'].get('event',{})
-                was_active=bool(current_event.get('active'))
-                # Tests use the same FIFO queue as real gift-triggered spins. Never
-                # replace an active test: that can make consecutive tests overlap.
-                run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
-                queue_position=len(state['gacha'].get('queue',[])) if was_active else 0
-                write_state(state);result={'ok':True,'queued':was_active,'queuePosition':queue_position}
+                with STATE_LOCK:
+                    state=read_playback_mutation_state()
+                    pattern=next((x for x in state['gacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
+                    if not pattern:
+                        raise ValueError('テストするパターンを選べません')
+                    was_active=bool(state['gacha'].get('event',{}).get('active'))
+                    # Keep the test read/create/write atomic with slot progress.
+                    run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
+                    queue_position=len(state['gacha'].get('queue',[])) if was_active else 0
+                    STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+                result={'ok':True,'queued':was_active,'queuePosition':queue_position}
             elif self.path == '/api/text-role-image':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 scope=str(data.get('scope') or '');pattern_id=str(data.get('patternId') or '');role=str(data.get('role') or '')
@@ -3688,3 +3682,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
