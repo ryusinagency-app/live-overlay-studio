@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.15'
+APP_VERSION = '0.67.16'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -439,6 +439,9 @@ def normalize_stats_overlay(value):
         'labelSize':max(10,min(100,safe_int(raw.get('labelSize'),18))),
         'valueSize':max(14,min(200,safe_int(raw.get('valueSize'),46))),
     }
+
+def pachinko_phase_media_stages():
+    return ('timeShort', 'timeShortHit', 'timeShortMiss', 'atSpin', 'atHit', 'atMiss', 'atContinueMiss', 'atEndMiss', 'upperSpin', 'upperHit', 'upperMiss', 'upperContinueMiss', 'upperEndMiss', 'ltSpin', 'ltHit', 'ltMiss', 'ltContinueMiss', 'ltEndMiss')
 
 def pachinko_boundary_stages():
     return tuple(phase+edge for phase in ('reach','cz','hit','at','upper','lt') for edge in ('Enter','Exit'))
@@ -1052,16 +1055,19 @@ def normalize_state(data):
             source=raw_text_roles.get(role) if isinstance(raw_text_roles.get(role),dict) else (raw_text_roles.get('missState') if role in ('endMissState','continueMissState') and isinstance(raw_text_roles.get('missState'),dict) else raw_text_roles.get('resultState') if role in ('endMissState','continueMissState','reachState','hitState','missState','czState','timeShortState','atState','upperState','luckyTriggerState','continueState','endState') and isinstance(raw_text_roles.get('resultState'),dict) else {})
             text_roles[role]={'enabled':source.get('enabled',True) is not False,'text':str(source.get('text') or '')[:120],'colorEnabled':bool(source.get('colorEnabled',False)),'color':valid_hex(source.get('color')) or '#ffffff','size':max(12,min(400,safe_int(source.get('size',0),0))) if source.get('size') else 0,'fontFamily':source.get('fontFamily') if source.get('fontFamily') in ('global','system','native','yuGothic','meiryo','gothic','serif','mono') else 'global','mode':'image' if source.get('mode')=='image' else 'text','imageUrl':str(source.get('imageUrl') or '')[:2000],'imageName':str(source.get('imageName') or '')[:120],'imageSize':max(20,min(600,safe_int(source.get('imageSize',120),120))),'positionEnabled':bool(source.get('positionEnabled',False)),'x':max(0,min(100,safe_float(source.get('x',50),50))),'y':max(0,min(100,safe_float(source.get('y',50),50)))}
         media={}
-        for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages():
+        for stage in ('spin','reach','cz','hit','at','upper','lt','end','stop','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages()+pachinko_phase_media_stages():
             for kind in ('AnimationUrl','AnimationName','AudioUrl','AudioName'):
                 key=stage+kind
                 media[key]=str(item.get(key) or '')[:2000 if key.endswith('Url') else 120]
+            media[stage+'AudioLoop']=bool(item.get(stage+'AudioLoop',stage not in ('stop','preAlert1','preAlert2','preAlert3')+pachinko_phase_media_stages()))
+            media[stage+'VideoLoop']=item.get(stage+'VideoLoop',True) is not False
             media[stage+'AudioVolume']=max(0,min(100,safe_int(item.get(stage+'AudioVolume',75),75)))
             media[stage+'VideoVolume']=max(0,min(100,safe_int(item.get(stage+'VideoVolume',item.get(stage+'AudioVolume',75)),75)))
             if stage.endswith(('Enter','Exit')): media[stage+'Enabled']=item.get(stage+'Enabled',False) is True
             # Rotation duration and result/media display duration are independent.
             duration_key='spinDisplaySeconds' if stage=='spin' else stage+'Seconds'
-            media[duration_key]=max(.2,min(120,safe_float(item.get(duration_key,3),3)))
+            default_seconds=.5 if stage in ('timeShortHit','timeShortMiss') else 3
+            media[duration_key]=max(.2,min(120,safe_float(item.get(duration_key,default_seconds),default_seconds)))
         at_spins=max(1,min(10000,safe_int(item.get('atSpins',10),10)))
         at_den=max(1,min(1000000,safe_int(item.get('atHitDenominator',1000),1000)))
         at_legacy_rate=max(0,min(100,safe_int(item.get('atContinuationRate',80),80)))/100
@@ -1084,7 +1090,7 @@ def normalize_state(data):
             'id':str(item.get('id') or f'pachinko-pattern-{index+1}')[:80], 'name':str(item.get('name') or f'パチンコ{index+1}')[:60], 'enabled':item.get('enabled',True) is not False, 'giftName':str(item.get('giftName') or '').strip()[:120],
             'spinsPerGift':max(1,min(10000,safe_int(item.get('spinsPerGift',10),10))), 'hitNumerator':max(1,min(1000000,safe_int(item.get('hitNumerator',1),1))), 'hitDenominator':max(1,min(1000000,safe_int(item.get('hitDenominator',199),199))), 'spinSeconds':max(.05,min(30,safe_float(item.get('spinSeconds',.8),.8))), 'testPlaybackSpeed':safe_float(item.get('testPlaybackSpeed',1),1) if safe_float(item.get('testPlaybackSpeed',1),1) in (1,.5,.2) else 1,
             'reachMissChance':max(0,min(100,safe_float(item.get('reachMissChance',15),15))),
-            'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
+            'spinBeepLoop':item.get('spinBeepLoop',True) is not False, 'spinBeepEnabled':item.get('spinBeepEnabled',True) is not False, 'spinBeepAudioUrl':str(item.get('spinBeepAudioUrl') or '')[:2000], 'spinBeepAudioName':str(item.get('spinBeepAudioName') or '')[:120], 'spinBeepVolume':max(0,min(100,safe_int(item.get('spinBeepVolume',35),35))),
             'baseWin':max(0,min(999999,safe_int(item.get('baseWin',10),10))), 'czEnabled':bool(item.get('czEnabled',False)), 'czRate':max(0,min(100,safe_int(item.get('czRate',50),50))),
             'timeShortEnabled':bool(item.get('timeShortEnabled',False)), 'timeShortSpins':max(0,min(10000,safe_int(item.get('timeShortSpins',50),50))), 'timeShortHitDenominator':max(1,min(1000000,safe_int(item.get('timeShortHitDenominator',99),99))), 'timeShortSpinSeconds':max(.05,min(30,safe_float(item.get('timeShortSpinSeconds',.8),.8))), 'reachEnabled':item.get('reachEnabled',True) is not False,
             'atEnabled':item.get('atEnabled',True) is not False, 'atEntryRate':max(0,min(100,safe_int(item.get('atEntryRate',50),50))), 'atSpins':at_spins, 'atHitNumerator':max(0,min(at_den,safe_int(item.get('atHitNumerator',at_default_num),at_default_num))), 'atHitDenominator':at_den, 'atSpinSeconds':max(.05,min(30,safe_float(item.get('atSpinSeconds',.8),.8))), 'atMinWin':max(0,min(999999,safe_int(item.get('atMinWin',5),5))), 'atMaxWin':max(0,min(999999,safe_int(item.get('atMaxWin',20),20))),
@@ -3295,7 +3301,7 @@ class Handler(SimpleHTTPRequestHandler):
                 state=read_state();pattern=next((x for x in state['pachinkoGacha']['patterns'] if x['id']==str(data.get('patternId') or '')),None)
                 if not pattern: raise ValueError('保存先のパチンコガチャが見つかりません')
                 stage=str(data.get('stage') or '');kind=str(data.get('kind') or '')
-                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','stop','spinBeep','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages() or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
+                if stage not in ('spin','reach','cz','hit','at','upper','lt','end','stop','spinBeep','preAlert1','preAlert2','preAlert3')+pachinko_boundary_stages()+pachinko_phase_media_stages() or kind not in ('animation','audio'): raise ValueError('演出の種類を確認してください')
                 url_key=stage+('AnimationUrl' if kind=='animation' else 'AudioUrl');name_key=stage+('AnimationName' if kind=='animation' else 'AudioName')
                 if bool(data.get('clear')): pattern[url_key]='';pattern[name_key]=''
                 elif kind=='animation':
@@ -3812,6 +3818,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
