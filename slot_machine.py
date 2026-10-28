@@ -748,12 +748,16 @@ def complete_event(state, event_id):
         machine.setdefault('queue', []).pop(queue_index)
     elif machine.get('queue'):
         next_event = machine.setdefault('queue', []).pop(0)
-        # Leave a visible blank gap between queued players.  Without it the
-        # previous result and the next spin are one atomic snapshot, which
-        # looks like the ± screen was skipped and the machine never closed.
+        # Another dedicated machine may already be running this queued event.
+        # Promoting it must not hide its in-progress spin or its choice screen.
+        already_running = (next_event.get('patternId') != event.get('patternId')
+                           or _int(next_event.get('appliedSpins')) > 0
+                           or bool(next_event.get('choiceReady')))
         next_event['active'] = True
-        next_event['startAfter'] = time.time() + 0.8
+        if not already_running:
+            next_event['startAfter'] = time.time() + 0.8
         machine['event'] = next_event
     else:
         machine['event'] = copy.deepcopy(EMPTY_EVENT)
     return True
+
