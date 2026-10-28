@@ -1735,7 +1735,7 @@ if(id==='compCardOpacity')$('compCardOpacityVal').textContent=$('compCardOpacity
 save()}));
 $('saveNow').onclick=()=>{clearTimeout(timer);
 timer=null;
-persist()};
+persist(true)};
 $('addMission').onclick=()=>{state.missions.push(freshMission(state.missions.length));
 renderMissions();
 save()};
