@@ -20,12 +20,13 @@ import tempfile
 import urllib.request
 from urllib.parse import parse_qs, urlsplit
 import socket
+from preset_board import normalize_presets
 from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_slot_spin,
                           choose_sign as choose_slot_sign, complete_event as complete_slot_event,
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.19'
+APP_VERSION = '0.67.20'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -63,7 +64,7 @@ def prepare_app_root():
         if not source_state.exists() and installed_state.exists():
             try:
                 shutil.copy2(installed_state, source_state)
-                media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
+                media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_', 'smoking_gacha_', 'other_gacha_', 'gift_media_', 'preset_', 'win_counter_')
                 for item in installed_root.iterdir():
                     if item.is_file() and item.name.startswith(media_prefixes):
                         shutil.copy2(item, source_root / item.name)
@@ -82,6 +83,7 @@ def prepare_app_root():
         except OSError as error:
             print(f'Could not back up settings before update: {error}')
     assets = [
+        'overlay_presets.html', 'presets_controls.js', 'preset_board.js', 'preset_board.css',
         'control.html', 'overlay.html', 'overlay_comp.html',
         'overlay_counters.html', 'overlay_gacha.html', 'overlay_other_gacha.html',
         'overlay_gacha_history.html', 'overlay_gacha_ranking.html', 'overlay_gacha_set_ranking.html',
@@ -108,7 +110,7 @@ def prepare_app_root():
         shutil.copy2(old_state, app_root / 'state.json')
 
     media_prefixes = ('smoking_alarm.', 'gacha_', 'pachinko_', 'slot_',
-                      'smoking_gacha_', 'other_gacha_', 'gift_media_', 'win_counter_')
+                      'smoking_gacha_', 'other_gacha_', 'gift_media_', 'preset_', 'win_counter_')
     legacy_roots = [executable_root, SOURCE_ROOT]
     app_root_resolved = app_root.resolve()
     for legacy_root in legacy_roots:
@@ -528,6 +530,7 @@ def normalize_state(data):
     # update (including a second dedicated-overlay gift) preserves appliedSpins.
     _hydrate_slot_spin_plans(normalized_source)
     merged = {**copy.deepcopy(DEFAULT), **normalized_source}
+    merged['presets'] = normalize_presets(merged.get('presets'))
     valid_hex = lambda value: str(value or '').lower() if re.fullmatch(r'#[0-9a-fA-F]{6}', str(value or '')) else ''
     raw_other = merged.get('otherGacha') if isinstance(merged.get('otherGacha'), dict) else {}
     raw_other_event = raw_other.get('event') if isinstance(raw_other.get('event'), dict) else {}
@@ -2933,6 +2936,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
     def _do_GET(self):
         parsed=urlsplit(self.path)
+        if parsed.path == '/api/overlay/presets':
+            query=parse_qs(parsed.query);board_id=str((query.get('id') or [''])[0])
+            boards=read_cached_overlay_source().get('presets',{}).get('boards',[])
+            board=next((b for b in boards if b.get('id')==board_id),None) if board_id else next(iter(boards),None)
+            body=json.dumps({'board':board},ensure_ascii=False,separators=(',',':')).encode('utf-8')
+            etag='"'+hashlib.sha256(body).hexdigest()+'"'
+            if self.headers.get('If-None-Match')==etag:
+                self.send_response(304);self.send_header('ETag',etag);self.end_headers();return
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('ETag',etag);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if parsed.path == '/api/diagnostics':
             body=json.dumps(performance_diagnostics(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
@@ -2979,7 +2991,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def _do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete', '/api/presets/media'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
@@ -3322,6 +3334,21 @@ class Handler(SimpleHTTPRequestHandler):
                     if not raw or len(raw)>15*1024*1024: raise ValueError('音源は15MB以下にしてください')
                     ext={'mpeg':'mp3','mp4':'m4a','m4a':'m4a','x-wav':'wav'}.get(match.group(1),match.group(1));safe_id=re.sub(r'[^A-Za-z0-9_-]','_',pattern['id'])[:60];filename=f'pachinko_{stage}_audio_{safe_id}.{ext}';(ROOT/filename).write_bytes(raw);pattern[url_key]='/'+filename+'?v='+str(safe_int(time.time()*1000));pattern[name_key]=Path(str(data.get('name') or filename)).name[:120]
                 write_state(state);result={'ok':True,'pachinkoGacha':read_state()['pachinkoGacha']}
+            elif self.path == '/api/presets/media':
+                if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
+                match=re.fullmatch(r'data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)',str(data.get('dataUrl') or ''))
+                if not match: raise ValueError('PNG、JPG、WebP、GIF形式の画像を選択してください')
+                raw=base64.b64decode(match.group(2),validate=True)
+                if not raw or len(raw)>15*1024*1024: raise ValueError('画像は15MB以下にしてください')
+                with STATE_LOCK:
+                    state=read_playback_mutation_state()
+                    board=next((b for b in state.get('presets',{}).get('boards',[]) if b.get('id')==str(data.get('boardId') or '')),None)
+                    item=next((x for x in board.get('items',[]) if x.get('id')==str(data.get('itemId') or '')),None) if board else None
+                    if item is None: raise ValueError('画像の保存先が見つかりません')
+                    suffix={'jpeg':'jpg'}.get(match.group(1),match.group(1));key=hashlib.sha256((board['id']+'|'+item['id']).encode()).hexdigest()[:24]
+                    filename=f'preset_{key}.{suffix}';(ROOT/filename).write_bytes(raw)
+                    item['imageUrl']='/'+filename+'?v='+str(time.time_ns());item['imageName']=Path(str(data.get('name') or filename)).name[:120]
+                    write_state_file(state);result={'ok':True,'item':copy.deepcopy(item)}
             elif self.path == '/api/gift-media/upload':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
                 state=read_state();rule=next((x for x in state['giftMedia']['rules'] if x['id']==str(data.get('ruleId') or '')),None)
@@ -3418,6 +3445,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if not pattern: raise ValueError('保存先のスロットが見つかりません')
                 field=str(data.get('field') or '');role_id=str(data.get('roleId') or '')
                 allowed={'cabinetUrl':'visual','monitorUrl':'visual','atMonitorUrl':'visual','upperMonitorUrl':'visual','atAudioUrl':'audio','upperAudioUrl':'audio','upperEntryUrl':'visual','upperEntryAudioUrl':'audio','atContinueSuccessUrl':'visual','atContinueSuccessAudioUrl':'audio','atContinueFailureUrl':'visual','atContinueFailureAudioUrl':'audio','freezeUrl':'visual','freezeAudioUrl':'audio','gogoUrl':'visual','bigSymbolImageUrl':'image','gogoAudioUrl':'audio','startAudioUrl':'audio','spinAudioUrl':'audio','stopAudioUrl':'audio','stop1AudioUrl':'audio','stop2AudioUrl':'audio','stop3AudioUrl':'audio','bigEffectUrl':'visual','bigEffectAudioUrl':'audio','upperBigEffectUrl':'visual','upperBigEffectAudioUrl':'audio','symbolImageUrl':'image','imageUrl':'image','animationUrl':'visual','audioUrl':'audio','entryUrl':'visual','entryAudioUrl':'audio','successUrl':'visual','successAudioUrl':'audio','failureUrl':'visual','failureAudioUrl':'audio'}
+                for scene in ('challenge','challengeEntry','challengeBigEffect'):
+                    allowed[scene+'Url']='visual';allowed[scene+'AudioUrl']='audio'
                 media_type=allowed.get(field)
                 if not media_type: raise ValueError('素材の設定先を確認してください')
                 target=pattern
@@ -3823,6 +3852,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
