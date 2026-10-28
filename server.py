@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.10'
+APP_VERSION = '0.67.11'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1361,7 +1361,11 @@ def _hydrate_slot_spin_plans(state):
         event['spins']=spins
 
 def read_cached_overlay_source():
-    """Share one normalized disk read across every browser-source poll."""
+    """Share one lightweight disk snapshot across every browser-source poll.
+
+    Settings are normalized before they are saved. Playback readers therefore
+    must not normalize the complete configuration again after every reel.
+    """
     def signature():
         try:
             stat = STATE.stat()
@@ -1372,9 +1376,17 @@ def read_cached_overlay_source():
         cache = OVERLAY_SNAPSHOT_CACHE
         current_signature = signature()
         if cache['state'] is None or cache['signature'] != current_signature:
-            cache['state'] = read_state()
-            # If a writer races us after read_state releases STATE_LOCK, keep the
-            # earlier signature so the next request invalidates this snapshot.
+            with STATE_LOCK:
+                try:
+                    snapshot = json.loads(STATE.read_text(encoding='utf-8'))
+                except Exception:
+                    snapshot = copy.deepcopy(DEFAULT)
+                if not isinstance(snapshot, dict):
+                    snapshot = copy.deepcopy(DEFAULT)
+                _hydrate_slot_spin_plans(snapshot)
+            cache['state'] = snapshot
+            # If a writer races us after STATE_LOCK is released, retain the
+            # earlier signature so the next poll refreshes immediately.
             cache['signature'] = current_signature
             cache['at'] = time.monotonic()
         return cache['state']
@@ -1422,6 +1434,20 @@ def read_overlay_state(kind, pattern_id=''):
         result['gacha']['patterns'] = [pattern] if pattern else []
         effect_key = 'gacha:' + str(event.get('patternId') or '')
         result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
+    elif kind == 'gift-history':
+        result = {
+            'fontFamily': state.get('fontFamily', 'system'),
+            'textScale': state.get('textScale', 100),
+            'textColor': state.get('textColor', '#ffffff'),
+            'textOutlineEnabled': state.get('textOutlineEnabled', False),
+            'textOutlineColor': state.get('textOutlineColor', '#000000'),
+            'textOutlineWidth': state.get('textOutlineWidth', 0),
+            'textBackgroundEnabled': state.get('textBackgroundEnabled', False),
+            'textBackgroundColor': state.get('textBackgroundColor', '#000000'),
+            'textBackgroundOpacity': state.get('textBackgroundOpacity', 0),
+            'textEffects': {'giftWall': state.get('textEffects', {}).get('giftWall', {})},
+            'giftWall': copy.deepcopy(state.get('giftWall', {})),
+        }
     elif kind == 'gacha-history':
         machine=state['gacha'];view=machine['rankingViews']['history']
         rows=sorted(machine.get('history',[]),key=lambda row:row.get('createdAt',0),reverse=True)[:view['limit']]
@@ -2795,7 +2821,7 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/slot/status':
             body=json.dumps(read_slot_live_status(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
-        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/smoking-gacha', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/smoking-gacha', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history', '/api/overlay/gift-history'):
             kind = parsed.path.rsplit('/', 1)[-1]
             query=parse_qs(parsed.query);pattern_id=str((query.get('id') or [''])[0]) if kind=='slot' else ''
             body = json.dumps(read_overlay_state(kind,pattern_id), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
