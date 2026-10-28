@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.09'
+APP_VERSION = '0.67.10'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -3216,7 +3216,7 @@ class Handler(SimpleHTTPRequestHandler):
                     # screen. Dedicated overlays may consume their own queued event
                     # concurrently; the common overlay continues in FIFO order.
                     run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
-                    _externalize_slot_spin_plans(state)
+                    _externalize_slot_spin_plans(state, cleanup=False)
                     STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':True}
             elif self.path == '/api/slot/current-spin':
@@ -3239,7 +3239,7 @@ class Handler(SimpleHTTPRequestHandler):
                     state=read_slot_mutation_state()
                     ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
                     if ok:
-                        _externalize_slot_spin_plans(state)
+                        _externalize_slot_spin_plans(state, cleanup=False)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok}
             elif self.path == '/api/slot/choose-sign':
@@ -3248,7 +3248,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ok=choose_slot_sign(state,safe_int(data.get('eventId')),str(data.get('choice') or ''))
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
-                        _externalize_slot_spin_plans(state)
+                        _externalize_slot_spin_plans(state, cleanup=False)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok,'completed':ok}
             elif self.path == '/api/slot/complete':
@@ -3256,7 +3256,7 @@ class Handler(SimpleHTTPRequestHandler):
                     state=read_slot_mutation_state()
                     ok=complete_slot_event(state,safe_int(data.get('eventId')))
                     if ok:
-                        _externalize_slot_spin_plans(state)
+                        _externalize_slot_spin_plans(state, cleanup=False)
                         STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
                 result={'ok':ok}
             elif self.path == '/api/slot/media':
