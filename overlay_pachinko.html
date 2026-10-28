@@ -91,34 +91,37 @@ function pachinkoRoleKey(property){return 'role'+property.replace(/-/g,'')}
 function clearPachinkoRoleStyles(el){for(const property of ['color','font-size','font-family','position','left','right','top','bottom','translate','margin','z-index','width','max-width','white-space']){const key=pachinkoRoleKey(property);if(el.dataset[key]==='1'){el.style.removeProperty(property);delete el.dataset[key]}}}
 function setPachinkoRoleStyle(el,property,value,priority=''){el.style.setProperty(property,value,priority);el.dataset[pachinkoRoleKey(property)]='1'}
 function applyPachinkoTextRoles(){const roles=activePattern?.textRoles||{};for(const id of ['pattern','sender','status','spin','sub','total']){const el=$(id),raw=String(el.textContent||''),x=roles[pachinkoRoleFor(id,raw)]||{},customImage=x.mode==='image'&&x.imageUrl,customText=!customImage&&!!x.text,fontFamily=x.fontFamily||'global';clearPachinkoRoleStyles(el);el.classList.remove('roleTextOff','roleCustomText','roleCustomImage');for(const property of ['--role-content','--role-image','--role-image-size','--role-color','--role-size','--role-font'])el.style.removeProperty(property);const baseColor=getComputedStyle(el).color,baseSize=getComputedStyle(el).fontSize;if(x.enabled===false){el.classList.add('roleTextOff');continue}if(x.positionEnabled){setPachinkoRoleStyle(el,'position','absolute','important');setPachinkoRoleStyle(el,'left',Math.max(0,Math.min(100,Number.isFinite(+x.x)?+x.x:50))+'%','important');setPachinkoRoleStyle(el,'right','auto','important');setPachinkoRoleStyle(el,'top',Math.max(0,Math.min(100,Number.isFinite(+x.y)?+x.y:50))+'%','important');setPachinkoRoleStyle(el,'bottom','auto','important');setPachinkoRoleStyle(el,'translate','-50% -50%','important');setPachinkoRoleStyle(el,'margin','0','important');setPachinkoRoleStyle(el,'z-index','20','important');setPachinkoRoleStyle(el,'width','max-content','important');setPachinkoRoleStyle(el,'max-width','94%','important');setPachinkoRoleStyle(el,'white-space','normal','important')}if(customImage){el.classList.add('roleCustomImage');el.style.setProperty('--role-image',`url("${String(x.imageUrl).replace(/"/g,'%22')}")`);el.style.setProperty('--role-image-size',Math.max(20,Math.min(600,+x.imageSize||120))+'px')}else if(customText){el.classList.add('roleCustomText');el.style.setProperty('--role-content',JSON.stringify(pachinkoRoleTemplate(x.text,raw)));el.style.setProperty('--role-color',x.colorEnabled&&x.color?x.color:baseColor);el.style.setProperty('--role-size',(+x.size>0?+x.size+'px':baseSize));el.style.setProperty('--role-font',pachinkoFontStack(fontFamily))}else{if(x.colorEnabled&&x.color)setPachinkoRoleStyle(el,'color',x.color,'important');if(+x.size>0)setPachinkoRoleStyle(el,'font-size',(+x.size)+'px');if(fontFamily!=='global')setPachinkoRoleStyle(el,'font-family',pachinkoFontStack(fontFamily),'important')}}}
-function startStageMedia(p,key,{keepMissing=false,fallbackKey=null}={}){
+function startStageMedia(p,key,{keepMissing=false,fallbackKey=null,restartAudio=false}={}){
  const videoKey=p[key+'AnimationUrl']?key:fallbackKey||key,audioKey=p[key+'AudioUrl']?key:fallbackKey||key;
  const url=p[videoKey+'AnimationUrl']||'',audioUrl=p[audioKey+'AudioUrl']||'';
  // Keep the same player and its position across text/result/turn changes.
  if(url||!keepMissing){
-  if(url!==currentMediaUrl||currentVideoStage!==videoKey||!$('media').firstElementChild||$('media').firstElementChild.__pachinkoExpired){
+  const reuseVisual=url===currentMediaUrl&&$('media').firstElementChild&&!$('media').firstElementChild.__pachinkoExpired;
+  if(url!==currentMediaUrl||!$('media').firstElementChild||$('media').firstElementChild.__pachinkoExpired){
    clearPachinkoMediaTimer('visual');if(currentVideo)currentVideo.pause();currentVideo=null;currentMediaUrl=url;$('media').replaceChildren();
    if(url){const video=/\.(mp4|webm)(?:[?#]|$)/i.test(url),node=document.createElement(video?'video':'img');node.src=url;if(video){node.autoplay=true;node.playsInline=true;node.loop=p[videoKey+'VideoLoop']!==false;node.volume=pachinkoMediaVolume(p,videoKey,true);currentVideo=node}$('media').append(node);if(video)node.play().catch(()=>{});armPachinkoMediaTimer('visual',node,p[videoKey+(video?'Video':'Image')+'Seconds'],()=>{if(video)node.pause();node.style.visibility='hidden'})}
   }
-  if(url){currentVideoStage=videoKey;currentVideoSourceStage=p.__mediaFallbacks?.[videoKey+'Animation']||videoKey;if(currentVideo){currentVideo.loop=p[videoKey+'VideoLoop']!==false;currentVideo.volume=pachinkoMediaVolume(p,videoKey,true)}}
+  if(url){if(reuseVisual&&currentVideoStage!==videoKey){const node=$('media').firstElementChild,video=!!currentVideo;armPachinkoMediaTimer('visual',node,p[videoKey+(video?'Video':'Image')+'Seconds'],()=>{if(video)node.pause();node.style.visibility='hidden'})}currentVideoStage=videoKey;currentVideoSourceStage=p.__mediaFallbacks?.[videoKey+'Animation']||videoKey;if(currentVideo){currentVideo.loop=p[videoKey+'VideoLoop']!==false;currentVideo.volume=pachinkoMediaVolume(p,videoKey,true)}}
  }
  if(audioUrl||!keepMissing){
-  if(audioUrl!==currentAudioUrl||currentAudioStage!==audioKey||(!currentAudio&&audioUrl)||currentAudio?.__pachinkoExpired){
+  const cue=audioKey==='stop'||/(Enter|Exit)$/.test(audioKey);
+  const reuseAudio=audioUrl===currentAudioUrl&&currentAudio&&!currentAudio.__pachinkoExpired&&!restartAudio&&!cue;
+  if(audioUrl!==currentAudioUrl||(!currentAudio&&audioUrl)||currentAudio?.__pachinkoExpired||restartAudio||(cue&&currentAudioStage!==audioKey)){
    clearPachinkoMediaTimer('audio');if(currentAudio)currentAudio.pause();currentAudio=null;currentAudioUrl=audioUrl;
-   if(audioUrl){currentAudio=stageAudioPlayers.get(audioUrl);if(!currentAudio){currentAudio=new Audio(audioUrl);stageAudioPlayers.set(audioUrl,currentAudio)}currentAudio.currentTime=0;currentAudio.loop=pachinkoAudioLoop(p,audioKey);currentAudio.volume=pachinkoMediaVolume(p,audioKey);currentAudio.play().catch(()=>{});const node=currentAudio;armPachinkoMediaTimer('audio',node,p[audioKey+'AudioSeconds'],()=>node.pause())}
+   if(audioUrl){currentAudio=stageAudioPlayers.get(audioUrl);if(!currentAudio){currentAudio=new Audio(audioUrl);stageAudioPlayers.set(audioUrl,currentAudio)}if(cue||restartAudio||currentAudio.__pachinkoExpired)currentAudio.currentTime=0;currentAudio.loop=pachinkoAudioLoop(p,audioKey);currentAudio.volume=pachinkoMediaVolume(p,audioKey);if(!currentAudio.ended||currentAudio.loop||cue||restartAudio)currentAudio.play().catch(()=>{});const node=currentAudio;armPachinkoMediaTimer('audio',node,p[audioKey+'AudioSeconds'],()=>node.pause())}
   }
-  if(audioUrl){currentAudioStage=audioKey;currentAudioSourceStage=p.__mediaFallbacks?.[audioKey+'Audio']||audioKey;currentAudio.loop=pachinkoAudioLoop(p,audioKey);currentAudio.volume=pachinkoMediaVolume(p,audioKey);if(currentAudio.paused&&!currentAudio.ended&&!currentAudio.__pachinkoExpired)currentAudio.play().catch(()=>{})}
+  if(audioUrl){if(reuseAudio&&currentAudioStage!==audioKey){const node=currentAudio;armPachinkoMediaTimer('audio',node,p[audioKey+'AudioSeconds'],()=>node.pause())}currentAudioStage=audioKey;currentAudioSourceStage=p.__mediaFallbacks?.[audioKey+'Audio']||audioKey;currentAudio.loop=pachinkoAudioLoop(p,audioKey);currentAudio.volume=pachinkoMediaVolume(p,audioKey);if(currentAudio.paused&&!currentAudio.ended&&!currentAudio.__pachinkoExpired)currentAudio.play().catch(()=>{})}
  }
 }
 // Result media has its own lifecycle. A stopped-reel track never leaks into WIN text.
-function stopPachinkoStageAudio(){clearPachinkoMediaTimer('audio');if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentAudioUrl='';currentAudioStage=''}
+function stopPachinkoStageAudio(reset=true){clearPachinkoMediaTimer('audio');if(currentAudio){currentAudio.pause();if(reset)currentAudio.currentTime=0;currentAudio=null}currentAudioUrl='';currentAudioStage=''}
 function startPachinkoResult(p,key,winning,phaseKey){
- stopPachinkoBeep(true);stopPachinkoStageAudio();
+ stopPachinkoBeep(true);if(currentAudioStage==='stop')stopPachinkoStageAudio();
  const resolved={...p,__mediaFallbacks:{}};
  for(const [kind,fallback] of [['Animation',phaseKey],['Audio',winning?'hit':phaseKey]]){
   if(!resolved[key+kind+'Url']){resolved.__mediaFallbacks[key+kind]=fallback;resolved[key+kind+'Url']=p[fallback+kind+'Url']||'';for(const suffix of ['Volume','Loop'])resolved[key+kind+suffix]=p[fallback+kind+suffix];for(const type of kind==='Audio'?['Audio']:['Image','Video'])if(!resolved[key+type+'Seconds'])resolved[key+type+'Seconds']=p[fallback+type+'Seconds']}
  }
- startStageMedia(resolved,key);
+ startStageMedia(resolved,key,{restartAudio:winning||!!p[key+'AudioUrl']});
 }
 async function playStage(p,key,text,detail='',fallback=1){stopPachinkoBeep();startStageMedia(p,key);showText(text,'',detail,'');const seconds=Math.max(.2,Math.min(120,Number(p[(key==='spin'?'spinDisplay':key)+'Seconds'])||fallback));await sleep(pachinkoStageWaitMs(seconds))}
 async function playPachinkoBoundary(p,phase,edge,detail='',force=false){const key=phase+edge;if(!force&&p[key+'Enabled']!==true)return false;await playStage(p,key,pachinkoPhaseNames[phase]+(edge==='Enter'?'突入':'終了'),detail,3);return true}
@@ -273,14 +276,17 @@ async function playEvent(state,event){
     if(r.phase!==phase){
      phase=r.phase;
      await playPachinkoBoundary(p,mediaKey,'Enter',(i+1)+' SET');
-     await playStage(p,mediaKey,phase==='lt'?'LUCKY TRIGGER':phase==='upper'?'上位ST突入':'ST突入',(i+1)+' SET',1);
     }
     await animatePhaseSpins(p,r,phase);
     const roundSeconds=Math.max(.2,Number(p[(phase==='lt'?'luckyTrigger':phase==='upper'?'upper':'at')+'ResultSeconds']??p[mediaKey+'Seconds'])||2);
     const winning=Math.abs(Number(r.win)||0)>0;
     const resultKey=mediaKey+(winning?'Hit':r.resultKind==='continue-miss'?'ContinueMiss':r.resultKind==='end-miss'?'EndMiss':'Miss');
+    const continuingMiss=r.mode==='continue'&&r.resultKind==='continue-miss'&&r.continued&&i+1<rounds.length&&rounds[i+1].phase===phase;
+    // A continuing miss stays on the settled reels. Only an explicitly configured
+    // miss effect adds a separate stage, and it never shows the aggregate WIN.
+    if(continuingMiss&&!p[resultKey+'AnimationUrl']&&!p[resultKey+'AudioUrl'])continue;
     startPachinkoResult(p,resultKey,winning,mediaKey);
-    showText(pachinkoRoundStatus(r),pachinkoRoundWinText(r,event),(i+1)+' SET',pachinkoTotalText(r.total,event));
+    showText(pachinkoRoundStatus(r),pachinkoRoundWinText(r,event),(i+1)+' SET',continuingMiss?'':pachinkoTotalText(r.total,event));
     $('spin').classList.add('pulse');await sleep(pachinkoStageWaitMs(roundSeconds));$('spin').classList.remove('pulse');
     if(i===rounds.length-1||rounds[i+1].phase!==phase)await playPachinkoBoundary(p,mediaKey,'Exit',pachinkoTotalText(r.total,event));
    }
@@ -304,5 +310,6 @@ async function showPachinkoPreview(data){
 window.addEventListener('message',event=>{if(!previewMode||event.origin!==location.origin||event.source!==window.parent)return;const data=event.data||{};if(data.type==='pachinko-preview-choice'&&data.generation===playbackGeneration&&previewChoiceResolver)previewChoiceResolver(data.choice);if(data.type==='pachinko-preview')showPachinkoPreview(data).catch(error=>{if(error.name!=='AbortError')console.error('Pachinko preview',error)});if(data.type==='pachinko-preview-update'&&data.pattern)applyPachinkoLiveVolumes(data.pattern)});
 if(!previewMode){poll();setInterval(poll,500)}setInterval(()=>{if(playing&&activePattern)applyPachinkoTextRoles()},500);
 </script></body></html>
+
 
 
