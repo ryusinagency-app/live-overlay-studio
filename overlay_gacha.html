@@ -31,7 +31,7 @@ window.__gachaMainStarted=false;
 window.__gachaPollReady=false;
 window.__gachaLastModernPoll=0;
 (function(){
-  var legacyLastId=0,legacyTimer=null,legacyPoll=null;
+  var legacyLastId=0,legacyTimer=null,legacyPoll=null,legacyStopped=false;
   function queryValue(name){var match=new RegExp('(?:[?&])'+name+'=([^&]*)').exec(location.search||'');return match?decodeURIComponent(match[1].replace(/\+/g,' ')):''}
   var legacyLayout=queryValue('layout');
   function byId(id){return document.getElementById(id)}
@@ -43,12 +43,14 @@ window.__gachaLastModernPoll=0;
     byId('pattern').textContent=ev.patternName||'WINガチャ';byId('sender').textContent=ev.senderName||'';byId('setCount').textContent='0SET';
     result.textContent='???';state.textContent='抽選中…';total.textContent='START';
     function round(){
+      if(legacyStopped||window.__gachaMainStarted){if(legacyTimer){clearInterval(legacyTimer);legacyTimer=null}return}
       if(index>=rounds.length){card.className=card.className.replace(' spinning','');result.textContent='終了';state.textContent='AT終了';total.textContent='合計'+(ev.total>=0?'+':'')+(ev.total||0)+'WIN';setTimeout(function(){card.className='card';finish(ev.id)},Math.max(1000,Math.min(30000,Number(g.endSeconds||6)*1000)));return}
       var item=rounds[index],started=Date.now(),duration=Math.max(200,Math.min(30000,Number(item.spinSeconds||g.spinSeconds||5)*1000));
       legacyTimer=setInterval(function(){var n=Math.floor(Math.random()*50)+1;result.textContent=(item.delta<0?'-':'+')+n+' WIN';if(Date.now()-started>=duration){clearInterval(legacyTimer);result.textContent=(item.delta>=0?'+':'')+item.delta+' WIN';state.textContent=item.continued?'継続！':'終了…';total.textContent='今回 '+(item.total>=0?'+':'')+item.total+' WIN';byId('setCount').textContent=(index+(item.continued?1:0))+'SET';index++;setTimeout(round,900)}},90)
     }
     round()
   }
+  window.__stopGachaCompat=function(){legacyStopped=true;if(legacyPoll){clearInterval(legacyPoll);legacyPoll=null}if(legacyTimer){clearInterval(legacyTimer);legacyTimer=null}};
   function poll(){
     /* Once the full player has initialized it exclusively owns playback.
        Starting this fallback merely because LIVE Studio delayed a poll could
@@ -233,6 +235,6 @@ window.addEventListener('resize',()=>requestAnimationFrame(clampPreviewTextPosit
 window.addEventListener('message',event=>{if(event.origin!==location.origin)return;const d=event.data||{};if(!new URLSearchParams(location.search).has('preview'))return;if(d.type==='gacha-preview-play'){livePreviewG=d.g||{};activeTextSettings=livePreviewG;const ev={...(d.event||{}),preview:true};playToken++;play(ev,playToken,d.animationUrl||livePreviewG.animationUrl||'',livePreviewG);return}if(d.type==='gacha-preview-scene'){if(d.action==='stop'){playToken++;stopOverlayPlayback();return}playToken++;showPreviewScene(d);return}if(d.type==='gacha-preview-update'){showPreviewScene({...d,scene:activePreviewScene,action:'show'});return}});
 for(const key of ['pattern','sender','setCount','result','state','total']){$(key).addEventListener('pointerdown',event=>{if(!new URLSearchParams(location.search).has('preview')||!new URLSearchParams(location.search).has('edit')||!livePreviewG)return;const card=$('card'),el=$(key);if(getComputedStyle(el).display==='none')return;event.preventDefault();const cardRect=card.getBoundingClientRect(),elRect=el.getBoundingClientRect(),centerX=elRect.left+elRect.width/2,centerY=elRect.top+elRect.height/2,offsetX=event.clientX-centerX,offsetY=event.clientY-centerY;el.setPointerCapture&&el.setPointerCapture(event.pointerId);const position=(ev)=>{const rect=card.getBoundingClientRect(),box=el.getBoundingClientRect(),pad=10;let x=(ev.clientX-offsetX-rect.left)/rect.width*100,y=(ev.clientY-offsetY-rect.top)/rect.height*100,minX=(box.width/2+pad)/rect.width*100,maxX=100-minX,minY=(box.height/2+pad)/rect.height*100,maxY=100-minY;if(minX>maxX)minX=maxX=50;if(minY>maxY)minY=maxY=50;x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));el.style.setProperty('--edit-x',x+'%');el.style.setProperty('--edit-y',y+'%');parent.postMessage({type:'gacha-element-layout',patternId:livePreviewG.id,scene:activePreviewScene,key,x,y},location.origin)};const move=ev=>position(ev);const done=ev=>{if((ev&&ev.pointerId)!==undefined&&ev.pointerId!==event.pointerId)return;position(ev||event);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',done);el.removeEventListener('pointercancel',done)};el.addEventListener('pointermove',move);el.addEventListener('pointerup',done);el.addEventListener('pointercancel',done)})}
 
-window.__gachaMainStarted=true;
-if(!new URLSearchParams(location.search).has("preview")){update();setInterval(update,750)}
+window.__gachaMainStarted=true;if(window.__stopGachaCompat)window.__stopGachaCompat();
+if(!new URLSearchParams(location.search).has("preview")){update();setInterval(update,500)}
 </script></body></html>
