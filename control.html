@@ -769,6 +769,7 @@ function textFxTargets(){const items=[['win','現在WIN'],['smoking','禁煙タ�
 (state.memos||[]).forEach((item,i)=>items.push(['memo:'+item.id,'メモ '+(i+1)+'：'+(item.title||'メモ')]));
 (state.giftRules||[]).forEach((item,i)=>items.push(['giftRule:'+item.id,'ギフトテキスト '+(i+1)+'：'+(item.giftName||'未設定')]));
 (state.gacha?.patterns||[]).forEach((item,i)=>items.push(['gacha:'+item.id,'WINガチャ '+(i+1)+'：'+(item.name||'名称なし')]));
+(state.pachinkoGacha?.patterns||[]).forEach((item,i)=>items.push(['pachinko:'+item.id,'パチンコガチャ '+(i+1)+'：'+(item.name||'名称なし')]));
 (state.smokingGacha?.patterns||[]).forEach((item,i)=>items.push(['smokingGacha:'+item.id,'禁煙ガチャ '+(i+1)+'：'+(item.name||'名称なし')]));return items}
 function defaultTextFx(){return {mode:'global',outlineEnabled:false,outlineColor:'#000000',outlineWidth:2,backgroundEnabled:false,backgroundColor:'#000000',backgroundOpacity:55}}
 function renderTextFxTargets(preferred){const select=$('textFxTarget');if(!select)return;const old=preferred||select.value;select.replaceChildren();for(const [key,label] of textFxTargets()){const option=document.createElement('option');option.value=key;option.textContent=label;select.appendChild(option)}if([...select.options].some(option=>option.value===old))select.value=old;renderTextFxEditor()}
