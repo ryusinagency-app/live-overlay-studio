@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.12'
+APP_VERSION = '0.67.13'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -348,8 +348,9 @@ def persist_gift_catalog(gifts):
         except Exception:
             data = copy.deepcopy(DEFAULT)
         merged = merge_gift_catalog(data.get('giftCatalog', []), gifts)
-        data['giftCatalog'] = merged
-        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        if data.get('giftCatalog') != merged:
+            data['giftCatalog'] = merged
+            STATE.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     with TIKTOK_GIFT_CATALOG_LOCK:
         TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(merged)
     return merged
@@ -2141,11 +2142,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
     if not name:
         return False
     with STATE_LOCK:
-        try:
-            data = json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data = copy.deepcopy(DEFAULT)
-        data, _ = normalize_state(data)
+        data = read_playback_mutation_state()
         matched = False
         recorded = False
         count=max(1,int(count or 1))
@@ -2221,7 +2218,9 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             matched=True
         if not matched and not recorded:
             return False
-        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        # Persist new plans once; retain existing sidecars without a full scan.
+        _externalize_slot_spin_plans(data, cleanup=False)
+        STATE.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
         return matched
 
 def get_tiktok_status():
@@ -2280,7 +2279,6 @@ def tiktok_gift_listener(username):
                 if gift is None:
                     update_status('connected', 'ギフトイベントを受信しましたが、ギフト名を取得できません')
                     return
-                remember_gift(gift)
                 gift_name = str(getattr(gift, 'name', '') or '').strip()
                 if not gift_name:
                     update_status('connected', 'ギフトイベントを受信しましたが、ギフト名を取得できません')
@@ -2289,6 +2287,7 @@ def tiktok_gift_listener(username):
                 gift_type = getattr(gift, 'type', None)
                 if getattr(event, 'streaking', False) and gift_type in (None, 1):
                     return
+                remember_gift(gift)
                 sender = getattr(event, 'user', None) or getattr(event, 'user_info', None)
                 sender_name = str(_gift_value(sender, 'nickname', 'unique_id', 'uniqueId', 'username') or '').strip()
                 avatar_url = _gift_image_url({'image':_gift_value(sender, 'avatar', 'avatar_thumb', 'avatarThumb', 'profile_picture', 'profilePicture')})
@@ -2296,7 +2295,6 @@ def tiktok_gift_listener(username):
                 gift_info = gift_items[0] if gift_items else None
                 matched = process_gift_event(gift_name, getattr(event, 'repeat_count', 1), sender_name, gift_info, avatar_url)
                 if matched:
-                    seconds = read_state().get('timer', {}).get('seconds', 0)
                     update_status('connected', f'ギフト反応: {gift_name}（タイマー／WINガチャ）')
                 else:
                     update_status('connected', f'ギフト受信: {gift_name}（ギフト設定の名前と一致しません）')
