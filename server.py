@@ -2836,7 +2836,7 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.dumps(get_gta_watch_status(), ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path == '/api/tiktok/gifts':
-            gifts = read_state().get('giftCatalog', [])
+            gifts = read_cached_overlay_source().get('giftCatalog', [])
             with TIKTOK_GIFT_CATALOG_LOCK:
                 TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(gifts)
             status = get_tiktok_status()
