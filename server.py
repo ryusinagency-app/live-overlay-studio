@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.13'
+APP_VERSION = '0.67.14'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -153,10 +153,49 @@ if FROZEN_APP and os.name == 'nt':
         subprocess.Popen([str(managed_exe)], cwd=str(ROOT), close_fds=True)
         raise SystemExit(0)
 STATE = ROOT / 'state.json'
-STATE_LOCK = threading.Lock()
+PERFORMANCE_LOCK = threading.Lock()
+PERFORMANCE_METRICS = {}
+
+def record_performance(name, seconds):
+    milliseconds = max(0.0, seconds * 1000)
+    with PERFORMANCE_LOCK:
+        item = PERFORMANCE_METRICS.setdefault(name, {'count': 0, 'totalMs': 0.0, 'maxMs': 0.0, 'lastMs': 0.0})
+        item['count'] += 1
+        item['totalMs'] += milliseconds
+        item['maxMs'] = max(item['maxMs'], milliseconds)
+        item['lastMs'] = milliseconds
+
+class MeasuredStateLock:
+    """Measure state contention without logging user settings or gift data."""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._owner = threading.local()
+
+    def acquire(self, blocking=True, timeout=-1):
+        started = time.perf_counter()
+        acquired = self._lock.acquire(blocking, timeout) if timeout != -1 else self._lock.acquire(blocking)
+        record_performance('stateLockWait', time.perf_counter() - started)
+        if acquired:
+            self._owner.started = time.perf_counter()
+        return acquired
+
+    def release(self):
+        duration = time.perf_counter() - self._owner.started
+        self._lock.release()
+        record_performance('stateLockHeld', duration)
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *args):
+        self.release()
+
+STATE_LOCK = MeasuredStateLock()
 SLOT_SPIN_PLAN_LOCK = threading.Lock()
 SLOT_SPIN_PLAN_CACHE = {}
 OVERLAY_SNAPSHOT_LOCK = threading.Lock()
+OVERLAY_REFRESH_LOCK = threading.Lock()
 OVERLAY_SNAPSHOT_CACHE = {'signature': None, 'at': 0, 'state': None}
 JST = timezone(timedelta(hours=9))
 DEFAULT = {
@@ -350,7 +389,7 @@ def persist_gift_catalog(gifts):
         merged = merge_gift_catalog(data.get('giftCatalog', []), gifts)
         if data.get('giftCatalog') != merged:
             data['giftCatalog'] = merged
-            STATE.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+            write_state_file(data)
     with TIKTOK_GIFT_CATALOG_LOCK:
         TIKTOK_GIFT_CATALOG[:] = copy.deepcopy(merged)
     return merged
@@ -1311,7 +1350,7 @@ def read_state():
             merged, changed = copy.deepcopy(DEFAULT), False
         if changed or not STATE.exists():
             _externalize_slot_spin_plans(merged)
-            STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+            write_state_file(merged)
         _hydrate_slot_spin_plans(merged)
         return merged
 
@@ -1361,36 +1400,91 @@ def _hydrate_slot_spin_plans(state):
                 SLOT_SPIN_PLAN_CACHE[filename]=spins
         event['spins']=spins
 
-def read_cached_overlay_source():
-    """Share one lightweight disk snapshot across every browser-source poll.
+def state_file_signature():
+    stat = STATE.stat()
+    return (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
 
-    Settings are normalized before they are saved. Playback readers therefore
-    must not normalize the complete configuration again after every reel.
-    """
-    def signature():
-        try:
-            stat = STATE.stat()
-            return (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
-        except OSError:
-            return None
+def publish_overlay_snapshot(data):
+    # Spin plans are immutable. Share those arrays instead of copying tens of
+    # thousands of results for every counter update.
+    memo = {id(event['spins']): event['spins']
+            for event in _slot_events(data.get('slotMachine', {}))
+            if isinstance(event.get('spins'), list) and event['spins']}
+    snapshot = copy.deepcopy(data, memo)
+    _hydrate_slot_spin_plans(snapshot)
+    signature = state_file_signature()
     with OVERLAY_SNAPSHOT_LOCK:
-        cache = OVERLAY_SNAPSHOT_CACHE
-        current_signature = signature()
-        if cache['state'] is None or cache['signature'] != current_signature:
-            with STATE_LOCK:
-                try:
-                    snapshot = json.loads(STATE.read_text(encoding='utf-8'))
-                except Exception:
-                    snapshot = copy.deepcopy(DEFAULT)
-                if not isinstance(snapshot, dict):
-                    snapshot = copy.deepcopy(DEFAULT)
-                _hydrate_slot_spin_plans(snapshot)
-            cache['state'] = snapshot
-            # If a writer races us after STATE_LOCK is released, retain the
-            # earlier signature so the next poll refreshes immediately.
-            cache['signature'] = current_signature
-            cache['at'] = time.monotonic()
-        return cache['state']
+        OVERLAY_SNAPSHOT_CACHE.update(signature=signature, at=time.monotonic(), state=snapshot)
+
+def write_state_file(data):
+    """Commit under STATE_LOCK, then publish before acknowledging the mutation."""
+    started = time.perf_counter()
+    _externalize_slot_spin_plans(data, cleanup=False)
+    payload = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+    STATE.write_text(payload, encoding='utf-8')
+    publish_overlay_snapshot(data)
+    record_performance('stateWrite', time.perf_counter() - started)
+
+def read_cached_overlay_source():
+    """Serve the last committed snapshot while another state operation is busy.
+
+    Never hold OVERLAY_SNAPSHOT_LOCK while waiting for STATE_LOCK or disk IO.
+    Every app writer publishes its new snapshot before returning, so playback
+    acknowledgements and the following polls observe the same committed state.
+    """
+    started = time.perf_counter()
+    with OVERLAY_SNAPSHOT_LOCK:
+        cached = OVERLAY_SNAPSHOT_CACHE['state']
+        cached_signature = OVERLAY_SNAPSHOT_CACHE['signature']
+    try:
+        current_signature = state_file_signature()
+    except OSError:
+        if cached is not None:
+            return cached
+        raise
+    if cached is not None and cached_signature == current_signature:
+        record_performance('snapshotRead', time.perf_counter() - started)
+        return cached
+    # A single reader may refresh an externally changed file. Other readers
+    # keep displaying the last committed state rather than queueing behind it.
+    if cached is not None and not OVERLAY_REFRESH_LOCK.acquire(blocking=False):
+        record_performance('snapshotServedWhileBusy', 0)
+        return cached
+    refreshing = cached is not None
+    acquired = STATE_LOCK.acquire(blocking=cached is None)
+    try:
+        if not acquired:
+            record_performance('snapshotServedWhileBusy', 0)
+            return cached
+        snapshot = json.loads(STATE.read_text(encoding='utf-8'))
+        if not isinstance(snapshot, dict):
+            raise ValueError('保存された設定を読み込めません')
+        publish_overlay_snapshot(snapshot)
+        with OVERLAY_SNAPSHOT_LOCK:
+            return OVERLAY_SNAPSHOT_CACHE['state']
+    except (OSError, ValueError):
+        if cached is None:
+            raise
+        record_performance('snapshotReadFailure', 0)
+        return cached
+    finally:
+        if acquired:
+            STATE_LOCK.release()
+        if refreshing:
+            OVERLAY_REFRESH_LOCK.release()
+        record_performance('snapshotRead', time.perf_counter() - started)
+
+def performance_diagnostics():
+    with PERFORMANCE_LOCK:
+        metrics = copy.deepcopy(PERFORMANCE_METRICS)
+    for item in metrics.values():
+        item['averageMs'] = item['totalMs'] / max(1, item['count'])
+        for key in ('totalMs', 'maxMs', 'lastMs', 'averageMs'):
+            item[key] = round(item[key], 3)
+    with OVERLAY_SNAPSHOT_LOCK:
+        updated = OVERLAY_SNAPSHOT_CACHE['at']
+    return {'version': APP_VERSION, 'metrics': metrics,
+            'snapshotAgeMs': round((time.monotonic() - updated) * 1000, 1) if updated else None}
 
 def read_overlay_state(kind, pattern_id=''):
     """Small, consistent playback snapshots; never expose profiles/history to renderers."""
@@ -1525,7 +1619,7 @@ def write_state(data):
     merged, _ = normalize_state(allowed)
     with STATE_LOCK:
         _externalize_slot_spin_plans(merged)
-        STATE.write_text(json.dumps(merged, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+        write_state_file(merged)
 
 def read_playback_mutation_state():
     """Read saved runtime state under STATE_LOCK without loading slot plans.
@@ -1638,7 +1732,7 @@ def dispatch_hotkey_action(action):
                 if counter.get('id') == action['id']:
                     counter['value'] = max(0, int(counter.get('value', 0)) + action['delta'])
                     break
-        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        write_state_file(data)
 
 def normalize_gift_name(value):
     value = unicodedata.normalize('NFKC', str(value or '')).casefold()
@@ -1710,7 +1804,7 @@ def complete_other_gacha_event(event_id):
         if queue:
             next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time();other['event']=next_event
         sync_active_profile_other_gacha(data)
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def normalize_pachinko_payouts(rows):
@@ -1841,7 +1935,7 @@ def skip_pachinko_event(event_id,scope='current',created_at=None,expected_queue=
             if pending:
                 following=pending.pop(0);following['active']=True;following['createdAt']=time.time();machine['event']=following
         else: return False
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def pachinko_signed_total(event):
@@ -1874,7 +1968,7 @@ def pachinko_choice_action(event_id,choice=None,created_at=None):
         if created_at is not None and safe_float(event.get('createdAt'))!=safe_float(created_at): return False
         if choice is None: event['choiceReady']=True
         elif not choose_pachinko_sign_in_state(data,choice): return False
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def update_pachinko_stats(data,event):
@@ -1914,7 +2008,7 @@ def complete_pachinko_event(event_id):
         event['active']=False;queue=machine.setdefault('queue',[])
         if queue:
             nxt=queue.pop(0);nxt['active']=True;nxt['createdAt']=time.time();machine['event']=nxt
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');return True
+        write_state_file(data);return True
 
 def queue_gift_media_event(data, rule, gift_name, sender_name='', count=1):
     media=data['giftMedia']; current=media.get('event') or {}; queued=media.setdefault('queue',[])
@@ -1933,7 +2027,7 @@ def complete_gift_media_event(event_id):
         event['active']=False;pending=media.setdefault('queue',[])
         if pending:
             next_event=pending.pop(0);next_event['active']=True;next_event['createdAt']=time.time();media['event']=next_event
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def run_gacha_draw(data, pattern, gift_name='テスト', sender_name='', is_test=False, avatar_url=''):
@@ -2021,7 +2115,7 @@ def mark_smoking_gacha_choice_ready(event_id):
         except Exception: data=copy.deepcopy(DEFAULT)
         data,_=normalize_state(data);ev=data['smokingGacha']['event']
         if int(ev.get('id') or 0)!=event_id or not ev.get('active') or ev.get('choice'): return False
-        ev['choiceReady']=True;STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');return True
+        ev['choiceReady']=True;write_state_file(data);return True
 
 def choose_smoking_gacha_sign_in_state(data, choice):
     ev=data['smokingGacha']['event']
@@ -2039,7 +2133,7 @@ def choose_smoking_gacha_sign(event_id, choice):
         except Exception:data=copy.deepcopy(DEFAULT)
         data,_=normalize_state(data);ev=data['smokingGacha']['event']
         if int(ev.get('id') or 0)!=event_id or not choose_smoking_gacha_sign_in_state(data,choice):return False
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');return True
+        write_state_file(data);return True
 
 def complete_smoking_gacha_event(event_id):
     with STATE_LOCK:
@@ -2050,7 +2144,7 @@ def complete_smoking_gacha_event(event_id):
         ev['active']=False;queue_items=g.setdefault('queue',[])
         if queue_items:
             nxt=queue_items.pop(0);nxt['active']=True;nxt['createdAt']=time.time();g['event']=nxt
-        STATE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');return True
+        write_state_file(data);return True
 
 def complete_gacha_event(event_id):
     with STATE_LOCK:
@@ -2070,7 +2164,7 @@ def complete_gacha_event(event_id):
         if queue:
             next_event=queue.pop(0); next_event['active']=True; next_event['createdAt']=time.time()
             gacha['event']=next_event
-        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def skip_gacha_event(event_id):
@@ -2088,7 +2182,7 @@ def skip_gacha_event(event_id):
         if queue:
             next_event=queue.pop(0);next_event['active']=True;next_event['createdAt']=time.time()
             gacha['event']=next_event
-        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def choose_gacha_sign_in_state(data, choice):
@@ -2108,7 +2202,7 @@ def choose_gacha_sign(event_id, choice):
         data=read_playback_mutation_state()
         if int(data['gacha']['event'].get('id') or 0)!=event_id or not choose_gacha_sign_in_state(data,choice):
             return False
-        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def mark_gacha_choice_ready(event_id):
@@ -2117,7 +2211,7 @@ def mark_gacha_choice_ready(event_id):
         if int(event.get('id') or 0)!=event_id or event.get('winSign')!='both':
             return False
         event['choiceReady']=True
-        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def apply_gacha_round(event_id, round_index):
@@ -2135,7 +2229,7 @@ def apply_gacha_round(event_id, round_index):
         if not event.get('isTest'):
             win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
         applied.append(round_index); event['currentWin']=win['currentWin']
-        STATE.write_text(json.dumps(data,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+        write_state_file(data)
         return True
 
 def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avatar_url=''):
@@ -2221,7 +2315,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             return False
         # Persist new plans once; retain existing sidecars without a full scan.
         _externalize_slot_spin_plans(data, cleanup=False)
-        STATE.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+        write_state_file(data)
         return matched
 
 def get_tiktok_status():
@@ -2366,11 +2460,9 @@ def start_global_hotkeys():
         def refresh_actions():
             nonlocal action_map
             try:
-                # Read the settings under the same lock used by every state
-                # writer. Otherwise the polling thread can see a half-written
-                # JSON file and briefly replace the live key map with defaults.
-                with STATE_LOCK:
-                    data = json.loads(STATE.read_text(encoding='utf-8')) if STATE.exists() else copy.deepcopy(DEFAULT)
+                # Reuse the last committed settings while a save is running.
+                # A shortcut refresh must not join the disk-write wait queue.
+                data = read_cached_overlay_source()
             except Exception:
                 # Keep the last valid bindings if the file is temporarily
                 # unavailable or invalid; the next poll will retry.
@@ -2562,7 +2654,7 @@ def get_hotkey_status():
 def get_minecraft_watch_status():
     with MINECRAFT_WATCH_LOCK:
         status = dict(MINECRAFT_WATCH_STATUS)
-    config = read_state().get('minecraftBridge', {})
+    config = read_cached_overlay_source().get('minecraftBridge', {})
     clean_path = clean_local_path(config.get('logPath'))
     path = Path(clean_path).expanduser() if clean_path else None
     exists = bool(path and path.is_file())
@@ -2589,7 +2681,7 @@ def minecraft_log_watcher():
     carry = b''
     while True:
         try:
-            config = read_state().get('minecraftBridge', {})
+            config = read_cached_overlay_source().get('minecraftBridge', {})
             enabled = bool(config.get('enabled'))
             path_text = clean_local_path(config.get('logPath'))
             marker = str(config.get('marker') or 'bedrock_win').strip()
@@ -2640,7 +2732,7 @@ def minecraft_log_watcher():
                         data, _ = normalize_state(raw)
                         win = data['winCounter']
                         win['currentWin'] = max(-999999, min(999999, win['currentWin'] + 1))
-                        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+                        write_state_file(data)
                     with MINECRAFT_WATCH_LOCK:
                         MINECRAFT_WATCH_STATUS['lastEventAt'] = time.time()
                         MINECRAFT_WATCH_STATUS['winsReceived'] = int(MINECRAFT_WATCH_STATUS.get('winsReceived', 0)) + 1
@@ -2654,7 +2746,7 @@ def minecraft_log_watcher():
 def get_gta_watch_status():
     with GTA_WATCH_LOCK:
         status = dict(GTA_WATCH_STATUS)
-    config = read_state().get('gtaBridge', {})
+    config = read_cached_overlay_source().get('gtaBridge', {})
     clean_path = clean_local_path(config.get('logPath'))
     path = Path(clean_path).expanduser() if clean_path else None
     exists = bool(path and path.is_file())
@@ -2679,7 +2771,7 @@ def gta_log_watcher():
     carry = b''
     while True:
         try:
-            config = read_state().get('gtaBridge', {})
+            config = read_cached_overlay_source().get('gtaBridge', {})
             enabled = bool(config.get('enabled'))
             path_text = clean_local_path(config.get('logPath'))
             marker = str(config.get('marker') or 'Sent WebSocket message: {"type":"win"').strip()
@@ -2736,7 +2828,7 @@ def gta_log_watcher():
                         data, _ = normalize_state(raw)
                         win = data['winCounter']
                         win['currentWin'] = max(-999999, min(999999, win['currentWin'] + delta))
-                        STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+                        write_state_file(data)
                     with GTA_WATCH_LOCK:
                         GTA_WATCH_STATUS['lastEventAt'] = time.time()
                         GTA_WATCH_STATUS['eventsReceived'] = int(GTA_WATCH_STATUS.get('eventsReceived', 0)) + 1
@@ -2787,6 +2879,21 @@ def check_for_update():
         return {'configured': True, 'error': str(error)}
 
 class Handler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self._timed_request(self._do_GET)
+
+    def do_POST(self):
+        self._timed_request(self._do_POST)
+
+    def _timed_request(self, action):
+        started = time.perf_counter()
+        try:
+            return action()
+        finally:
+            path = urlsplit(self.path).path
+            name = self.command + ' ' + (path if path.startswith('/api/') else 'media')
+            record_performance(name, time.perf_counter() - started)
+
     def log_message(self, format, *args):
         # PyInstaller's --windowed mode has no sys.stderr.  The default
         # SimpleHTTPRequestHandler logger writes to stderr before sending the
@@ -2800,8 +2907,11 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
-    def do_GET(self):
+    def _do_GET(self):
         parsed=urlsplit(self.path)
+        if parsed.path == '/api/diagnostics':
+            body=json.dumps(performance_diagnostics(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if parsed.path == '/api/health':
             body=json.dumps({'ok':True,'version':APP_VERSION},separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
@@ -2844,7 +2954,7 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.dumps({'gifts': gifts, 'connected': status.get('status') == 'connected', 'enabled': status.get('enabled', False)}, ensure_ascii=False).encode('utf-8')
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
-    def do_POST(self):
+    def _do_POST(self):
         if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete'):
             self.send_error(404); return
         try:
@@ -2860,7 +2970,7 @@ class Handler(SimpleHTTPRequestHandler):
                         current=copy.deepcopy(DEFAULT)
                     current,_=normalize_state(current)
                     current['giftWall']['displayHistory']=[]
-                    STATE.write_text(json.dumps(current,ensure_ascii=False,indent=2),encoding='utf-8')
+                    write_state_file(current)
                 result={'ok':True,'historyCount':len(current['giftWall'].get('history',[]))}
             elif self.path == '/api/giftwall/restore-display':
                 if self.client_address[0] not in ('127.0.0.1','::1'):
@@ -2873,7 +2983,7 @@ class Handler(SimpleHTTPRequestHandler):
                     current,_=normalize_state(current)
                     wall=current['giftWall']; threshold=wall['minCoins']
                     wall['displayHistory']=[copy.deepcopy(item) for item in wall.get('history',[]) if item.get('totalCoins',0)>=threshold][:200]
-                    STATE.write_text(json.dumps(current,ensure_ascii=False,indent=2),encoding='utf-8')
+                    write_state_file(current)
                 result={'ok':True,'displayCount':len(wall['displayHistory']),'historyCount':len(wall.get('history',[]))}
             elif self.path == '/api/state':
                 manual_win_value = bool(data.pop('_manualWinCounterValue', False))
@@ -2934,7 +3044,7 @@ class Handler(SimpleHTTPRequestHandler):
                     # 接続中に取得・追加されたカタログを、古い操作画面の保存で消さない。
                     data['giftCatalog']=copy.deepcopy(current.get('giftCatalog',[]))
                     merged,_=normalize_state({**copy.deepcopy(DEFAULT),**data})
-                    STATE.write_text(json.dumps(merged,ensure_ascii=False,indent=2),encoding='utf-8')
+                    write_state_file(merged)
                 result = {'ok': True}
             elif self.path == '/api/smoking-audio':
                 if self.client_address[0] not in ('127.0.0.1', '::1'):
@@ -3107,7 +3217,7 @@ class Handler(SimpleHTTPRequestHandler):
                     # Keep the test read/create/write atomic with slot progress.
                     run_gacha_draw(state,pattern,'テスト','テスト',is_test=True)
                     queue_position=len(state['gacha'].get('queue',[])) if was_active else 0
-                    STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',', ':')),encoding='utf-8')
+                    write_state_file(state)
                 result={'ok':True,'queued':was_active,'queuePosition':queue_position}
             elif self.path == '/api/text-role-image':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
@@ -3236,7 +3346,7 @@ class Handler(SimpleHTTPRequestHandler):
                     # concurrently; the common overlay continues in FIFO order.
                     run_slot_draw(state,pattern,pattern.get('giftName') or 'テストギフト','テスト',is_test=True)
                     _externalize_slot_spin_plans(state, cleanup=False)
-                    STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+                    write_state_file(state)
                 result={'ok':True}
             elif self.path == '/api/slot/current-spin':
                 with STATE_LOCK:
@@ -3259,7 +3369,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ok=apply_slot_spin(state,safe_int(data.get('eventId')),safe_int(data.get('spinIndex'),-1))
                     if ok:
                         _externalize_slot_spin_plans(state, cleanup=False)
-                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+                        write_state_file(state)
                 result={'ok':ok}
             elif self.path == '/api/slot/choose-sign':
                 with STATE_LOCK:
@@ -3268,7 +3378,7 @@ class Handler(SimpleHTTPRequestHandler):
                     if ok:
                         complete_slot_event(state,safe_int(data.get('eventId')))
                         _externalize_slot_spin_plans(state, cleanup=False)
-                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+                        write_state_file(state)
                 result={'ok':ok,'completed':ok}
             elif self.path == '/api/slot/complete':
                 with STATE_LOCK:
@@ -3276,7 +3386,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ok=complete_slot_event(state,safe_int(data.get('eventId')))
                     if ok:
                         _externalize_slot_spin_plans(state, cleanup=False)
-                        STATE.write_text(json.dumps(state,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+                        write_state_file(state)
                 result={'ok':ok}
             elif self.path == '/api/slot/media':
                 if self.client_address[0] not in ('127.0.0.1','::1'): self.send_error(403); return
@@ -3653,14 +3763,7 @@ def run_desktop_app(server):
     window.mainloop()
 
 def main():
-    start_global_hotkeys()
     global MINECRAFT_WATCH_THREAD, GTA_WATCH_THREAD
-    if MINECRAFT_WATCH_THREAD is None or not MINECRAFT_WATCH_THREAD.is_alive():
-        MINECRAFT_WATCH_THREAD = threading.Thread(target=minecraft_log_watcher, daemon=True)
-        MINECRAFT_WATCH_THREAD.start()
-    if GTA_WATCH_THREAD is None or not GTA_WATCH_THREAD.is_alive():
-        GTA_WATCH_THREAD = threading.Thread(target=gta_log_watcher, daemon=True)
-        GTA_WATCH_THREAD.start()
     try:
         # LIVE Studio may isolate browser sources from the Windows loopback
         # interface. Listen on the PC network interface as well so its browser
@@ -3670,6 +3773,21 @@ def main():
         # A second launch should focus the already running app instead of failing.
         webbrowser.open(f'http://127.0.0.1:8765/control.html?build={APP_VERSION}')
         return
+    # Only the process that owns the server initializes state and watchers.
+    # A second launch must not normalize an already-running app's live events.
+    try:
+        read_state()
+        read_cached_overlay_source()
+    except Exception:
+        server.server_close()
+        raise
+    start_global_hotkeys()
+    if MINECRAFT_WATCH_THREAD is None or not MINECRAFT_WATCH_THREAD.is_alive():
+        MINECRAFT_WATCH_THREAD = threading.Thread(target=minecraft_log_watcher, daemon=True)
+        MINECRAFT_WATCH_THREAD.start()
+    if GTA_WATCH_THREAD is None or not GTA_WATCH_THREAD.is_alive():
+        GTA_WATCH_THREAD = threading.Thread(target=gta_log_watcher, daemon=True)
+        GTA_WATCH_THREAD.start()
     if FROZEN_APP and os.name == 'nt':
         run_desktop_app(server)
         return
@@ -3681,4 +3799,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
