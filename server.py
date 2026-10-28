@@ -26,7 +26,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.20'
+APP_VERSION = '0.67.21-dev'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -254,6 +254,7 @@ DEFAULT = {
     'timer': {'endAt': 0, 'seconds': 0, 'giftName': '', 'defaultText': 'カウント：0秒', 'currentText': ''},
     'winCounter': {'title': '現在', 'currentWin': 0, 'goalWin': 10, 'shortcutAdd': 'CTRL+ALT+7', 'shortcutSub': 'CTRL+ALT+SHIFT+7', 'giftRules': [], 'positiveTextColor': '', 'negativeTextColor': '#ff4055', 'goalTextColor': '', 'titleSize': 30, 'valueSize': 76, 'imageUrl': '', 'imageName': '', 'imageSize': 64, 'imageEnabled': True, 'soundEnabled': False, 'addSoundUrl': '', 'addSoundName': '', 'addSoundVolume': 75, 'subSoundUrl': '', 'subSoundName': '', 'subSoundVolume': 75, 'goalSoundUrl': '', 'goalSoundName': '', 'goalSoundVolume': 75, 'soundVolume': 75},
     'minecraftBridge': {'enabled': False, 'logPath': '', 'marker': 'bedrock_win'},
+    'minecraftStudioBridge': {'enabled': False, 'url': 'http://127.0.0.1:8775/api/gift', 'token': ''},
     'gtaBridge': {'enabled': False, 'logPath': '', 'marker': 'Sent WebSocket message: {"type":"win"', 'winAmount': 1, 'loseEnabled': True, 'loseMarker': 'Sent WebSocket message: {"type":"lose"', 'loseAmount': 1},
     'gacha': {'mode':'continue', 'continuationRate':70, 'spinSeconds':5, 'soundVolume':65, 'shortcutChoicePlus':'CTRL+ALT+8', 'shortcutChoiceMinus':'CTRL+ALT+9', 'patterns':[{'id':'gacha-pattern-1','name':'WINガチャ','giftName':'','minWin':1,'maxWin':10,'outcomeMode':'range','outcomes':[]}], 'animationUrl':'', 'animationName':'', 'audioUrl':'', 'audioName':'', 'audioVolume':75, 'resultAudioUrl':'', 'resultAudioName':'', 'resultAudioVolume':80, 'effectStyle':'card', 'slotNumberSize':130, 'slotNumberColor':'#ffffff', 'slotX':50, 'slotY':50, 'spinStyle':'dramatic', 'videoAudioEnabled':True, 'videoVolume':75, 'endAnimationUrl':'', 'endAnimationName':'', 'endAudioUrl':'', 'endAudioName':'', 'endAudioVolume':75, 'endSeconds':6, 'queue':[], 'event':{'id':0,'type':'','active':False,'patternName':'','rounds':[],'total':0,'giftName':'','senderName':'','createdAt':0}},
     'pachinkoGacha': {'patterns': [], 'queue': [], 'history': [], 'event': {'id':0,'type':'','active':False,'patternId':'','patternName':'','senderName':'','spins':0,'hitSpin':0,'route':'','rounds':[],'total':0,'createdAt':0}},
@@ -277,6 +278,11 @@ HOTKEY_STATUS_LOCK = threading.Lock()
 MINECRAFT_WATCH_STATUS = {'status': 'stopped', 'message': 'Minecraftログ連携はオフです', 'lastEventAt': 0, 'winsReceived': 0}
 MINECRAFT_WATCH_LOCK = threading.Lock()
 MINECRAFT_WATCH_THREAD = None
+MINECRAFT_STUDIO_QUEUE = queue.Queue(maxsize=10000)
+MINECRAFT_STUDIO_THREAD = None
+MINECRAFT_STUDIO_STATUS = {'status':'stopped','message':'Live Minecraft Studio連携はオフです','sent':0,'lastEventAt':0}
+MINECRAFT_WIN_EVENT_IDS = set()
+MINECRAFT_WIN_EVENT_ORDER = []
 GTA_WATCH_STATUS = {'status': 'stopped', 'message': 'GTA連携はオフです', 'lastEventAt': 0, 'eventsReceived': 0}
 GTA_WATCH_LOCK = threading.Lock()
 GTA_WATCH_THREAD = None
@@ -820,6 +826,15 @@ def normalize_state(data):
         'enabled': bool(raw_bridge.get('enabled', False)),
         'logPath': clean_local_path(raw_bridge.get('logPath'))[:1000],
         'marker': marker,
+    }
+    raw_studio = merged.get('minecraftStudioBridge') if isinstance(merged.get('minecraftStudioBridge'), dict) else {}
+    studio_url = str(raw_studio.get('url') or 'http://127.0.0.1:8775/api/gift').strip()[:500]
+    if not studio_url.startswith(('http://127.0.0.1:', 'http://localhost:')):
+        studio_url = 'http://127.0.0.1:8775/api/gift'
+    merged['minecraftStudioBridge'] = {
+        'enabled': raw_studio.get('enabled', False) is True,
+        'url': studio_url,
+        'token': str(raw_studio.get('token') or '')[:200],
     }
     raw_gta_bridge = merged.get('gtaBridge') if isinstance(merged.get('gtaBridge'), dict) else {}
     gta_marker = str(raw_gta_bridge.get('marker') or 'Sent WebSocket message: {"type":"win"').strip()[:160]
@@ -2259,6 +2274,66 @@ def apply_gacha_round(event_id, round_index):
         write_state_file(data)
         return True
 
+def queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info):
+    bridge = data.get('minecraftStudioBridge') if isinstance(data.get('minecraftStudioBridge'), dict) else {}
+    if bridge.get('enabled') is not True:
+        return False
+    price = max(0, safe_int((item_info or {}).get('price') or 0))
+    event = {
+        'eventId': 'tiktok-' + hashlib.sha256(
+            f"{time.time_ns()}|{gift_name}|{sender_name}|{count}".encode('utf-8')
+        ).hexdigest()[:24],
+        'giftId': str((item_info or {}).get('id') or '')[:120],
+        'giftName': str((item_info or {}).get('name') or gift_name)[:120],
+        'giftImageUrl': str((item_info or {}).get('imageUrl') or '')[:2000],
+        'senderName': str(sender_name or '')[:80],
+        'repeatCount': max(1, min(1000000, safe_int(count, 1))),
+        'coins': price,
+        'timestamp': time.time(),
+    }
+    # Rules may initially be saved by name before TikTok supplies a stable ID.
+    # The receiving app can therefore match giftId first and giftName second.
+    try:
+        MINECRAFT_STUDIO_QUEUE.put_nowait(event)
+        return True
+    except queue.Full:
+        MINECRAFT_STUDIO_STATUS.update(status='error', message='Minecraft連携の待機列が上限に達しました')
+        return False
+
+def minecraft_studio_worker():
+    while True:
+        event = MINECRAFT_STUDIO_QUEUE.get()
+        delivered = False
+        try:
+            bridge = read_cached_overlay_source().get('minecraftStudioBridge', {})
+            if bridge.get('enabled') is not True:
+                delivered = True
+                MINECRAFT_STUDIO_STATUS.update(status='stopped', message='Live Minecraft Studio連携はオフです')
+            else:
+                body = json.dumps(event, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+                request = urllib.request.Request(
+                    bridge.get('url') or 'http://127.0.0.1:8775/api/gift', data=body, method='POST',
+                    headers={'Content-Type':'application/json', 'X-Live-Minecraft-Token':str(bridge.get('token') or '')}
+                )
+                with urllib.request.urlopen(request, timeout=3) as response:
+                    delivered = 200 <= response.status < 300
+                if delivered:
+                    MINECRAFT_STUDIO_STATUS.update(
+                        status='connected', message='Live Minecraft Studioへ接続中',
+                        sent=safe_int(MINECRAFT_STUDIO_STATUS.get('sent')) + 1, lastEventAt=time.time())
+        except Exception as error:
+            MINECRAFT_STUDIO_STATUS.update(status='error', message=f'Live Minecraft Studioへ接続できません: {error}')
+        finally:
+            if not delivered:
+                # Keep retries slow and bounded so a stopped companion app can
+                # never consume the overlay server or TikTok listener thread.
+                time.sleep(2)
+                try:
+                    MINECRAFT_STUDIO_QUEUE.put_nowait(event)
+                except queue.Full:
+                    pass
+            MINECRAFT_STUDIO_QUEUE.task_done()
+
 def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avatar_url=''):
     name = normalize_gift_name(gift_name)
     if not name:
@@ -2275,6 +2350,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             if cached:
                 item_info = {**(item_info or {}), **{k:v for k,v in cached.items() if not (item_info or {}).get(k)}}
         item_info = item_info or {'name':gift_name, 'price':0, 'imageUrl':''}
+        minecraft_forwarded = queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info)
         price=max(0,int(item_info.get('price') or 0))
         total_coins=price*count
         wall=data['giftWall']
@@ -2339,11 +2415,13 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             win['currentWin']=max(-999999,min(999999,win['currentWin']+delta))
             matched=True
         if not matched and not recorded:
-            return False
+            # Forwarding is queue-only and must not turn every Minecraft gift
+            # into a full settings-file write.
+            return minecraft_forwarded
         # Persist new plans once; retain existing sidecars without a full scan.
         _externalize_slot_spin_plans(data, cleanup=False)
         write_state_file(data)
-        return matched
+        return matched or minecraft_forwarded
 
 def get_tiktok_status():
     with TIKTOK_STATUS_LOCK:
@@ -2991,12 +3069,35 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body); return
         return super().do_GET()
     def _do_POST(self):
-        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete', '/api/presets/media'):
+        if self.path not in ('/api/state', '/api/giftwall/reset-display', '/api/giftwall/restore-display', '/api/tiktok/connect', '/api/tiktok/toggle', '/api/tiktok/gift-alias', '/api/gift/test', '/api/minecraft-studio/win', '/api/smoking-audio', '/api/win-image', '/api/win-sound', '/api/gacha-audio', '/api/gacha-result-audio', '/api/gacha-animation', '/api/gacha-outcome-media', '/api/gacha-media-clear', '/api/gacha-end-audio', '/api/gacha-end-animation', '/api/gacha/test', '/api/gacha/apply-round', '/api/gacha/choose-sign', '/api/gacha/choice-ready', '/api/gacha/choose-sign', '/api/gacha/complete', '/api/gacha/skip-stuck', '/api/text-role-image', '/api/pachinko/test', '/api/pachinko/preview', '/api/pachinko/skip', '/api/pachinko/complete', '/api/pachinko/choice-ready', '/api/pachinko/choose-sign', '/api/pachinko/media', '/api/pachinko/digit-image', '/api/slot/test', '/api/slot/current-spin', '/api/slot/apply-spin', '/api/slot/choose-sign', '/api/slot/complete', '/api/slot/media', '/api/smoking-gacha-animation', '/api/smoking-gacha-audio', '/api/smoking-gacha-result-audio', '/api/smoking-gacha/test', '/api/smoking-gacha/choice-ready', '/api/smoking-gacha/choose-sign', '/api/smoking-gacha/complete', '/api/other-gacha/test', '/api/other-gacha/complete', '/api/other-gacha-media', '/api/gift-media/upload', '/api/gift-media/test', '/api/gift-media/complete', '/api/presets/media'):
             self.send_error(404); return
         try:
             n = int(self.headers.get('Content-Length','0'))
             data = json.loads(self.rfile.read(n))
-            if self.path == '/api/giftwall/reset-display':
+            if self.path == '/api/minecraft-studio/win':
+                if self.client_address[0] not in ('127.0.0.1','::1'):
+                    self.send_error(403); return
+                event_id=str(data.get('eventId') or '')[:160]
+                amount=max(-999999,min(999999,safe_int(data.get('amount') or 0)))
+                if not event_id:
+                    result={'ok':False,'message':'eventIdが必要です'}
+                elif event_id in MINECRAFT_WIN_EVENT_IDS:
+                    result={'ok':True,'duplicate':True}
+                else:
+                    with STATE_LOCK:
+                        current=read_playback_mutation_state()
+                        bridge=current.get('minecraftStudioBridge',{})
+                        expected=str(bridge.get('token') or '')
+                        supplied=str(self.headers.get('X-Live-Minecraft-Token') or '')
+                        if expected and supplied != expected:
+                            self.send_error(403); return
+                        current['winCounter']['currentWin']=max(-999999,min(999999,current['winCounter']['currentWin']+amount))
+                        write_state_file(current)
+                    MINECRAFT_WIN_EVENT_IDS.add(event_id);MINECRAFT_WIN_EVENT_ORDER.append(event_id)
+                    while len(MINECRAFT_WIN_EVENT_ORDER)>2000:
+                        MINECRAFT_WIN_EVENT_IDS.discard(MINECRAFT_WIN_EVENT_ORDER.pop(0))
+                    result={'ok':True,'duplicate':False,'amount':amount,'currentWin':current['winCounter']['currentWin']}
+            elif self.path == '/api/giftwall/reset-display':
                 if self.client_address[0] not in ('127.0.0.1','::1'):
                     self.send_error(403); return
                 with STATE_LOCK:
@@ -3816,7 +3917,7 @@ def run_desktop_app(server):
     window.mainloop()
 
 def main():
-    global MINECRAFT_WATCH_THREAD, GTA_WATCH_THREAD
+    global MINECRAFT_WATCH_THREAD, MINECRAFT_STUDIO_THREAD, GTA_WATCH_THREAD
     try:
         # LIVE Studio may isolate browser sources from the Windows loopback
         # interface. Listen on the PC network interface as well so its browser
@@ -3838,6 +3939,9 @@ def main():
     if MINECRAFT_WATCH_THREAD is None or not MINECRAFT_WATCH_THREAD.is_alive():
         MINECRAFT_WATCH_THREAD = threading.Thread(target=minecraft_log_watcher, daemon=True)
         MINECRAFT_WATCH_THREAD.start()
+    if MINECRAFT_STUDIO_THREAD is None or not MINECRAFT_STUDIO_THREAD.is_alive():
+        MINECRAFT_STUDIO_THREAD = threading.Thread(target=minecraft_studio_worker, daemon=True)
+        MINECRAFT_STUDIO_THREAD.start()
     if GTA_WATCH_THREAD is None or not GTA_WATCH_THREAD.is_alive():
         GTA_WATCH_THREAD = threading.Thread(target=gta_log_watcher, daemon=True)
         GTA_WATCH_THREAD.start()
