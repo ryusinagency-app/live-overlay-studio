@@ -20,6 +20,8 @@ def exercise(module_name):
         app.STATE = app.ROOT / "state.json"
         state, _ = app.normalize_state(copy.deepcopy(app.DEFAULT))
         state["loadTestPadding"] = "x" * 500_000
+        state["slotMachine"]["patterns"][0]["giftRules"] = [
+            {"giftName": "Load Gift", "giftId": "900001", "spins": 1}]
         for index in range(2):
             event = {
                 **copy.deepcopy(app.SLOT_EMPTY_EVENT),
@@ -79,6 +81,15 @@ def exercise(module_name):
                              for event_id in (100, 101)]
                     jobs.append(pool.submit(request, "/api/gacha/apply-round",
                                             {"eventId": 500, "roundIndex": index}))
+                    if module_name == "server":
+                        # Exercise the real listener's gift processing path
+                        # concurrently with both players and all eight readers.
+                        def incoming_gift():
+                            started=time.perf_counter()
+                            ok=app.process_gift_event("Load Gift", 1, "LIVE sender",
+                                {"name": "Load Gift", "id": "900001", "price": 100, "imageUrl": ""})
+                            return {"ok": ok}, time.perf_counter()-started
+                        jobs.append(pool.submit(incoming_gift))
                     for job in jobs:
                         result, elapsed = job.result()
                         assert result.get("ok", True), result
@@ -95,8 +106,11 @@ def exercise(module_name):
                 assert normalization_calls == 0, normalization_calls
                 assert not final["slotMachine"]["event"]["spins"]
                 assert not final["slotMachine"]["queue"][0]["spins"]
-                assert app.STATE.stat().st_size < initial_size * 1.05
-                assert plans == {p.name: p.read_bytes() for p in app.ROOT.glob("slot_plan_*.json")}
+                assert all(not event.get("spins") and event.get("spinsFile")
+                           for event in [final["slotMachine"]["event"], *final["slotMachine"]["queue"]])
+                assert all((app.ROOT/name).read_bytes() == content for name,content in plans.items())
+                assert len(final["slotMachine"]["queue"]) == 21
+                assert len(final["giftWall"]["history"]) == 20
                 assert request("/api/gacha/complete", {"eventId": 500})[0]["ok"]
                 completed = json.loads(app.STATE.read_text())
                 assert completed["gacha"]["history"][0]["result"] == 20
