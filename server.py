@@ -1398,6 +1398,15 @@ def read_overlay_state(kind, pattern_id=''):
     elif kind == 'smoking':
         result['smokingTimer'] = state.get('smokingTimer', {})
         result['textEffects'] = {'smoking': state.get('textEffects', {}).get('smoking', {})}
+    elif kind == 'smoking-gacha':
+        machine = state.get('smokingGacha', {})
+        event = machine.get('event', {})
+        pattern = next((p for p in machine.get('patterns', []) if p.get('id') == event.get('patternId')), None)
+        result['smokingGacha'] = {key: value for key, value in machine.items()
+                                  if key not in ('patterns', 'queue', 'history')}
+        result['smokingGacha']['patterns'] = [pattern] if pattern else []
+        effect_key = 'smoking-gacha:' + str(event.get('patternId') or '')
+        result['textEffects'] = {effect_key: state.get('textEffects', {}).get(effect_key, {})}
     elif kind == 'win':
         result['winCounter'] = {key: value for key, value in state['winCounter'].items()
                                 if key != 'giftRules' and not key.startswith('shortcut')}
@@ -2767,7 +2776,7 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/slot/status':
             body=json.dumps(read_slot_live_status(),ensure_ascii=False,separators=(',',':')).encode('utf-8')
             self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
-        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
+        if parsed.path in ('/api/overlay/basic', '/api/overlay/smoking', '/api/overlay/smoking-gacha', '/api/overlay/win', '/api/overlay/gacha', '/api/overlay/pachinko', '/api/overlay/slot', '/api/overlay/rankings', '/api/overlay/gacha-history'):
             kind = parsed.path.rsplit('/', 1)[-1]
             query=parse_qs(parsed.query);pattern_id=str((query.get('id') or [''])[0]) if kind=='slot' else ''
             body = json.dumps(read_overlay_state(kind,pattern_id), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
