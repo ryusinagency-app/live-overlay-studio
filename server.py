@@ -25,7 +25,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.14'
+APP_VERSION = '0.67.15'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -1590,12 +1590,20 @@ def read_overlay_state(kind, pattern_id=''):
         raise ValueError('Unknown overlay snapshot')
     return copy.deepcopy(result)
 
+def slot_choice_waiters(machine):
+    return [event for event in _slot_events(machine)
+            if event.get('active') and event.get('choiceReady') and not event.get('choice')]
+
 def read_slot_live_status():
     state=read_cached_overlay_source();machine=state['slotMachine'];event=machine.get('event') or {}
     event_status={key:event.get(key) for key in ('id','active','senderName','patternId','appliedSpins','total','choiceReady','choice')}
     event_status['spinCount']=len(event.get('spins') or [])
     event_status['visibleSpinCount']=visible_spin_count(event)
+    choice_events=[{key: item.get(key) for key in
+                    ('id','patternId','patternName','senderName','total','choiceReady','isTest')}
+                   for item in slot_choice_waiters(machine)]
     return {'slotMachine':{'event':event_status,'queueCount':len(machine.get('queue') or []),
+                           'choiceEvents':choice_events,
                            'history':machine.get('history',[]),'statsByDate':machine.get('statsByDate',{}),
                            'statsDate':machine.get('statsDate','')}}
 
@@ -1699,11 +1707,14 @@ def parse_shortcut(value):
 
 def dispatch_hotkey_action(action):
     with STATE_LOCK:
-        try:
-            data = json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception:
-            data = copy.deepcopy(DEFAULT)
-        data, _ = normalize_state(data)
+        if action['type'] == 'slotChoice':
+            data = read_slot_mutation_state()
+        else:
+            try:
+                data = json.loads(STATE.read_text(encoding='utf-8'))
+            except Exception:
+                data = copy.deepcopy(DEFAULT)
+            data, _ = normalize_state(data)
         if action['type'] == 'mission':
             for mission in data.get('missions', []):
                 if mission.get('id') == action['id']:
@@ -1716,11 +1727,13 @@ def dispatch_hotkey_action(action):
         elif action['type'] == 'pachinkoChoice':
             choose_pachinko_sign_in_state(data,action['choice'])
         elif action['type'] == 'slotChoice':
-            event=data['slotMachine']['event']
-            if event.get('active'):
-                event_id=event.get('id')
-                if choose_slot_sign(data,event_id,action['choice']):
-                    complete_slot_event(data,event_id)
+            waiting=slot_choice_waiters(data['slotMachine'])
+            if not waiting:
+                return False
+            event_id=waiting[0]['id']
+            if not choose_slot_sign(data,event_id,action['choice']):
+                return False
+            complete_slot_event(data,event_id)
         elif action['type'] == 'smokingTimer':
             timer=data['smokingTimer']; now=time.time(); remain=max(0,int((timer.get('endAt') or 0)-now)) if timer.get('endAt') else max(0,int(timer.get('remainingSeconds') or 0)); next_value=max(0,remain+int(action['delta']))
             timer['remainingSeconds']=next_value; timer['endAt']=now+next_value if next_value else 0
@@ -3799,5 +3812,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
