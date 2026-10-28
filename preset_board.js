@@ -1,0 +1,9 @@
+/* Shared, static renderer for preview and overlay. No animation or polling here. */
+function renderPresetBoard(host,board,style){
+ if(!board){host.replaceChildren();if(style)style.textContent='';return}
+ const fonts={system:'system-ui,sans-serif',yuGothic:'"Yu Gothic",sans-serif',meiryo:'Meiryo,sans-serif',serif:'"Yu Mincho",serif',gothic:'"Arial Black",sans-serif',mono:'monospace'};
+ host.className='presetBoard '+(board.style||'simple')+(board.transparent?' transparent':'')+(board.outline?' outline':'');
+ for(const [key,value]of Object.entries({'--columns':board.columns,'--card-width':board.cardWidth+'px','--card-height':board.cardHeight+'px','--gap':board.gap+'px','--image-size':board.imageSize+'px','--font-size':board.fontSize+'px','--radius':board.radius+'px','--text':board.textColor,'--accent':board.accent,'--font':fonts[board.fontFamily]||fonts.system})){host.style.setProperty(key,String(value))}
+ const hex=/^#[a-f0-9]{6}$/i.test(board.background||'')?board.background:'#17151c';host.style.setProperty('--card-bg',`rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${Number(board.opacity??90)/100})`);
+ const fragment=document.createDocumentFragment();for(const item of board.items||[]){if(item.enabled===false)continue;const card=document.createElement('article');card.className='presetCard';const images=document.createElement('div');images.className='presetImages';for(const [url,alt]of [[item.giftImageUrl,item.giftName||'ギフト'],[item.imageUrl,'任意の画像']]){if(!url)continue;const img=document.createElement('img');img.src=url;img.alt=alt;img.loading='lazy';img.decoding='async';images.appendChild(img)}const text=document.createElement('div');text.className='presetDescription';text.textContent=item.description||item.giftName||'';card.append(images,text);fragment.appendChild(card)}host.replaceChildren(fragment);if(style)style.textContent=board.customCss||'';
+}
