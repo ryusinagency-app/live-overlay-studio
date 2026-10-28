@@ -1447,7 +1447,8 @@ def read_overlay_state(kind, pattern_id=''):
             'textBackgroundColor': state.get('textBackgroundColor', '#000000'),
             'textBackgroundOpacity': state.get('textBackgroundOpacity', 0),
             'textEffects': {'giftWall': state.get('textEffects', {}).get('giftWall', {})},
-            'giftWall': copy.deepcopy(state.get('giftWall', {})),
+            'giftWall': {key: value for key, value in state.get('giftWall', {}).items()
+                         if key != 'history'},
         }
     elif kind == 'gacha-history':
         machine=state['gacha'];view=machine['rankingViews']['history']
