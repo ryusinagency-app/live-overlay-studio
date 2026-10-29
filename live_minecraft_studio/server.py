@@ -14,9 +14,10 @@ import webbrowser
 
 from game_engine import Arena, GameEngine, MultiplierState, clamp
 from rcon import RconClient
+from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 STATE_FILE = DATA_DIR / "state.json"
@@ -40,10 +41,10 @@ DEFAULT = {
                         "description": "耐久ゲージを20回復します"},
         "demo-shield": {"name": "シールド", "kind": "shield", "amount": 1, "win": 0,
                         "description": "次のブロック破壊を1回無効化します"},
-        "demo-time-plus": {"name": "防衛時間＋5秒", "kind": "countdown", "countdownMode": "add",
-                           "seconds": 5, "win": 0, "description": "防衛中の残り時間を5秒増やします"},
-        "demo-time-minus": {"name": "防衛時間－3秒", "kind": "countdown", "countdownMode": "add",
-                            "seconds": -3, "win": 0, "description": "防衛中の残り時間を3秒短くします"},
+        "demo-time-plus": {"name": "カウント＋5秒", "kind": "countdown", "countdownMode": "add",
+                           "seconds": 5, "win": 0, "description": "カウントの残り時間を5秒増やします"},
+        "demo-time-minus": {"name": "カウント－3秒", "kind": "countdown", "countdownMode": "add",
+                            "seconds": -3, "win": 0, "description": "カウントの残り時間を3秒短くします"},
         "demo-all": {"name": "全埋め", "kind": "fill_all", "amount": 1, "win": 100,
                      "description": "使用回数制限を想定した全埋めアイテムです"},
     },
@@ -76,6 +77,7 @@ def load_state():
 
 
 STATE = load_state()
+LOCAL_SERVER = LocalMinecraftServer(DATA_DIR)
 arena_config = STATE["arena"]
 multiplier_config = STATE["multiplier"]
 ENGINE = GameEngine(
@@ -102,7 +104,8 @@ def public_state():
         config = json.loads(json.dumps(STATE))
     config["rcon"]["password"] = "" if not config["rcon"].get("password") else "••••••••"
     config["winBridge"]["token"] = "" if not config["winBridge"].get("token") else "••••••••"
-    return {"version": APP_VERSION, "config": config, "game": ENGINE.snapshot(), "status": status_snapshot()}
+    return {"version": APP_VERSION, "config": config, "game": ENGINE.snapshot(), "status": status_snapshot(),
+            "localServer": LOCAL_SERVER.status()}
 
 
 def status_snapshot():
@@ -281,6 +284,24 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/config":
                 self._update_config(body)
                 return self._json({"ok": True, "state": public_state()})
+            if path == "/api/local-server/prepare":
+                result = LOCAL_SERVER.prepare(body.get("eulaAccepted") is True)
+                with STATE_LOCK:
+                    STATE["rcon"].update({"host": "127.0.0.1", "port": 25575,
+                                          "password": result["password"],
+                                          "serverSoftware": "Paper 1.21.1"})
+                save_state()
+                return self._json({"ok": True, "message": "準備が完了しました", "state": public_state()})
+            if path == "/api/local-server/start":
+                result = LOCAL_SERVER.start()
+                STATUS.update(rcon="接続中" if result.get("running") else "未接続", lastError="")
+                return self._json({"ok": True, "message": result.get("message"), "state": public_state()})
+            if path == "/api/local-server/stop":
+                with STATE_LOCK:
+                    rcon = dict(STATE["rcon"])
+                result = LOCAL_SERVER.stop(rcon)
+                STATUS.update(rcon="未接続", lastError="")
+                return self._json({"ok": True, "message": result.get("message"), "state": public_state()})
             if path == "/api/rcon/test":
                 with STATE_LOCK:
                     rcon = dict(STATE["rcon"])
