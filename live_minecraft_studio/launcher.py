@@ -17,7 +17,7 @@ def main():
     root.resizable(False, False)
     tk.Label(root, text="Live Minecraft Studio", fg="white", bg="#11141b",
              font=("Yu Gothic UI", 22, "bold")).pack(pady=(35, 8))
-    tk.Label(root, text=f"埋め立て・防衛ゲーム  v{server.APP_VERSION}", fg="#aab0bf", bg="#11141b",
+    tk.Label(root, text=f"埋め立てゲーム  v{server.APP_VERSION}", fg="#aab0bf", bg="#11141b",
              font=("Yu Gothic UI", 11)).pack()
     tk.Button(root, text="操作画面を開く", command=lambda: webbrowser.open("http://127.0.0.1:8775/"),
               bg="#ef334e", fg="white", activebackground="#d92540", relief="flat",
