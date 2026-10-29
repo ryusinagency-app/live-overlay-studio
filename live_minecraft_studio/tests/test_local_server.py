@@ -1,6 +1,9 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
+import io
 import unittest
+import zipfile
 
 from local_server import LocalMinecraftServer
 
@@ -26,6 +29,39 @@ class LocalServerTests(unittest.TestCase):
             self.assertIn("server-ip=\n", properties)
             self.assertIn("eula=true", (server.server_dir / "eula.txt").read_text("utf-8"))
             self.assertTrue(result["password"])
+
+    def test_java_download_identifies_the_app_to_avoid_403(self):
+        with TemporaryDirectory() as folder:
+            server = LocalMinecraftServer(Path(folder))
+            statuses = iter([
+                {"available": False, "version": "未設定", "bundled": False},
+                {"available": True, "version": 'openjdk version "21"', "bundled": True},
+            ])
+            server.java_status = lambda: next(statuses)
+            package = io.BytesIO()
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("jdk-21/bin/java.exe", b"test")
+            package.seek(0)
+            seen = {}
+
+            class Response(io.BytesIO):
+                def __enter__(self):
+                    return self
+                def __exit__(self, *_):
+                    self.close()
+
+            def fake_open(request, timeout=0):
+                seen["user_agent"] = request.get_header("User-agent")
+                seen["accept"] = request.get_header("Accept")
+                return Response(package.getvalue())
+
+            with patch("urllib.request.urlopen", fake_open):
+                result = server.ensure_java()
+
+            self.assertTrue(result["available"])
+            self.assertEqual(seen["user_agent"], "LiveMinecraftStudio/0.2.2")
+            self.assertEqual(seen["accept"], "application/octet-stream")
+            self.assertTrue(any(server.java_dir.glob("*/bin/java.exe")))
 
 
 if __name__ == "__main__":

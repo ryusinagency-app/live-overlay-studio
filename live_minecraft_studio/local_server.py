@@ -62,7 +62,14 @@ class LocalMinecraftServer:
         extract_dir = self.java_dir.parent / "java21.extracting"
         self.message = "アプリ専用Java 21をダウンロード中"
         try:
-            with urllib.request.urlopen(JAVA_21_URL, timeout=180) as response, archive.open("wb") as output:
+            request = urllib.request.Request(
+                JAVA_21_URL,
+                headers={
+                    "User-Agent": "LiveMinecraftStudio/0.2.2",
+                    "Accept": "application/octet-stream",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=180) as response, archive.open("wb") as output:
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
@@ -81,6 +88,9 @@ class LocalMinecraftServer:
             if self.java_dir.exists():
                 shutil.rmtree(self.java_dir)
             extract_dir.replace(self.java_dir)
+        except Exception as exc:
+            self.message = "Java 21の自動設定に失敗しました"
+            raise RuntimeError(f"Java 21をダウンロードできませんでした: {exc}") from exc
         finally:
             archive.unlink(missing_ok=True)
             if extract_dir.exists():
