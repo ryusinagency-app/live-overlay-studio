@@ -16,8 +16,9 @@ from rcon import RconClient
 
 
 PAPER_VERSION = "1.21.1"
-PAPER_API = f"https://api.papermc.io/v2/projects/paper/versions/{PAPER_VERSION}"
+PAPER_API = f"https://fill.papermc.io/v3/projects/paper/versions/{PAPER_VERSION}/builds"
 JAVA_21_URL = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
+APP_USER_AGENT = "LiveMinecraftStudio/0.2.3 (https://github.com/ryusinagency-app/live-overlay-studio)"
 
 
 class LocalMinecraftServer:
@@ -65,7 +66,7 @@ class LocalMinecraftServer:
             request = urllib.request.Request(
                 JAVA_21_URL,
                 headers={
-                    "User-Agent": "LiveMinecraftStudio/0.2.2",
+                    "User-Agent": APP_USER_AGENT,
                     "Accept": "application/octet-stream",
                 },
             )
@@ -128,22 +129,41 @@ class LocalMinecraftServer:
             self.server_dir.mkdir(parents=True, exist_ok=True)
             self.message = "Paper 1.21.1を準備中"
             if not self.jar_path.exists():
-                with urllib.request.urlopen(PAPER_API + "/builds", timeout=30) as response:
-                    payload = json.load(response)
-                builds = payload.get("builds") or []
-                if not builds:
-                    raise RuntimeError("Paper 1.21.1のダウンロード情報を取得できませんでした")
-                latest = max(int(item["build"]) for item in builds if item.get("channel") == "default")
-                name = f"paper-{PAPER_VERSION}-{latest}.jar"
-                url = f"{PAPER_API}/builds/{latest}/downloads/{name}"
                 temporary = self.jar_path.with_suffix(".download")
-                with urllib.request.urlopen(url, timeout=120) as response, temporary.open("wb") as output:
-                    while True:
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        output.write(chunk)
-                temporary.replace(self.jar_path)
+                try:
+                    request = urllib.request.Request(
+                        PAPER_API,
+                        headers={"User-Agent": APP_USER_AGENT, "Accept": "application/json"},
+                    )
+                    with urllib.request.urlopen(request, timeout=30) as response:
+                        builds = json.load(response)
+                    stable = next(
+                        (item for item in builds if str(item.get("channel", "")).upper() == "STABLE"),
+                        None,
+                    )
+                    download = (stable or {}).get("downloads", {}).get("server:default", {})
+                    url = download.get("url")
+                    if not url:
+                        raise RuntimeError("安定版のダウンロード情報が見つかりません")
+                    self.message = "Paper 1.21.1をダウンロード中"
+                    download_request = urllib.request.Request(
+                        url,
+                        headers={"User-Agent": APP_USER_AGENT, "Accept": "application/java-archive"},
+                    )
+                    with urllib.request.urlopen(download_request, timeout=180) as response, temporary.open("wb") as output:
+                        while True:
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            output.write(chunk)
+                    if temporary.stat().st_size < 1_000_000:
+                        raise RuntimeError("ダウンロードしたPaperファイルが不完全です")
+                    temporary.replace(self.jar_path)
+                except Exception as exc:
+                    self.message = "Paper 1.21.1の準備に失敗しました"
+                    raise RuntimeError(f"Paper 1.21.1をダウンロードできませんでした: {exc}") from exc
+                finally:
+                    temporary.unlink(missing_ok=True)
 
             password = secrets.token_urlsafe(24)
             (self.server_dir / "eula.txt").write_text("eula=true\n", "utf-8")
@@ -218,4 +238,5 @@ class LocalMinecraftServer:
             time.sleep(0.5)
         self.message = "安全に停止しました"
         return self.status()
+
 
