@@ -26,6 +26,7 @@ class LocalMinecraftServer:
         self.process: subprocess.Popen | None = None
         self.lock = Lock()
         self.message = "未準備"
+        self._java = self.java_status()
 
     @staticmethod
     def java_status() -> dict:
@@ -55,14 +56,15 @@ class LocalMinecraftServer:
             "running": running,
             "serverDir": str(self.server_dir),
             "joinAddress": "localhost",
-            "java": self.java_status(),
+            "java": self._java,
             "message": self.message,
         }
 
     def prepare(self, eula_accepted: bool) -> dict:
         if not eula_accepted:
             raise ValueError("Minecraft EULAへの同意にチェックしてください")
-        java = self.java_status()
+        self._java = self.java_status()
+        java = self._java
         if not java["available"]:
             raise RuntimeError("Java 21が見つかりません。Java 21をインストールしてから、もう一度押してください")
 
@@ -125,7 +127,8 @@ class LocalMinecraftServer:
         if self._port_open(25565):
             self.message = "サーバーは起動済みです"
             return self.status()
-        java = self.java_status()
+        self._java = self.java_status()
+        java = self._java
         if not java["available"]:
             raise RuntimeError("Java 21が見つかりません")
         log = (self.server_dir / "live_minecraft_server.log").open("a", encoding="utf-8")
