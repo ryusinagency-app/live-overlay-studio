@@ -284,7 +284,7 @@ class GameEngine:
                 a.filled.clear()
             a.full_since = 0.0
             win = int(round(a.hold_win * self.multiplier.factor("win", now)))
-            self.history.append({"eventId": event_id, "effect": "全埋め防衛成功", "win": win, "at": now})
+            self.history.append({"eventId": event_id, "effect": "埋め立て成功", "win": win, "at": now})
             self.history = self.history[-500:]
             return {"eventId": event_id, "commands": commands, "win": win, "message": "全埋めを守り切りました"}
 
