@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 import json
+import hashlib
 import os
 import secrets
 import shutil
@@ -18,7 +19,7 @@ from rcon import RconClient
 PAPER_VERSION = "1.21.1"
 PAPER_API = f"https://fill.papermc.io/v3/projects/paper/versions/{PAPER_VERSION}/builds"
 JAVA_21_URL = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
-APP_USER_AGENT = "LiveMinecraftStudio/0.2.3 (https://github.com/ryusinagency-app/live-overlay-studio)"
+APP_USER_AGENT = "LiveMinecraftStudio/0.3.0 (https://github.com/ryusinagency-app/live-overlay-studio)"
 
 
 class LocalMinecraftServer:
@@ -120,6 +121,23 @@ class LocalMinecraftServer:
             "message": self.message,
         }
 
+    def install_plugin(self):
+        root = Path(__file__).resolve().parent
+        source = root / "LiveMinecraftArena.jar"
+        if not source.exists():
+            source = root / "plugin" / "target" / "LiveMinecraftArena.jar"
+        if not source.exists():
+            raise RuntimeError("ゲーム連携ファイルが見つかりません。アプリをダウンロードし直してください")
+        destination = self.server_dir / "plugins" / "LiveMinecraftArena.jar"
+        if destination.exists() and hashlib.sha256(source.read_bytes()).digest() == hashlib.sha256(destination.read_bytes()).digest():
+            return
+        if self._port_open(25565):
+            raise RuntimeError("ゲーム連携の更新には「安全に停止」→「サーバーを起動」が必要です")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(".tmp")
+        shutil.copyfile(source, temporary)
+        temporary.replace(destination)
+
     def prepare(self, eula_accepted: bool) -> dict:
         if not eula_accepted:
             raise ValueError("Minecraft EULAへの同意にチェックしてください")
@@ -200,6 +218,7 @@ class LocalMinecraftServer:
     def start(self) -> dict:
         if not self.jar_path.exists():
             raise RuntimeError("先に「サーバーを準備」を押してください")
+        self.install_plugin()
         if self._port_open(25565):
             self.message = "サーバーは起動済みです"
             return self.status()

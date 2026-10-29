@@ -1,83 +1,83 @@
 import unittest
 from game_engine import Arena, GameEngine, MultiplierState
-from server import classify_server_software
+from server import bridge_command, classify_server_software
 
 
 class EngineTests(unittest.TestCase):
     def engine(self):
-        return GameEngine(Arena(width=3, depth=3, height=3, hold_seconds=10),
-                          MultiplierState(threshold=5000, duration_seconds=300, multiplier=2))
+        return GameEngine(Arena(width=3, depth=3, height=3), MultiplierState())
 
-    def test_multiplier_activates_and_doubles_fill(self):
+    def test_gift_is_intent_not_fictitious_world_state(self):
         e = self.engine()
-        effects = {"fill": {"name": "埋める", "kind": "fill", "amount": 2}}
-        result = e.receive({"eventId": "1", "giftId": "fill", "coins": 5000}, effects)
-        self.assertEqual(4, len(e.arena.filled))
-        self.assertLessEqual(len(result["commands"]), 4)
-        self.assertTrue(e.multiplier.active())
+        r = e.receive({"eventId": "gift", "giftId": "fill", "coins": 5000}, {"fill": {"kind": "fill", "amount": 2}})
+        self.assertEqual("lmsarena fill 4", r["commands"][0])
+        self.assertTrue(r["commands"][1].startswith("lmsarena announce "))
+        self.assertEqual(0, e.snapshot()["arena"]["filled"])
+        self.assertIsNone(e.tick())
 
-    def test_duplicate_event_is_ignored(self):
-        e = self.engine(); effects = {"fill": {"kind": "fill", "amount": 1}}
-        e.receive({"eventId": "same", "giftId": "fill"}, effects)
-        result = e.receive({"eventId": "same", "giftId": "fill"}, effects)
-        self.assertTrue(result["duplicate"])
-        self.assertEqual(1, len(e.arena.filled))
+    def test_manual_world_counts_and_server_countdown_are_used(self):
+        e = self.engine()
+        e.sync_world({"ready": True, "filled": 27, "capacity": 27, "defending": True, "holdRemainingSeconds": 6})
+        self.assertEqual(27, e.snapshot()["arena"]["filled"])
+        self.assertEqual(6, e.snapshot()["arena"]["holdRemainingSeconds"])
+        e.sync_world({"ready": True, "filled": 26, "capacity": 27, "defending": False})
+        self.assertFalse(e.snapshot()["arena"]["defending"])
 
-    def test_full_arena_starts_countdown_and_awards_after_hold(self):
-        e = self.engine(); effects = {"all": {"kind": "fill_all", "amount": 1}}
-        e.receive({"eventId": "full", "giftId": "all"}, effects)
-        started = e.arena.full_since
-        self.assertIsNone(e.tick(started + 9.9))
-        result = e.tick(started + 10)
-        self.assertEqual(1, result["win"])
-        self.assertEqual(0, len(e.arena.filled))
+    def test_server_win_delivered_once_and_penalty_is_distinct(self):
+        e = self.engine()
+        state = {"wins": [{"eventId": "win-1", "win": 1}, {"eventId": "floor-1", "win": -5, "reason": "底の耐久ゼロ"}]}
+        events = e.sync_world(state)
+        self.assertEqual([1, -5], [v["win"] for v in events])
+        self.assertEqual("底の耐久ゼロ", events[1]["message"])
+        self.assertEqual([], e.sync_world(state))
 
-    def test_break_resets_countdown(self):
-        e = self.engine(); effects = {
-            "all": {"kind": "fill_all", "amount": 1},
-            "tnt": {"kind": "tnt", "amount": 1, "breakBlocks": 1},
-        }
-        e.receive({"eventId": "full", "giftId": "all"}, effects)
-        e.receive({"eventId": "boom", "giftId": "tnt"}, effects)
-        self.assertEqual(0, e.arena.full_since)
-        self.assertEqual(26, len(e.arena.filled))
+    def test_duplicate_gift_not_sent_twice(self):
+        e = self.engine()
+        effect = {"fill": {"kind": "fill", "amount": 1}}
+        payload = {"eventId": "same", "giftId": "fill"}
+        e.receive(payload, effect)
+        self.assertTrue(e.receive(payload, effect)["duplicate"])
 
-    def test_shield_prevents_break_and_keeps_countdown(self):
-        e = self.engine(); effects = {
-            "all": {"kind": "fill_all", "amount": 1},
-            "shield": {"kind": "shield", "amount": 1},
-            "tnt": {"kind": "tnt", "amount": 1, "breakBlocks": 1},
-        }
-        e.receive({"eventId": "full", "giftId": "all"}, effects)
-        started = e.arena.full_since
-        e.receive({"eventId": "shield", "giftId": "shield"}, effects)
-        e.receive({"eventId": "boom", "giftId": "tnt"}, effects)
-        self.assertEqual(started, e.arena.full_since)
-        self.assertEqual(27, len(e.arena.filled))
-        self.assertEqual(0, e.arena.shield_charges)
+    def test_tnt_never_invents_breakage_or_damage(self):
+        e = self.engine()
+        e.sync_world({"filled": 27, "capacity": 27, "health": 100})
+        r = e.receive({"eventId": "tnt", "giftId": "tnt"}, {"tnt": {"kind": "tnt", "amount": 1, "damage": 1000, "breakWin": -100}})
+        self.assertEqual("lmsarena tnt 1 normal 60", r["commands"][0])
+        self.assertEqual(0, r["win"])
+        self.assertEqual(27, e.snapshot()["arena"]["filled"])
+        self.assertEqual(100, e.snapshot()["arena"]["health"])
 
-    def test_gifts_can_change_countdown(self):
-        e = self.engine(); effects = {
-            "all": {"kind": "fill_all", "amount": 1},
-            "plus": {"kind": "countdown", "countdownMode": "add", "seconds": 5},
-            "minus": {"kind": "countdown", "countdownMode": "add", "seconds": -3},
-            "set": {"kind": "countdown", "countdownMode": "set", "seconds": 4},
-        }
-        e.receive({"eventId": "full", "giftId": "all"}, effects)
-        started = e.arena.full_since
-        e.receive({"eventId": "plus", "giftId": "plus"}, effects)
-        self.assertEqual(started + 5, e.arena.full_since)
-        e.receive({"eventId": "minus", "giftId": "minus"}, effects)
-        self.assertEqual(started + 2, e.arena.full_since)
-        e.receive({"eventId": "set", "giftId": "set"}, effects)
-        remaining = e.arena.hold_seconds - (__import__('time').time() - e.arena.full_since)
-        self.assertAlmostEqual(4, remaining, delta=.1)
+    def test_fill_layers_and_percent_are_server_authoritative(self):
+        e = self.engine()
+        layers = e.receive({"eventId": "layers", "giftId": "layers"},
+                           {"layers": {"kind": "fill_layers", "amount": 2}})
+        percent = e.receive({"eventId": "half", "giftId": "half"},
+                            {"half": {"kind": "fill_percent", "amount": 50}})
+        self.assertEqual("lmsarena fill_layers 2", layers["commands"][0])
+        self.assertEqual("lmsarena fill_percent 50", percent["commands"][0])
+        self.assertEqual(0, e.snapshot()["arena"]["filled"])
+
+    def test_frame_is_atomic_with_optional_floor(self):
+        e = self.engine()
+        self.assertEqual(1, len(e.frame_commands()))
+        self.assertIn("lmsarena generate world", e.frame_commands()[0])
+        self.assertTrue(e.frame_commands()[0].endswith("false 100 10 1 3 64 3 64"))
+        e.arena.floor_enabled = True
+        self.assertTrue(e.frame_commands()[0].endswith("true 100 10 1 3 64 3 64"))
+
+    def test_missing_plugin_and_server_error_not_reported_as_success(self):
+        class Client:
+            def __init__(self, reply): self.reply = reply
+            def command(self, _): return self.reply
+        with self.assertRaises(RuntimeError): bridge_command(Client("Unknown command"), "lmsarena status")
+        with self.assertRaisesRegex(RuntimeError, "bad block"): bridge_command(Client('{"ok":false,"message":"bad block"}'), "lmsarena generate")
+        self.assertEqual({"ok": True}, bridge_command(Client('{"ok":true}'), "lmsarena status"))
 
     def test_server_software_detection(self):
         self.assertEqual("Paper系", classify_server_software("This server is running Paper version 1.21"))
         self.assertEqual("Fabric系", classify_server_software("fabric-loader 0.16"))
-        self.assertEqual("バニラ／判定不能", classify_server_software("Unknown command"))
 
 
 if __name__ == "__main__":
     unittest.main()
+

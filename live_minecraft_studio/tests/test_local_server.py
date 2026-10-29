@@ -9,6 +9,33 @@ from local_server import APP_USER_AGENT, LocalMinecraftServer, PAPER_API
 
 
 class LocalServerTests(unittest.TestCase):
+    def test_plugin_update_preserves_world_and_other_plugins(self):
+        with TemporaryDirectory() as folder:
+            base = Path(folder)
+            source = base / "app" / "LiveMinecraftArena.jar"
+            source.parent.mkdir()
+            source.write_bytes(b"new bridge")
+            server = LocalMinecraftServer(base / "data")
+            server._port_open = lambda _: False
+            plugins = server.server_dir / "plugins"
+            plugins.mkdir(parents=True)
+            (plugins / "Other.jar").write_bytes(b"keep")
+            (plugins / "LiveMinecraftArena.jar").write_bytes(b"old bridge")
+            with patch("local_server.__file__", str(source.parent / "local_server.py")):
+                server.install_plugin()
+            self.assertEqual(b"new bridge", (plugins / "LiveMinecraftArena.jar").read_bytes())
+            self.assertEqual(b"keep", (plugins / "Other.jar").read_bytes())
+
+    def test_running_server_requires_restart_for_bridge_update(self):
+        with TemporaryDirectory() as folder:
+            base = Path(folder)
+            (base / "LiveMinecraftArena.jar").write_bytes(b"bridge")
+            server = LocalMinecraftServer(base / "data")
+            server._port_open = lambda _: True
+            with patch("local_server.__file__", str(base / "local_server.py")):
+                with self.assertRaisesRegex(RuntimeError, "安全に停止"):
+                    server.install_plugin()
+
     def test_prepare_requires_eula_and_writes_private_server_settings(self):
         with TemporaryDirectory() as folder:
             server = LocalMinecraftServer(Path(folder))

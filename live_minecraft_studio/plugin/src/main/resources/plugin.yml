@@ -1,0 +1,9 @@
+name: LiveMinecraftArena
+version: 0.3.0
+main: studio.liveminecraft.ArenaPlugin
+api-version: '1.21'
+description: Protected open-top arena and authoritative player block tracking
+commands:
+  lmsarena:
+    description: Live Minecraft Studio bridge (server console only)
+    usage: /lmsarena status
