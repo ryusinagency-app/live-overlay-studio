@@ -17,7 +17,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.2.3"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 STATE_FILE = DATA_DIR / "state.json"
@@ -404,3 +404,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
