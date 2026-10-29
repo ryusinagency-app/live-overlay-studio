@@ -1,6 +1,8 @@
 name: Build Live Minecraft Studio
 
 on:
+  pull_request:
+    paths: ['live_minecraft_studio/**', '.github/workflows/build-live-minecraft-studio.yml']
   release:
     types: [published]
   workflow_dispatch:
@@ -15,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    if: startsWith(github.event.release.tag_name || inputs.tag, 'minecraft-v')
+    if: github.event_name == 'pull_request' || startsWith(github.event.release.tag_name || inputs.tag, 'minecraft-v')
     runs-on: windows-latest
     steps:
       - name: Check out release source
@@ -29,6 +31,17 @@ jobs:
           python-version: '3.12'
           architecture: x64
 
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: live_minecraft_studio/plugin/pom.xml
+
+      - name: Build and test server bridge
+        run: mvn -B -f live_minecraft_studio/plugin/pom.xml package
+
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
 
@@ -41,6 +54,7 @@ jobs:
         run: python build_windows_app.py
 
       - name: Attach EXE to release
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
