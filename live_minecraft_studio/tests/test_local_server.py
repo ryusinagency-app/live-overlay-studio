@@ -5,7 +5,7 @@ import io
 import unittest
 import zipfile
 
-from local_server import LocalMinecraftServer
+from local_server import APP_USER_AGENT, LocalMinecraftServer, PAPER_API
 
 
 class LocalServerTests(unittest.TestCase):
@@ -59,10 +59,38 @@ class LocalServerTests(unittest.TestCase):
                 result = server.ensure_java()
 
             self.assertTrue(result["available"])
-            self.assertEqual(seen["user_agent"], "LiveMinecraftStudio/0.2.2")
+            self.assertEqual(seen["user_agent"], APP_USER_AGENT)
             self.assertEqual(seen["accept"], "application/octet-stream")
             self.assertTrue(any(server.java_dir.glob("*/bin/java.exe")))
+
+    def test_paper_download_uses_v3_api_and_required_user_agent(self):
+        with TemporaryDirectory() as folder:
+            server = LocalMinecraftServer(Path(folder))
+            server.java_status = lambda: {"available": True, "version": 'openjdk version "21"', "bundled": True}
+            seen = []
+
+            class Response(io.BytesIO):
+                def __enter__(self):
+                    return self
+                def __exit__(self, *_):
+                    self.close()
+
+            builds = b'[{"id":123,"channel":"STABLE","downloads":{"server:default":{"url":"https://example.test/paper.jar"}}}]'
+
+            def fake_open(request, timeout=0):
+                seen.append((request.full_url, request.get_header("User-agent")))
+                if request.full_url == PAPER_API:
+                    return Response(builds)
+                return Response(b"paper" * 250000)
+
+            with patch("urllib.request.urlopen", fake_open):
+                result = server.prepare(True)
+
+            self.assertTrue(result["prepared"])
+            self.assertEqual(seen[0], (PAPER_API, APP_USER_AGENT))
+            self.assertEqual(seen[1], ("https://example.test/paper.jar", APP_USER_AGENT))
 
 
 if __name__ == "__main__":
     unittest.main()
+
