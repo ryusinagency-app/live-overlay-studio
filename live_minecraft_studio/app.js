@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id);let current,workingEffects,giftCatalog=[
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.message||'通信エラー');return j}
 function toast(message,error=false){const el=$('toast');el.textContent=message;el.className=error?'show error':'show';setTimeout(()=>el.className='',2600)}
 function value(id){const el=$(id);return el.type==='number'?Number(el.value):el.type==='checkbox'?el.checked:el.value}
-function set(id,v){const el=$(id);if(!el)return;if(el.type==='checkbox')el.checked=!!v;else el.value=v??''}
+function set(id,v){const el=$(id);if(!el||el.dataset.dirty==='1')return;if(el.type==='checkbox')el.checked=!!v;else el.value=v??''}
 function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier;
  $('connection').textContent=s.status.rcon;$('connection').className='badge '+(s.status.rcon==='接続中'?'ok':'');
  $('health').textContent=`${a.health} / ${a.maxHealth}`;$('healthBar').style.width=`${a.maxHealth?a.health/a.maxHealth*100:0}%`;
@@ -27,9 +27,11 @@ function renderEffectCards(){const host=$('effectCards');host.replaceChildren();
 function addGift(gift){const id=String(gift.id||gift.name);if(!id)return;workingEffects[id]={...(workingEffects[id]||{}),giftId:String(gift.id||''),giftName:String(gift.name||''),giftImageUrl:String(gift.imageUrl||''),name:String(gift.name||'ギフト効果'),kind:'fill',amount:1,win:0,description:'1ブロック埋めます'};$('giftDialog').close();renderEffectCards()}
 function renderGiftCatalog(){const q=$('giftSearch').value.trim().toLowerCase();$('giftCatalog').replaceChildren(...giftCatalog.filter(g=>!q||String(g.name).toLowerCase().includes(q)||String(g.price).includes(q)).map(g=>{const b=document.createElement('button');b.className='giftChoice';const img=document.createElement('img');img.src=g.imageUrl||'';const n=document.createElement('b');n.textContent=g.name||'ギフト';const p=document.createElement('small');p.textContent=`${g.price||0}コイン`;b.append(img,n,p);b.onclick=()=>addGift(g);return b}))}
 async function refresh(){try{render(await api('/api/state'))}catch(e){$('connection').textContent='停止';}}
-async function save(body,message='保存しました'){try{const r=await api('/api/config',body);render(r.state);toast(message)}catch(e){toast(e.message,true)}}
+async function save(body,message='保存しました'){try{const r=await api('/api/config',body);document.querySelectorAll('[data-dirty="1"]').forEach(el=>delete el.dataset.dirty);render(r.state);toast(message)}catch(e){toast(e.message,true)}}
 async function test(id){try{const r=await api('/api/test-effect',{giftId:id,coins:0});toast(r.message||'テストを開始しました');refresh()}catch(e){toast(e.message,true)}}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-page]').forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab)});
+document.addEventListener('input',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
+document.addEventListener('change',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
 $('saveArena').onclick=()=>save({arena:{x:value('x'),y:value('y'),z:value('z'),width:value('width'),depth:value('depth'),height:value('height'),frameBlock:value('frameBlock'),fillBlock:value('fillBlock'),maxHealth:value('maxHealth'),holdSeconds:value('holdSeconds'),holdWin:value('holdWin'),clearAfterSuccess:value('clearAfterSuccess')},commandDelayMs:value('commandDelayMs')});
 $('buildArena').onclick=async()=>{try{const r=await api('/api/arena/build',{});toast(`${r.queued}件の枠生成処理を開始しました`)}catch(e){toast(e.message,true)}};
 $('saveEffects').onclick=async()=>{collectEffectCards();await save({effects:workingEffects});workingEffects=undefined};
