@@ -5,16 +5,19 @@ from threading import Lock
 import json
 import os
 import secrets
+import shutil
 import socket
 import subprocess
 import time
 import urllib.request
+import zipfile
 
 from rcon import RconClient
 
 
 PAPER_VERSION = "1.21.1"
 PAPER_API = f"https://api.papermc.io/v2/projects/paper/versions/{PAPER_VERSION}"
+JAVA_21_URL = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
 
 
 class LocalMinecraftServer:
@@ -23,23 +26,69 @@ class LocalMinecraftServer:
     def __init__(self, data_dir: Path):
         self.server_dir = data_dir / "minecraft_server"
         self.jar_path = self.server_dir / "paper.jar"
+        self.java_dir = data_dir / "java21"
         self.process: subprocess.Popen | None = None
         self.lock = Lock()
         self.message = "未準備"
         self._java = self.java_status()
 
-    @staticmethod
-    def java_status() -> dict:
+    def java_executable(self) -> str:
+        bundled = list(self.java_dir.glob("*/bin/java.exe")) + list(self.java_dir.glob("bin/java.exe"))
+        if bundled:
+            return str(bundled[0])
+        return shutil.which("java") or "java"
+
+    def java_status(self) -> dict:
+        executable = self.java_executable()
         try:
             result = subprocess.run(
-                ["java", "-version"], capture_output=True, text=True, timeout=8,
+                [executable, "-version"], capture_output=True, text=True, timeout=8,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             text = (result.stderr or result.stdout or "").strip()
             version = text.splitlines()[0] if text else "Javaを確認できません"
-            return {"available": result.returncode == 0, "version": version}
+            return {"available": result.returncode == 0, "version": version,
+                    "bundled": str(executable).lower().startswith(str(self.java_dir).lower())}
         except Exception:
-            return {"available": False, "version": "Java 21が必要です"}
+            return {"available": False, "version": "初回準備でJava 21を自動設定します", "bundled": False}
+
+    def ensure_java(self) -> dict:
+        current = self.java_status()
+        if current["available"]:
+            self._java = current
+            return current
+        self.java_dir.parent.mkdir(parents=True, exist_ok=True)
+        archive = self.java_dir.parent / "java21.download"
+        extract_dir = self.java_dir.parent / "java21.extracting"
+        self.message = "アプリ専用Java 21をダウンロード中"
+        try:
+            with urllib.request.urlopen(JAVA_21_URL, timeout=180) as response, archive.open("wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir)
+            extract_dir.mkdir(parents=True)
+            with zipfile.ZipFile(archive) as package:
+                root = extract_dir.resolve()
+                for member in package.infolist():
+                    target = (extract_dir / member.filename).resolve()
+                    if target != root and root not in target.parents:
+                        raise RuntimeError("Javaファイルの展開先が不正です")
+                package.extractall(extract_dir)
+            if self.java_dir.exists():
+                shutil.rmtree(self.java_dir)
+            extract_dir.replace(self.java_dir)
+        finally:
+            archive.unlink(missing_ok=True)
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir, ignore_errors=True)
+        self._java = self.java_status()
+        if not self._java["available"]:
+            raise RuntimeError("アプリ専用Java 21を準備できませんでした")
+        return self._java
 
     @staticmethod
     def _port_open(port: int) -> bool:
@@ -63,10 +112,7 @@ class LocalMinecraftServer:
     def prepare(self, eula_accepted: bool) -> dict:
         if not eula_accepted:
             raise ValueError("Minecraft EULAへの同意にチェックしてください")
-        self._java = self.java_status()
-        java = self._java
-        if not java["available"]:
-            raise RuntimeError("Java 21が見つかりません。Java 21をインストールしてから、もう一度押してください")
+        self.ensure_java()
 
         with self.lock:
             self.server_dir.mkdir(parents=True, exist_ok=True)
@@ -127,14 +173,11 @@ class LocalMinecraftServer:
         if self._port_open(25565):
             self.message = "サーバーは起動済みです"
             return self.status()
-        self._java = self.java_status()
-        java = self._java
-        if not java["available"]:
-            raise RuntimeError("Java 21が見つかりません")
+        self.ensure_java()
         log = (self.server_dir / "live_minecraft_server.log").open("a", encoding="utf-8")
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         self.process = subprocess.Popen(
-            ["java", "-Xms2G", "-Xmx6G", "-jar", str(self.jar_path), "--nogui"],
+            [self.java_executable(), "-Xms2G", "-Xmx6G", "-jar", str(self.jar_path), "--nogui"],
             cwd=self.server_dir, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
             creationflags=flags,
         )
@@ -165,3 +208,4 @@ class LocalMinecraftServer:
             time.sleep(0.5)
         self.message = "安全に停止しました"
         return self.status()
+
