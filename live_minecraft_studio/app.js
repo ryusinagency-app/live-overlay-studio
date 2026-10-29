@@ -15,7 +15,7 @@ function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier
  $('localServerState').textContent=running?'起動中':prepared?'準備済み・停止中':'初回準備が必要';
  $('localServerMessage').textContent=local.message||'';
  $('localServerLamp').className=running?'running':prepared?'prepared':'';
- $('javaStatus').textContent=local.java?.available?(local.java.version||'Java確認済み'):'Java 21が必要です';
+ $('javaStatus').textContent=local.java?.available?(local.java.version||'Java確認済み'):'Java 21は「サーバーを準備」で自動設定されます';
  $('prepareLocalServer').disabled=running;$('startLocalServer').disabled=!prepared||running;$('stopLocalServer').disabled=!running;
  if(!workingEffects){workingEffects=structuredClone(c.effects);renderEffectCards()}
  $('testButtons').replaceChildren(...Object.entries(c.effects).map(([id,e])=>{const b=document.createElement('button');b.textContent=e.name||id;b.onclick=()=>test(id);return b}));
@@ -46,3 +46,4 @@ $('testConnection').onclick=async()=>{try{const r=await api('/api/rcon/test',{})
 $('detectServer').onclick=async()=>{try{await save({rcon:{host:value('rconHost'),port:value('rconPort'),password:value('rconPassword')}},'接続設定を保存しました');const r=await api('/api/rcon/detect',{});set('serverSoftware',r.software);$('serverVersionText').textContent=r.detail||'';toast(`${r.software} と判定しました`)}catch(e){toast(e.message,true)}};
 $('saveWin').onclick=()=>save({winBridge:{enabled:value('winEnabled'),url:value('winUrl'),token:value('winToken')}});
 refresh();setInterval(refresh,1000);
+
