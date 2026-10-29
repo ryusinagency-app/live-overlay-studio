@@ -16,7 +16,17 @@ TikTok LIVEのギフトをMinecraft Java版サーバー内の埋め立てゲー�
 - 全埋め後のカウント、破壊時のリセット、ギフトによる残り時間変更
 - 次の破壊を無効化するシールド
 
-## 起動
+## 個人用かんたん接続
+
+1. 初回だけ「サーバーを準備」を押します。
+2. Minecraft EULAへの同意後、Paper 1.21.1、ローカルサーバー、RCON設定を自動で準備します。
+3. 次回からは「サーバーを起動」を押します。
+4. Minecraft Java版1.21.1のマルチプレイで `localhost` に参加します。
+5. 終了時は「安全に停止」を押します。
+
+外部サービスへの登録、ポート開放、RCONの手入力は必要ありません。Java 21が見つからない場合だけ、画面にインストール案内を表示します。
+
+## アプリの起動
 
 ```powershell
 py server.py
@@ -26,13 +36,5 @@ py server.py
 
 効果一覧オーバーレイは `http://127.0.0.1:8775/effects_overlay.html`、進捗・耐久オーバーレイは `http://127.0.0.1:8775/overlay.html` です。
 
-Minecraftサーバーの `server.properties` ではRCONを有効にしてください。
-
-```properties
-enable-rcon=true
-rcon.port=25575
-rcon.password=十分に長いパスワード
-```
-
-RCONポートはインターネットへ公開せず、Minecraftサーバーと同じPCまたは信頼できるLAN内だけで利用してください。
+既存のMinecraftサーバーを利用する場合だけ、「上級者向け：手動接続設定」からRCON接続を設定できます。RCONポートはインターネットへ公開しないでください。
 
