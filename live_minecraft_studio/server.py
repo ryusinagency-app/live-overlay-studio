@@ -17,7 +17,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 STATE_FILE = DATA_DIR / "state.json"
