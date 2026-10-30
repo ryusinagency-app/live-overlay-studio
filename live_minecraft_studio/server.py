@@ -10,17 +10,18 @@ import base64
 import binascii
 import mimetypes
 import os
+import random
 import secrets
 import time
 import urllib.request
 import webbrowser
 
-from game_engine import Arena, GameEngine, MultiplierState, clamp, resolve_effect
+from game_engine import Arena, GameEngine, MultiplierState, clamp, resolve_effect, resolve_effects
 from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.4.0"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -45,6 +46,11 @@ DEFAULT = {
                    "applyFill": True, "applyTnt": True, "applyWin": True, "applyRepair": True,
                    "applyItems": True, "applyResize": False, "applyCountdown": False, "applyPlayer": False, "stackingMode": "extend"},
     "commandDelayMs": 35,
+    "gachas": {},
+    "social": {"followEnabled": False, "followTarget": "", "individualLikeEnabled": False,
+               "individualLikeEvery": 100, "individualLikeTarget": "", "totalLikeEnabled": False,
+               "totalLikeEvery": 1000, "totalLikeTarget": ""},
+    "socialRuntime": {"followedUsers": [], "individualLikes": {}, "totalLikes": 0},
     "winBridge": {"enabled": False, "url": "http://127.0.0.1:8765/api/minecraft-studio/win", "token": ""},
     "effects": {
         "demo-fill": {"name": "10ブロック埋め", "kind": "fill", "amount": 10, "win": 0,
@@ -77,6 +83,8 @@ SAVE_LOCK = Lock()
 COMMAND_QUEUE: Queue[str] = Queue(maxsize=100000)
 WIN_QUEUE: Queue[dict] = Queue(maxsize=10000)
 STATUS = {"rcon": "未接続", "lastError": "", "worldBridge": "未確認", "queuedCommands": 0, "pendingWin": 0}
+GACHA_EVENTS: list[dict] = []
+GACHA_LOCK = Lock()
 
 
 def deep_merge(base, incoming):
@@ -147,7 +155,13 @@ def public_state():
     config["rcon"]["password"] = "" if not config["rcon"].get("password") else "••••••••"
     config["winBridge"]["token"] = "" if not config["winBridge"].get("token") else "••••••••"
     with ENGINE.lock:
-        previews = {key: resolve_effect(effect, 1, ENGINE.multiplier) for key, effect in config["effects"].items()}
+        previews = {}
+        for key, effect in config["effects"].items():
+            actions = resolve_effects(effect, 1, ENGINE.multiplier)
+            preview = dict(actions[0])
+            preview["effectiveLabel"] = " ＋ ".join(action["effectiveLabel"] for action in actions)
+            preview["resolvedEffects"] = actions
+            previews[key] = preview
     return {"version": APP_VERSION, "config": config, "effectPreviews": previews, "game": ENGINE.snapshot(), "status": status_snapshot(),
             "localServer": LOCAL_SERVER.status()}
 
@@ -183,6 +197,125 @@ def queue_win(event):
 def queue_commands(commands):
     for command in commands:
         COMMAND_QUEUE.put_nowait(command)
+
+
+def minecraft_announcement(text, sender, duration=4):
+    notice = {"text": str(text)[:200], "sender": str(sender)[:80], "duration": int(clamp(duration, 1, 30, 4))}
+    encoded = base64.b64encode(json.dumps(notice, ensure_ascii=False).encode()).decode()
+    return "lmsarena announce " + encoded
+
+
+def dispatch_effect(result, sender_name=""):
+    queue_commands(result.get("commands", []))
+    if result.get("win"):
+        queue_win({"eventId": result["eventId"], "amount": result["win"],
+                   "reason": result.get("message", "Minecraft効果"), "senderName": str(sender_name)[:80]})
+    for action in result.get("effects", []):
+        if action.get("kind") == "gacha" and action.get("gachaId"):
+            start_gacha(str(action["gachaId"]), sender_name, result["eventId"])
+
+
+def weighted_index(entries):
+    weights = [max(0.0, float(item.get("weight", 0))) for item in entries]
+    total = sum(weights)
+    if total <= 0:
+        return random.randrange(len(entries))
+    pick = random.random() * total
+    for index, weight in enumerate(weights):
+        pick -= weight
+        if pick <= 0:
+            return index
+    return len(entries) - 1
+
+
+def start_gacha(gacha_id, sender_name, parent_event=None):
+    with STATE_LOCK:
+        config = json.loads(json.dumps(STATE.get("gachas", {}).get(gacha_id, {})))
+    if not config or config.get("enabled", True) is False:
+        return False
+    entries = [item for item in config.get("entries", []) if item.get("effectId") in STATE.get("effects", {})
+               and STATE["effects"][item["effectId"]].get("enabled", True) is not False]
+    if not entries:
+        return False
+    event_base = str(parent_event or ("gacha-" + secrets.token_hex(8)))
+
+    def run():
+        max_spins = int(clamp(config.get("maxSpins", 20), 1, 100, 20))
+        for spin in range(max_spins):
+            index = weighted_index(entries)
+            selected = entries[index]
+            effect_id = str(selected["effectId"])
+            effect = STATE.get("effects", {}).get(effect_id, {})
+            continued = (config.get("continueEnabled") is True and spin + 1 < max_spins and
+                         random.random() * 100 < float(clamp(config.get("continueRate", 70), 0, 100, 70)))
+            event_id = f"{event_base}-spin-{spin+1}"
+            event = {"eventId": event_id, "at": time.time(), "gachaId": gacha_id,
+                     "gachaName": str(config.get("name") or "スピナーガチャ")[:100],
+                     "sender": str(sender_name)[:80], "items": [str(item.get("label") or STATE["effects"].get(item.get("effectId"), {}).get("name") or "効果")[:80] for item in entries],
+                     "resultIndex": index, "resultLabel": str(selected.get("label") or effect.get("name") or "効果")[:100],
+                     "spinSeconds": float(clamp(config.get("spinSeconds", 5), 1, 30, 5)), "continued": continued,
+                     "giftSoundUrl": str(config.get("giftSoundUrl") or "") if spin == 0 else "",
+                     "spinSoundUrl": str(config.get("spinSoundUrl") or ""), "resultSoundUrl": str(config.get("resultSoundUrl") or ""),
+                     "soundVolume": int(clamp(config.get("soundVolume", 100), 0, 100, 100))}
+            with GACHA_LOCK:
+                GACHA_EVENTS.append(event); del GACHA_EVENTS[:-100]
+            queue_commands([minecraft_announcement(event["gachaName"], event["sender"], max(3, int(event["spinSeconds"])))])
+            time.sleep(event["spinSeconds"])
+            queue_commands([minecraft_announcement(event["resultLabel"] + (" ＋ 継続！" if continued else " ／ 継続終了"), event["sender"], 4)])
+            payload = {"eventId": event_id + "-effect", "giftId": effect_id, "giftName": effect.get("name", ""),
+                       "senderName": sender_name, "repeatCount": 1, "coins": 0, "source": "gacha"}
+            result = ENGINE.receive(payload, STATE["effects"])
+            dispatch_effect(result, sender_name)
+            save_state()
+            if not continued:
+                break
+            time.sleep(float(clamp(config.get("continueDelaySeconds", 2), .2, 10, 2)))
+    Thread(target=run, daemon=True).start()
+    return True
+
+
+def trigger_target(target, sender_name, event_id):
+    target = str(target or "")
+    if target.startswith("gacha:"):
+        return start_gacha(target.split(":", 1)[1], sender_name, event_id)
+    effect_id = target.split(":", 1)[1] if target.startswith("effect:") else target
+    if effect_id not in STATE.get("effects", {}):
+        return False
+    result = ENGINE.receive({"eventId": event_id, "giftId": effect_id, "senderName": sender_name,
+                             "repeatCount": 1, "coins": 0, "source": "social"}, STATE["effects"])
+    dispatch_effect(result, sender_name)
+    return True
+
+
+def receive_social(body):
+    kind = str(body.get("type") or body.get("eventType") or "").lower()
+    user_id = str(body.get("userId") or body.get("uniqueId") or body.get("senderId") or body.get("userName") or "")[:160]
+    user_name = str(body.get("userName") or body.get("senderName") or body.get("nickname") or user_id)[:80]
+    with STATE_LOCK:
+        cfg = dict(STATE.get("social", {})); runtime = STATE.setdefault("socialRuntime", {"followedUsers": [], "individualLikes": {}, "totalLikes": 0})
+        triggers = []
+        if kind == "follow":
+            followed = set(runtime.get("followedUsers", []))
+            if user_id and user_id not in followed:
+                followed.add(user_id); runtime["followedUsers"] = list(followed)[-100000:]
+                if cfg.get("followEnabled") and cfg.get("followTarget"): triggers.append((cfg["followTarget"], "follow"))
+        elif kind == "like":
+            count = int(clamp(body.get("count", body.get("likeCount", 1)), 1, 1000000, 1))
+            likes = runtime.setdefault("individualLikes", {}); before = int(likes.get(user_id, 0)); likes[user_id] = before + count
+            total_before = int(runtime.get("totalLikes", 0)); runtime["totalLikes"] = total_before + count
+            if cfg.get("individualLikeEnabled") and cfg.get("individualLikeTarget") and user_id:
+                every = int(clamp(cfg.get("individualLikeEvery", 100), 1, 100000000, 100))
+                triggers += [(cfg["individualLikeTarget"], "individual-like")] * min(20, likes[user_id] // every - before // every)
+            if cfg.get("totalLikeEnabled") and cfg.get("totalLikeTarget"):
+                every = int(clamp(cfg.get("totalLikeEvery", 1000), 1, 100000000, 1000))
+                triggers += [(cfg["totalLikeTarget"], "total-like")] * min(20, runtime["totalLikes"] // every - total_before // every)
+        else:
+            raise ValueError("typeはfollowまたはlikeを指定してください")
+    for index, (target, label) in enumerate(triggers):
+        trigger_target(target, user_name, f"social-{label}-{secrets.token_hex(8)}-{index}")
+    save_state()
+    return {"ok": True, "triggered": len(triggers), "newFollow": kind == "follow" and bool(triggers),
+            "totalLikes": STATE.get("socialRuntime", {}).get("totalLikes", 0)}
 
 
 def bridge_command(client, command):
@@ -362,10 +495,38 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/overlay":
             game = ENGINE.snapshot()
             with STATE_LOCK:
-                effects = [resolve_effect(e, 1, ENGINE.multiplier) for e in STATE["effects"].values()]
-            with STATE_LOCK:
+                effects = []
+                for effect in STATE["effects"].values():
+                    if effect.get("enabled", True) is False or effect.get("overlayVisible", True) is False:
+                        continue
+                    actions = resolve_effects(effect, 1, ENGINE.multiplier)
+                    preview = dict(actions[0])
+                    preview["effectiveLabel"] = " ＋ ".join(action["effectiveLabel"] for action in actions)
+                    effects.append(preview)
+                for gacha_id, gacha in STATE.get("gachas", {}).items():
+                    if gacha.get("enabled", True) is False or gacha.get("showInEffectList", True) is False:
+                        continue
+                    entries = [entry for entry in gacha.get("entries", []) if entry.get("effectId") in STATE["effects"]]
+                    total = sum(max(0, float(entry.get("weight", 0))) for entry in entries) or 1
+                    details = [f'{entry.get("label") or STATE["effects"][entry["effectId"]].get("name", "効果")} {max(0,float(entry.get("weight",0)))/total*100:.1f}%'
+                               for entry in entries]
+                    effects.append({"name": str(gacha.get("name") or "スピナーガチャ"), "effectiveLabel": "継続あり" if gacha.get("continueEnabled") else "1回抽選",
+                                    "description": " ／ ".join(details), "overlayVisible": True, "useCustomStyle": False, "kind": "gacha-card"})
+                social = STATE.get("social", {})
+                social_cards = [("followEnabled", "新規フォロー", "followTarget"),
+                                ("individualLikeEnabled", f'個人いいね {social.get("individualLikeEvery",100)}回ごと', "individualLikeTarget"),
+                                ("totalLikeEnabled", f'累計いいね {social.get("totalLikeEvery",1000)}回ごと', "totalLikeTarget")]
+                for enabled, name, target_key in social_cards:
+                    if social.get(enabled):
+                        target = str(social.get(target_key) or "")
+                        label = target
+                        if target.startswith("effect:"): label = STATE["effects"].get(target[7:], {}).get("name", target)
+                        if target.startswith("gacha:"): label = STATE.get("gachas", {}).get(target[7:], {}).get("name", target)
+                        effects.append({"name": name, "effectiveLabel": str(label or "未設定"), "description": "いいね・フォロー連動", "kind": "social-card"})
                 overlay = dict(STATE.get("overlay", {}))
-            return self._json({"game": game, "effects": effects, "overlay": overlay, "version": APP_VERSION})
+            with GACHA_LOCK:
+                gacha_events = list(GACHA_EVENTS)
+            return self._json({"game": game, "effects": effects, "overlay": overlay, "gachaEvents": gacha_events, "version": APP_VERSION})
         if path == "/api/gift-catalog":
             try:
                 with urllib.request.urlopen("http://127.0.0.1:8765/api/tiktok/gifts", timeout=3) as response:
@@ -398,6 +559,22 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/config":
                 self._update_config(body)
                 return self._json({"ok": True, "state": public_state()})
+            if path == "/api/social":
+                if not ENGINE.world_state.get("ready"):
+                    raise RuntimeError("先にサーバーへ接続して枠を生成してください")
+                return self._json(receive_social(body))
+            if path == "/api/test-gacha":
+                if not ENGINE.world_state.get("ready"):
+                    raise RuntimeError("先にサーバーへ接続して枠を生成してください")
+                gacha_id = str(body.get("gachaId") or "")
+                if not start_gacha(gacha_id, "テスト", "test-gacha-" + secrets.token_hex(8)):
+                    raise ValueError("ガチャの中身を1つ以上設定してください")
+                return self._json({"ok": True, "message": "ガチャテストを開始しました"})
+            if path == "/api/reset-social":
+                with STATE_LOCK:
+                    STATE["socialRuntime"] = {"followedUsers": [], "individualLikes": {}, "totalLikes": 0}
+                save_state()
+                return self._json({"ok": True, "message": "フォロー・いいね履歴をリセットしました", "state": public_state()})
             if path == "/api/local-server/prepare":
                 result = LOCAL_SERVER.prepare(body.get("eulaAccepted") is True)
                 with STATE_LOCK:
@@ -447,12 +624,10 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/gift":
                 if not ENGINE.world_state.get("ready"):
                     raise RuntimeError("先にサーバーへ接続して枠を生成してください")
+                if str(body.get("eventType") or body.get("type") or "").lower() in {"follow", "like"}:
+                    return self._json(receive_social(body))
                 result = ENGINE.receive(body, STATE["effects"])
-                queue_commands(result.get("commands", []))
-                if result.get("win"):
-                    queue_win({"eventId": result["eventId"], "amount": result["win"],
-                                         "reason": result.get("message", "Minecraft効果"),
-                                         "senderName": str(body.get("senderName") or "")[:80]})
+                dispatch_effect(result, body.get("senderName", ""))
                 save_state()
                 return self._json(result, 200 if result.get("ok") else 404)
             if path == "/api/test-effect":
@@ -460,9 +635,9 @@ class Handler(SimpleHTTPRequestHandler):
                     raise RuntimeError("先にサーバーへ接続して枠を生成してください")
                 gift_id = str(body.get("giftId") or "")
                 payload = {"eventId": "test-" + secrets.token_hex(8), "giftId": gift_id,
-                           "senderName": "テスト", "coins": body.get("coins", 0), "repeatCount": 1}
+                           "senderName": "テスト", "coins": body.get("coins", 0), "repeatCount": 1, "source": "test"}
                 result = ENGINE.receive(payload, STATE["effects"])
-                queue_commands(result.get("commands", []))
+                dispatch_effect(result, "テスト")
                 return self._json(result)
             return self._json({"ok": False, "message": "見つかりません"}, 404)
         except Exception as exc:
@@ -534,6 +709,23 @@ class Handler(SimpleHTTPRequestHandler):
                     m.next_target = (m.total_coins // m.threshold + 1) * m.threshold
             if isinstance(body.get("effects"), dict):
                 STATE["effects"] = body["effects"]
+            if isinstance(body.get("gachas"), dict):
+                cleaned = {}
+                for gacha_id, raw in list(body["gachas"].items())[:100]:
+                    if not isinstance(raw, dict): continue
+                    item = dict(raw); item["name"] = str(item.get("name") or "スピナーガチャ")[:100]
+                    item["spinSeconds"] = float(clamp(item.get("spinSeconds", 5), 1, 30, 5))
+                    item["continueRate"] = float(clamp(item.get("continueRate", 70), 0, 100, 70))
+                    item["maxSpins"] = int(clamp(item.get("maxSpins", 20), 1, 100, 20))
+                    item["continueDelaySeconds"] = float(clamp(item.get("continueDelaySeconds", 2), .2, 10, 2))
+                    item["soundVolume"] = int(clamp(item.get("soundVolume", 100), 0, 100, 100))
+                    item["entries"] = [dict(entry) for entry in item.get("entries", [])[:100] if isinstance(entry, dict)]
+                    cleaned[str(gacha_id)[:160]] = item
+                STATE["gachas"] = cleaned
+            if isinstance(body.get("social"), dict):
+                STATE["social"].update(body["social"])
+                STATE["social"]["individualLikeEvery"] = int(clamp(STATE["social"].get("individualLikeEvery", 100), 1, 100000000, 100))
+                STATE["social"]["totalLikeEvery"] = int(clamp(STATE["social"].get("totalLikeEvery", 1000), 1, 100000000, 1000))
         save_state()
         if ENGINE.world_state.get("active"):
             commands = []
