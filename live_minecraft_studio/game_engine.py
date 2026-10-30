@@ -118,8 +118,19 @@ def resolve_effect(effect: dict[str, Any], repeat: int, multiplier: MultiplierSt
                            f'規定カウント {e["seconds"]:+}秒' if kind == "countdown" else
                            f'移動停止 {e["seconds"]}秒' if kind == "freeze" else
                            f'吹き飛ばし 強さ{e["strength"]:g}' if kind == "launch" else
+                           str(e.get("gachaName") or "スピナーガチャ") if kind == "gacha" else
+                           f'TNT×{e["amount"]}' if kind == "tnt" else
                            "全埋め" if kind == "fill_all" else "全消し" if kind == "clear_all" else f'{e["amount"]}{labels.get(kind, "回")}')
     return e
+
+
+def resolve_effects(effect: dict[str, Any], repeat: int, multiplier: MultiplierState) -> list[dict[str, Any]]:
+    """Resolve every action in one gift exactly once at the multiplier boundary."""
+    actions = [effect]
+    extras = effect.get("additionalEffects", [])
+    if isinstance(extras, list):
+        actions.extend(item for item in extras[:20] if isinstance(item, dict))
+    return [resolve_effect(action, repeat, multiplier) for action in actions]
 
 
 @dataclass
@@ -188,13 +199,21 @@ class GameEngine:
             gift_id = str(payload.get("giftId") or "")
             gift_name = str(payload.get("giftName") or "")
             effect = effects.get(gift_id) or effects.get(gift_name)
+            if not effect and gift_id:
+                effect = next((item for item in effects.values() if str(item.get("giftId") or "") == gift_id), None)
             if not effect:
                 effect = {"kind": "none", "name": gift_name or "コイン集計", "amount": 0}
+            source = str(payload.get("source") or "gift")
+            if effect.get("enabled", True) is False:
+                effect = {"kind": "none", "name": gift_name or "無効な効果", "amount": 0, "displayEnabled": False}
+            if effect.get("gachaOnly") is True and source not in {"gacha", "social", "test"}:
+                effect = {"kind": "none", "name": gift_name or "ガチャ専用効果", "amount": 0,
+                          "displayEnabled": False}
 
             repeat = max(1, int(clamp(payload.get("repeatCount", 1), 1, 10000, 1)))
             coins = max(0, int(clamp(payload.get("coins", 0), 0, 10**9, 0))) * repeat
             activations = self.multiplier.add_coins(coins)
-            result = self._apply_effect(effect, repeat)
+            result = self._apply_effects(effect, repeat)
             self.processed_events.add(event_id)
             entry = {
                 "eventId": event_id,
@@ -212,9 +231,10 @@ class GameEngine:
             sound_url = str(effect.get("soundUrl") or "")[:500]
             sound_enabled = effect.get("soundEnabled", False) is True and sound_url.startswith("/user-sounds/")
             if display_enabled or sound_enabled:
-                text = str(effect.get("displayText") or resolved["effectiveLabel"])[:200]
+                text = str(effect.get("displayText") or result["effectiveLabel"])[:200]
                 for key, val in {"amount": resolved["amount"], "seconds": resolved["seconds"], "strength": f'{resolved["strength"]:g}',
-                                 "name": entry["senderName"], "gift": gift_name, "size": resolved["resizeDelta"]}.items():
+                                 "name": entry["senderName"], "gift": gift_name, "size": resolved["resizeDelta"],
+                                 "effects": result["effectiveLabel"]}.items():
                     text = text.replace("{" + key + "}", str(val))
                 notice = {"eventId": event_id, "at": time(), "text": text,
                           "sender": entry["senderName"] if effect.get("showSender", True) is not False else "",
@@ -235,13 +255,28 @@ class GameEngine:
                 "commands": result["commands"],
                 "win": result["win"],
                 "message": result["message"],
+                "effects": result["resolvedEffects"],
                 "multiplierActivations": activations,
             }
 
+    def _apply_effects(self, effect: dict[str, Any], repeat: int) -> dict[str, Any]:
+        resolved_effects = resolve_effects(effect, repeat, self.multiplier)
+        results = [self._apply_resolved_effect(action) for action in resolved_effects]
+        labels = [action["effectiveLabel"] for action in resolved_effects]
+        primary = dict(resolved_effects[0])
+        primary["effectiveLabel"] = " ＋ ".join(labels)
+        return {"commands": [command for result in results for command in result["commands"]],
+                "win": sum(result["win"] for result in results),
+                "message": str(effect.get("name") or effect.get("kind") or "ギフト効果"),
+                "effectiveLabel": primary["effectiveLabel"], "resolved": primary,
+                "resolvedEffects": resolved_effects}
+
     def _apply_effect(self, effect: dict[str, Any], repeat: int) -> dict[str, Any]:
         """Send intent to the server; never invent block counts or explosion damage."""
+        return self._apply_resolved_effect(resolve_effect(effect, repeat, self.multiplier))
+
+    def _apply_resolved_effect(self, effect: dict[str, Any]) -> dict[str, Any]:
         kind = str(effect.get("kind") or "fill")
-        effect = resolve_effect(effect, repeat, self.multiplier)
         amount = effect["amount"]
         win = effect["win"]
         commands: list[str] = []
