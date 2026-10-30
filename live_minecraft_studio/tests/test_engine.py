@@ -113,6 +113,15 @@ class EngineTests(unittest.TestCase):
                            {"off": {"kind": "fill_all", "enabled": False}})
         self.assertEqual([], result["commands"])
 
+    def test_gift_effect_can_be_limited_to_one_user_id(self):
+        effect = {"only": {"kind": "fill", "amount": 3, "allowedGiftUserId": "@ryusin__ch"}}
+        blocked = self.engine().receive({"eventId": "blocked", "giftId": "only", "source": "gift",
+                                         "uniqueId": "someone_else"}, effect)
+        allowed = self.engine().receive({"eventId": "allowed", "giftId": "only", "source": "gift",
+                                         "uniqueId": "RYUSIN__CH"}, effect)
+        self.assertEqual([], blocked["commands"])
+        self.assertTrue(allowed["commands"])
+
     def test_disabled_multiplier_does_not_count_or_activate(self):
         multiplier = MultiplierState(enabled=False, threshold=100)
         self.assertEqual(0, multiplier.add_coins(500))
