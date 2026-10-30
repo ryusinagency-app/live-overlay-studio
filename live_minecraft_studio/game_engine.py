@@ -208,18 +208,26 @@ class GameEngine:
             self.history.append(entry)
             self.history = self.history[-500:]
             resolved = result["resolved"]
-            if effect.get("displayEnabled", True) is not False and resolved.get("kind") != "none":
+            display_enabled = effect.get("displayEnabled", True) is not False and resolved.get("kind") != "none"
+            sound_url = str(effect.get("soundUrl") or "")[:500]
+            sound_enabled = effect.get("soundEnabled", False) is True and sound_url.startswith("/user-sounds/")
+            if display_enabled or sound_enabled:
                 text = str(effect.get("displayText") or resolved["effectiveLabel"])[:200]
                 for key, val in {"amount": resolved["amount"], "seconds": resolved["seconds"], "strength": f'{resolved["strength"]:g}',
                                  "name": entry["senderName"], "gift": gift_name, "size": resolved["resizeDelta"]}.items():
                     text = text.replace("{" + key + "}", str(val))
                 notice = {"eventId": event_id, "at": time(), "text": text,
                           "sender": entry["senderName"] if effect.get("showSender", True) is not False else "",
-                          "duration": int(clamp(effect.get("displaySeconds", 4), 1, 30, 4))}
+                          "duration": int(clamp(effect.get("displaySeconds", 4), 1, 30, 4)),
+                          "display": display_enabled,
+                          "soundUrl": sound_url if sound_enabled else "",
+                          "soundVolume": int(clamp(effect.get("soundVolume", 100), 0, 100, 100)),
+                          "soundSeconds": float(clamp(effect.get("soundSeconds", 0), 0, 600, 0))}
                 self.announcements.append(notice)
                 self.announcements = self.announcements[-50:]
-                encoded = base64.b64encode(json.dumps(notice, ensure_ascii=False).encode()).decode()
-                result["commands"].append("lmsarena announce " + encoded)
+                if display_enabled:
+                    encoded = base64.b64encode(json.dumps(notice, ensure_ascii=False).encode()).decode()
+                    result["commands"].append("lmsarena announce " + encoded)
             return {
                 "ok": True,
                 "duplicate": False,
