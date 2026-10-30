@@ -129,6 +129,15 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(multiplier.active())
         self.assertEqual(1, multiplier.factor("fill"))
 
+    def test_coin_value_starts_fever_and_scales_the_triggering_effect(self):
+        engine = GameEngine(Arena(width=3, depth=3, height=3),
+                            MultiplierState(threshold=100, next_target=100, multiplier=2, duration_seconds=60))
+        result = engine.receive({"eventId": "fever", "giftId": "fill", "coinValue": 100},
+                                {"fill": {"kind": "fill", "amount": 3, "useMultiplier": True}})
+        self.assertTrue(engine.multiplier.active())
+        self.assertEqual(1, result["multiplierActivations"])
+        self.assertEqual(6, result["effects"][0]["amount"])
+
     def test_display_text_is_used_for_effect_list_preview_with_additional_effects(self):
         effect = {"name": "複合ギフト", "displayText": "発動：{effects}", "kind": "fill", "amount": 10,
                   "additionalEffects": [{"kind": "tnt", "amount": 3}]}
