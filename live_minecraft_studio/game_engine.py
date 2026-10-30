@@ -103,7 +103,7 @@ def resolve_effect(effect: dict[str, Any], repeat: int, multiplier: MultiplierSt
     """The sole gift scaling boundary, shared by execution and all previews."""
     e = dict(effect)
     kind = str(e.get("kind") or "fill")
-    category = {"fill_all": "fill", "fill_layers": "fill", "fill_percent": "fill", "bomb": "items", "chain": "items", "shield": "items", "clear": "tnt", "freeze": "player", "launch": "player"}.get(kind, kind)
+    category = {"fill_all": "fill", "fill_layers": "fill", "fill_percent": "fill", "bomb": "items", "chain": "items", "shield": "items", "clear": "tnt", "freeze": "player", "launch": "player", "darkness": "player", "enderman": "tnt"}.get(kind, kind)
     enabled = e.get("useMultiplier", True) is not False
     now = time()
     factor = multiplier.factor(category, now) if enabled else 1.0
@@ -114,6 +114,8 @@ def resolve_effect(effect: dict[str, Any], repeat: int, multiplier: MultiplierSt
                          (multiplier.factor("win", now) if enabled else 1)))
     e["seconds"] = int(round(int(clamp(e.get("seconds", effect.get("amount", 1)), -3600, 3600, 1)) * repeat * factor))
     if kind == "freeze": e["seconds"] = int(clamp(e["seconds"], 1, 600, 5))
+    if kind == "darkness": e["seconds"] = int(clamp(e["seconds"], 1, 600, 10))
+    if kind == "enderman": e["amount"] = int(clamp(e["amount"], 1, 256, 1))
     e["strength"] = clamp(clamp(e.get("strength", 2), .1, 10, 2) * factor, .1, 10, 2)
     delta = int(clamp(e.get("resizeDelta", 1), -64, 64, 1))
     e["resizeDelta"] = (1 if delta >= 0 else -1) * math.ceil(abs(delta) * repeat * factor)
@@ -123,6 +125,8 @@ def resolve_effect(effect: dict[str, Any], repeat: int, multiplier: MultiplierSt
     e["effectiveLabel"] = (f'サイズ {e["resizeDelta"]:+}' if kind == "resize" else
                            f'規定カウント {e["seconds"]:+}秒' if kind == "countdown" else
                            f'移動停止 {e["seconds"]}秒' if kind == "freeze" else
+                           f'暗闇 {e["seconds"]}秒' if kind == "darkness" else
+                           f'エンダーマン×{e["amount"]}' if kind == "enderman" else
                            f'吹き飛ばし 強さ{e["strength"]:g}' if kind == "launch" else
                            str(e.get("gachaName") or "スピナーガチャ") if kind == "gacha" else
                            f'TNT×{e["amount"]}' if kind == "tnt" else
@@ -160,6 +164,8 @@ class Arena:
     hold_seconds: int = 10
     hold_win: int = 1
     clear_after_success: bool = True
+    top_layer_win: bool = False
+    gravity_fill: bool = False
 
     def normalize(self) -> None:
         self.min_width = int(clamp(self.min_width, 3, 64, 3))
@@ -211,8 +217,12 @@ class GameEngine:
                 effect = {"kind": "none", "name": gift_name or "コイン集計", "amount": 0}
             source = str(payload.get("source") or "gift")
             allowed_user = str(effect.get("allowedGiftUserId") or "").strip().lstrip("@").casefold()
+            nested_user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
+            nested_sender = payload.get("sender") if isinstance(payload.get("sender"), dict) else {}
             sender_user = str(payload.get("userId") or payload.get("uniqueId") or payload.get("senderId") or
-                              payload.get("userName") or payload.get("senderUniqueId") or "").strip().lstrip("@").casefold()
+                              payload.get("userName") or payload.get("senderUniqueId") or
+                              nested_user.get("uniqueId") or nested_user.get("userId") or nested_user.get("id") or
+                              nested_sender.get("uniqueId") or nested_sender.get("userId") or nested_sender.get("id") or "").strip().lstrip("@").casefold()
             if source == "gift" and allowed_user and sender_user != allowed_user:
                 effect = {"kind": "none", "name": gift_name or "対象外ユーザー", "amount": 0,
                           "displayEnabled": False}
@@ -339,6 +349,10 @@ class GameEngine:
             commands = [f"lmsarena freeze {effect['seconds']}"]
         elif kind == "launch":
             commands = [f"lmsarena launch {effect['strength']:g}"]
+        elif kind == "darkness":
+            commands = [f"lmsarena darkness {effect['seconds']}"]
+        elif kind == "enderman":
+            commands = [f"lmsarena enderman {min(amount, 256)}"]
         return {"commands": commands, "win": win, "message": message, "resolved": effect}
 
     def sync_world(self, state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -375,7 +389,8 @@ class GameEngine:
             f"lmsarena generate world {a.x} {a.y} {a.z} {a.width} {a.depth} {a.height} "
             f"{a.frame_block} {a.fill_block} {a.hold_seconds} {a.hold_win} {str(a.clear_after_success).lower()} "
             f"{str(a.floor_enabled).lower()} {a.max_health} {a.floor_damage} {a.floor_penalty} "
-            f"{a.min_width} {a.max_width} {a.min_height} {a.max_height}",
+            f"{a.min_width} {a.max_width} {a.min_height} {a.max_height} "
+            f"{str(a.top_layer_win).lower()} {str(a.gravity_fill).lower()}",
         ]
 
     def settings_command(self) -> str:
@@ -383,7 +398,8 @@ class GameEngine:
         a.normalize()
         return (f"lmsarena settings {a.hold_seconds} {a.hold_win} {str(a.clear_after_success).lower()} "
                 f"{str(a.floor_enabled).lower()} {a.max_health} {a.floor_damage} {a.floor_penalty} "
-                f"{a.min_width} {a.max_width} {a.min_height} {a.max_height}")
+                f"{a.min_width} {a.max_width} {a.min_height} {a.max_height} "
+                f"{str(a.top_layer_win).lower()} {str(a.gravity_fill).lower()}")
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
@@ -400,6 +416,8 @@ class GameEngine:
                     "holdRemainingSeconds": s.get("holdRemainingSeconds", 0),
                     "defending": bool(s.get("defending")), "holdWin": self.arena.hold_win,
                     "clearAfterSuccess": self.arena.clear_after_success,
+                    "topLayerWin": s.get("topLayerWin", self.arena.top_layer_win),
+                    "gravityFill": s.get("gravityFill", self.arena.gravity_fill),
                     "shieldCharges": s.get("shieldCharges", 0),
                     "floorEnabled": s.get("floorEnabled", self.arena.floor_enabled),
                     "health": s.get("health", self.arena.max_health), "maxHealth": s.get("maxHealth", self.arena.max_health),
