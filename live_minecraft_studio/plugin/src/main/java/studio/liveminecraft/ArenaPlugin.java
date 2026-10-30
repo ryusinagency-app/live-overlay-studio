@@ -10,6 +10,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Firework;
+import org.bukkit.entity.Enderman;
+import org.bukkit.entity.FallingBlock;
 import org.bukkit.event.*;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
@@ -25,6 +27,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 import org.bukkit.util.Transformation;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +47,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     private int hold = 10, win = 1, shield = 0, rounds = 0, cursor = 0;
     private long tick = 0, sweep = 0, fullSweep = -1;
     private boolean clear = true, ready = false, started = false;
+    private boolean topLayerWin = false, gravityFill = false;
     private boolean floorEnabled = false;
     private boolean daylightFixed = true, clearWeather = true;
     private int floorMax = 100, floorHealth = 100, floorDamage = 10, floorPenalty = 1;
@@ -78,7 +83,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
 
     private boolean sameWorld(Block b) { return world != null && world.equals(b.getWorld()); }
     private boolean inside(Block b) { return bounds != null && sameWorld(b) && bounds.inside(b.getX(), b.getY(), b.getZ()); }
-    private boolean protectedBlock(Block b) { return bounds != null && sameWorld(b) && bounds.frame(b.getX(), b.getY(), b.getZ()); }
+    private boolean protectedBlock(Block b) { return bounds != null && sameWorld(b) && (bounds.frame(b.getX(), b.getY(), b.getZ()) || b.getType()==Material.BARRIER); }
     private Block block(int i) { return world.getBlockAt(bounds.px(i), bounds.py(i), bounds.pz(i)); }
     private void changed(Block b) {
         if (!inside(b)) return;
@@ -91,7 +96,8 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
 
     private void configure(String[] a) {
         // configure world x y z width depth height frame fill hold win clear
-        if (a.length != 17 && a.length != 21) throw new IllegalArgumentException("Invalid arena settings");
+        if (a.length != 17 && a.length != 21 && a.length != 23) throw new IllegalArgumentException("Invalid arena settings");
+        Bounds oldBounds = bounds; World oldWorld = world; Material oldFill = fill;
         World next = Bukkit.getWorld(a[1]);
         if (next == null) throw new IllegalArgumentException("World not found: " + a[1]);
         Bounds b = new Bounds(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4]),
@@ -104,13 +110,28 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         if (seconds < 1 || seconds > 3600 || award < 0 || award > 1000000) throw new IllegalArgumentException("Invalid countdown or WIN");
         int maximum = Integer.parseInt(a[14]), damage = Integer.parseInt(a[15]), penalty = Integer.parseInt(a[16]);
         if (maximum < 1 || maximum > 1000000 || damage < 1 || damage > 1000000 || penalty < 0 || penalty > 1000000) throw new IllegalArgumentException("Invalid floor settings");
-        int minW = a.length == 21 ? Integer.parseInt(a[17]) : 3, maxW = a.length == 21 ? Integer.parseInt(a[18]) : 64;
-        int minH = a.length == 21 ? Integer.parseInt(a[19]) : 3, maxH = a.length == 21 ? Integer.parseInt(a[20]) : 64;
+        int minW = a.length >= 21 ? Integer.parseInt(a[17]) : 3, maxW = a.length >= 21 ? Integer.parseInt(a[18]) : 64;
+        int minH = a.length >= 21 ? Integer.parseInt(a[19]) : 3, maxH = a.length >= 21 ? Integer.parseInt(a[20]) : 64;
         if (minW < 3 || maxW > 64 || minW > maxW || minH < 3 || maxH > 64 || minH > maxH) throw new IllegalArgumentException("Invalid size limits (3-64)");
         world = next; bounds = b; frame = f; fill = v; hold = seconds; win = award; clear = Boolean.parseBoolean(a[12]);
         floorEnabled = Boolean.parseBoolean(a[13]); floorMax = maximum; floorHealth = maximum; floorDamage = damage; floorPenalty = penalty;
         minWidth = minW; maxWidth = maxW; minHeight = minH; maxHeight = maxH; generation++; resizeRevision = UUID.randomUUID().toString();
+        topLayerWin = a.length >= 23 && Boolean.parseBoolean(a[21]);
+        gravityFill = a.length >= 23 && Boolean.parseBoolean(a[22]);
         edits.clear(); filled.clear(); cursor = 0; ready = false; started = true; shield = 0; round.reset(); fullSweep = -1;
+        if (oldBounds != null && oldWorld != null) removeOldArena(oldWorld, oldBounds, b, oldFill);
+    }
+
+    private void removeOldArena(World oldWorld, Bounds old, Bounds replacement, Material previousFill) {
+        for (int y=old.y()-1; y<old.y()+old.height(); y++)
+            for (int z=old.z()-1; z<=old.z()+old.depth(); z++)
+                for (int x=old.x()-1; x<=old.x()+old.width(); x++)
+                    if ((old.frame(x,y,z) && (!oldWorld.equals(world) || !replacement.frame(x,y,z))) ||
+                        (old.inside(x,y,z) && (!oldWorld.equals(world) || !replacement.inside(x,y,z)) &&
+                         oldWorld.getBlockAt(x,y,z).getType()==previousFill)) {
+                        Block target=oldWorld.getBlockAt(x,y,z);
+                        edits.add(() -> target.setType(Material.AIR,false));
+                    }
     }
 
     private void build() {
@@ -223,7 +244,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     }
 
     private void settings(String[] a) {
-        if (a.length != 12) throw new IllegalArgumentException("Invalid live settings");
+        if (a.length != 12 && a.length != 14) throw new IllegalArgumentException("Invalid live settings");
         int nextHold = Integer.parseInt(a[1]), nextWin = Integer.parseInt(a[2]);
         int maximum = Integer.parseInt(a[5]), damage = Integer.parseInt(a[6]), penalty = Integer.parseInt(a[7]);
         int minW = Integer.parseInt(a[8]), maxW = Integer.parseInt(a[9]), minH = Integer.parseInt(a[10]), maxH = Integer.parseInt(a[11]);
@@ -232,8 +253,11 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         round.rebase(tick,hold,nextHold); hold = nextHold; win = nextWin; clear = Boolean.parseBoolean(a[3]); floorEnabled = Boolean.parseBoolean(a[4]);
         floorHealth = Math.min(floorHealth,maximum); floorMax = maximum; floorDamage = damage; floorPenalty = penalty;
         minWidth = minW; maxWidth = maxW; minHeight = minH; maxHeight = maxH;
-        String[] saved = Arrays.copyOf(getConfig().getString("arena").split(" "),21);
-        System.arraycopy(a,1,saved,10,11); getConfig().set("arena",String.join(" ",saved)); saveConfig();
+        if (a.length >= 14) { topLayerWin=Boolean.parseBoolean(a[12]); gravityFill=Boolean.parseBoolean(a[13]); }
+        String[] saved = Arrays.copyOf(getConfig().getString("arena").split(" "),23);
+        if (saved[21] == null) saved[21] = "false";
+        if (saved[22] == null) saved[22] = "false";
+        System.arraycopy(a,1,saved,10,a.length-1); getConfig().set("arena",String.join(" ",saved)); saveConfig();
     }
 
     private void resize(String axis, int delta) {
@@ -339,6 +363,36 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         }.runTaskTimer(this, 0, 1);
     }
 
+    private boolean topLayerComplete() {
+        int y = bounds.y() + bounds.height() - 1;
+        for (int z=bounds.z(); z<bounds.z()+bounds.depth(); z++)
+            for (int x=bounds.x(); x<bounds.x()+bounds.width(); x++)
+                if (world.getBlockAt(x,y,z).getType()!=fill) return false;
+        return true;
+    }
+
+    private void rescueBuriedPlayers() {
+        for (Player p : world.getPlayers()) {
+            Location at=p.getLocation();
+            if (!bounds.inside(at.getBlockX(),at.getBlockY(),at.getBlockZ())) continue;
+            if (at.getBlock().getType()!=fill && at.clone().add(0,1,0).getBlock().getType()!=fill) continue;
+            for (int y=Math.max(bounds.y(),at.getBlockY()+1); y<=bounds.y()+bounds.height()+2; y++) {
+                Block feet=world.getBlockAt(at.getBlockX(),y,at.getBlockZ());
+                Block head=world.getBlockAt(at.getBlockX(),y+1,at.getBlockZ());
+                if (feet.isEmpty() && head.isEmpty()) {
+                    Location safe=new Location(world,at.getBlockX()+.5,y,at.getBlockZ()+.5,at.getYaw(),at.getPitch());
+                    p.teleport(safe); p.setFallDistance(0); break;
+                }
+            }
+        }
+    }
+
+    private void dropFill(Block target) {
+        if (!inside(target)) return;
+        FallingBlock falling=world.spawnFallingBlock(target.getLocation().add(.5,.05,.5),fill.createBlockData());
+        falling.setDropItem(false); falling.setCancelDrop(true); falling.addScoreboardTag("lms-fill");
+    }
+
     private void update() {
         tick++;
         if (tick % 20 == 0) {
@@ -349,6 +403,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             }
         }
         if (!started || bounds == null) return;
+        if (tick % 5 == 0) rescueBuriedPlayers();
         // Bound work per tick; event tracking provides immediate countdown cancellation.
         for (int n = 0; n < 2048 && !edits.isEmpty(); n++) edits.removeFirst().run();
         if (!edits.isEmpty()) return;
@@ -358,7 +413,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             if (cursor >= capacity) { cursor = 0; sweep++; ready = true; }
         }
         if (!ready) return;
-        boolean full = filled.cardinality() == capacity;
+        boolean full = topLayerWin ? topLayerComplete() : filled.cardinality() == capacity;
         // Verify a complete sweep AFTER the countdown expires before granting a win.
         if (full && round.counting() && round.remaining(tick) == 0 && fullSweep < 0) fullSweep = sweep;
         if (!full) fullSweep = -1;
@@ -393,9 +448,58 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         s.put("shieldCharges", shield); s.put("completedRounds", rounds); s.put("wins", new ArrayList<>(wins));
         s.put("floorEnabled", floorEnabled); s.put("health", floorHealth); s.put("maxHealth", floorMax);
         s.put("bombCharges", bombs); s.put("chainCharges", chains); s.put("holdSeconds", hold);
+        s.put("topLayerWin", topLayerWin); s.put("gravityFill", gravityFill);
         s.put("width", bounds == null ? 0 : bounds.width()); s.put("depth", bounds == null ? 0 : bounds.depth()); s.put("height", bounds == null ? 0 : bounds.height());
         s.put("resizeRevision", resizeRevision);
         return s;
+    }
+
+    private void cage(Player p, int seconds) {
+        Location c=p.getLocation().getBlock().getLocation(); List<Block> placed=new ArrayList<>();
+        for (int y=-1;y<=2;y++) for(int x=-1;x<=1;x++) for(int z=-1;z<=1;z++) {
+            if (Math.abs(x)==1 || Math.abs(z)==1 || y==-1 || y==2) {
+                Block b=c.clone().add(x,y,z).getBlock();
+                if (b.isEmpty()) { b.setType(Material.BARRIER,false); placed.add(b); }
+            }
+        }
+        p.teleport(c.clone().add(.5,.05,.5));
+        long until=tick+seconds*20L; frozen.put(p.getUniqueId(),Math.max(until,frozen.getOrDefault(p.getUniqueId(),0L)));
+        getServer().getScheduler().runTaskLater(this,()->placed.forEach(b->{if(b.getType()==Material.BARRIER)b.setType(Material.AIR,false);}),seconds*20L);
+    }
+
+    private void rocket(Player p, double strength) {
+        boolean allowed=p.getAllowFlight(), flying=p.isFlying(); p.setFlying(false); p.setAllowFlight(false);
+        TNTPrimed visual=world.spawn(p.getLocation(),TNTPrimed.class); visual.setFuseTicks(35); visual.setYield(0); visual.addScoreboardTag("lms-launch");
+        p.setVelocity(new Vector(0,Math.max(1.2,strength),0));
+        getServer().getScheduler().runTaskLater(this,()->{if(p.isOnline()){p.setAllowFlight(allowed);p.setFlying(flying&&allowed);}},45L);
+    }
+
+    private void endermanRaid(int amount) {
+        List<Block> candidates=new ArrayList<>();
+        for(int i=0;i<bounds.capacity();i++) if(block(i).getType()==fill)candidates.add(block(i));
+        Collections.shuffle(candidates,random);
+        for(int i=0;i<Math.min(amount,candidates.size());i++) {
+            Block target=candidates.get(i); target.setType(Material.AIR,false); changed(target);
+            Enderman mob=world.spawn(target.getLocation().add(.5,1,.5),Enderman.class);
+            mob.setCarriedBlock(fill.createBlockData()); mob.addScoreboardTag("lms-enderman");
+            getServer().getScheduler().runTaskLater(this,mob::remove,60L);
+        }
+    }
+
+    private void spawnArenaTnt(String type, int fuse) {
+        Location at=new Location(world,bounds.x()+.5+random.nextInt(bounds.width()),bounds.y()+bounds.height()+1.2,bounds.z()+.5+random.nextInt(bounds.depth()));
+        TNTPrimed tnt=world.spawn(at,TNTPrimed.class); tnt.setVelocity(new Vector(0,0,0)); tnt.setFuseTicks(1200);
+        tnt.setYield(type.equals("giant")?12f:3f); tnt.addScoreboardTag("lms-arena"); tnt.addScoreboardTag("lms-"+type);
+        if(type.equals("giant"))showGiantTnt(tnt,1200);
+        new BukkitRunnable(){public void run(){
+            if(!tnt.isValid()){cancel();return;}
+            Location here=tnt.getLocation();
+            double x=Math.clamp(here.getX(),bounds.x()+.35,bounds.x()+bounds.width()-.35);
+            double z=Math.clamp(here.getZ(),bounds.z()+.35,bounds.z()+bounds.depth()-.35);
+            if(x!=here.getX() || z!=here.getZ()) tnt.teleport(new Location(world,x,here.getY(),z,here.getYaw(),here.getPitch()));
+            Vector velocity=tnt.getVelocity(); tnt.setVelocity(new Vector(0,velocity.getY(),0));
+            if(tnt.isOnGround() || tnt.getLocation().getY()<=bounds.y()+.05){tnt.setFuseTicks(fuse);cancel();}
+        }}.runTaskTimer(this,1,1);
     }
 
     @Override public boolean onCommand(CommandSender sender, Command cmd, String label, String[] a) {
@@ -431,16 +535,18 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                     resizeRevision = UUID.randomUUID().toString();
                 }
                 else if (a[0].equals("freeze")) {
-                    long until = tick + Math.clamp(Integer.parseInt(a[1]),1,600) * 20L;
-                    for (Player p : world.getPlayers()) frozen.put(p.getUniqueId(), Math.max(until, frozen.getOrDefault(p.getUniqueId(),0L)));
+                    int seconds=Math.clamp(Integer.parseInt(a[1]),1,600);
+                    for (Player p : world.getPlayers()) cage(p,seconds);
                 }
                 else if (a[0].equals("launch")) {
                     double strength = Math.clamp(Double.parseDouble(a[1]), .1, 10);
-                    for (Player p : world.getPlayers()) {
-                        TNTPrimed visual = world.spawn(p.getLocation(), TNTPrimed.class); visual.setFuseTicks(1); visual.setYield(0); visual.addScoreboardTag("lms-launch");
-                        p.setVelocity(new Vector(0,strength,0));
-                    }
+                    for (Player p : world.getPlayers()) rocket(p,strength);
                 }
+                else if (a[0].equals("darkness")) {
+                    int seconds=Math.clamp(Integer.parseInt(a[1]),1,600);
+                    for(Player p:world.getPlayers())p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,seconds*20,0,false,false,true));
+                }
+                else if (a[0].equals("enderman")) endermanRaid(Math.clamp(Integer.parseInt(a[1]),1,256));
                 else if (a[0].equals("announce")) {
                     Map<?,?> text = json.fromJson(new String(Base64.getDecoder().decode(a[1]), StandardCharsets.UTF_8), Map.class);
                     int duration = Math.clamp(((Number)text.get("duration")).intValue(),1,30);
@@ -462,14 +568,9 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                 else if (a[0].equals("tnt")) {
                     int count = Math.max(0, Math.min(256, Integer.parseInt(a[1])));
                     for (int i = 0; i < count; i++) {
-                        Location at = new Location(world, bounds.x() + .5 + random.nextInt(bounds.width()), bounds.y() + bounds.height() + 1, bounds.z() + .5 + random.nextInt(bounds.depth()));
-                        TNTPrimed tnt = world.spawn(at, TNTPrimed.class);
                         String type = a.length > 2 ? a[2] : "normal";
                         int fuse = type.equals("timed") && a.length > 3 ? Math.clamp(Integer.parseInt(a[3]),20,1200) : 60;
-                        tnt.setFuseTicks(fuse);
-                        tnt.setYield(type.equals("giant") ? 12f : 3f);
-                        tnt.addScoreboardTag("lms-arena"); tnt.addScoreboardTag("lms-" + type);
-                        if (type.equals("giant")) showGiantTnt(tnt, fuse);
+                        spawnArenaTnt(type,fuse);
                     }
                 } else throw new IllegalArgumentException("Unknown bridge command");
             }
@@ -488,6 +589,12 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     public void protectPlace(BlockPlaceEvent e) {
         Block b = e.getBlock();
         if (protectedBlock(b) || aboveArena(b)) e.setCancelled(true);
+        else if (inside(b) && gravityFill) {
+            e.setCancelled(true);
+            // Wait until Bukkit has rolled the cancelled placement back, otherwise
+            // the falling entity can collide with the temporary placed block.
+            getServer().getScheduler().runTask(this, () -> dropFill(b));
+        }
         else if (inside(b)) b.setType(fill, false);
     }
     @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
@@ -542,8 +649,8 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             if (chains <= 0) { p.sendMessage("§e連鎖ブロックはギフトで補充できます"); return; }
             chains--; saveItems(); consumeSpecial(p); chainFrom(target); return;
         }
-        target.setType(fill, false);
-        changed(target);
+        if (gravityFill) dropFill(target);
+        else { target.setType(fill, false); changed(target); }
         if (p.getGameMode() != GameMode.CREATIVE) {
             item.setAmount(item.getAmount() - 1);
             p.getInventory().setItemInMainHand(item);
@@ -606,6 +713,10 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                         Block b = world.getBlockAt(x,y,z);
                         if (b.getLocation().add(.5,.5,.5).distanceSquared(center) <= radius*radius && !e.blockList().contains(b)) e.blockList().add(b);
                     }
+            int floorX=Math.clamp(center.getBlockX(),bounds.x(),bounds.x()+bounds.width()-1);
+            int floorZ=Math.clamp(center.getBlockZ(),bounds.z(),bounds.z()+bounds.depth()-1);
+            if(center.getY()<=bounds.y()+1.2 && world.getBlockAt(floorX,bounds.y(),floorZ).isEmpty())
+                e.blockList().add(world.getBlockAt(floorX,bounds.y()-1,floorZ));
         }
         explosion(e.blockList(), tags.contains("lms-arena"), e.getEntity() instanceof TNTPrimed, tags.contains("lms-giant") ? 8 : 1);
     }
@@ -620,7 +731,15 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void fade(BlockFadeEvent e) { if (protectedBlock(e.getBlock())) e.setCancelled(true); }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
-    public void entityChange(EntityChangeBlockEvent e) { if (protectedBlock(e.getBlock())) e.setCancelled(true); }
+    public void entityChange(EntityChangeBlockEvent e) {
+        if (e.getEntity().getScoreboardTags().contains("lms-fill")) {
+            e.setCancelled(true);
+            Block landing=e.getBlock();
+            if (inside(landing)) { landing.setType(fill,false); changed(landing); }
+            e.getEntity().remove(); return;
+        }
+        if (protectedBlock(e.getBlock())) e.setCancelled(true);
+    }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void flow(BlockFromToEvent e) { if (protectedBlock(e.getToBlock())) e.setCancelled(true); }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
