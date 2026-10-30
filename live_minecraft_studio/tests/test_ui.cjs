@@ -10,15 +10,16 @@ window.eval(fs.readFileSync(path.join(root,'app.js'),'utf8'));
 setImmediate(async()=>{
   const d=window.document;
   if(d.querySelectorAll('.effectCard').length!==1)throw Error('effect cards were not rendered');
+  if(d.querySelectorAll('.effectTestButton').length!==1)throw Error('per-effect test button missing');
   d.getElementById('addGiftEffect').click();await new Promise(r=>setImmediate(r));
   if(d.querySelectorAll('.giftChoice').length!==1)throw Error('gift catalog was not rendered');
   d.querySelector('.giftChoice').click();
   if(d.querySelectorAll('.effectCard').length!==2)throw Error('selected gift was not added');
   const countdown=d.getElementById('holdSeconds');if(countdown.value!=='10')throw Error('hold seconds not rendered');
   if(d.getElementById('successText').value!=='CUSTOM WIN!')throw Error('custom WIN text not rendered');
-  if(!html.includes('countdown_overlay.html'))throw Error('large countdown overlay URL missing');
-  const overlay=fs.readFileSync(path.join(root,'countdown_overlay.html'),'utf8');
-  if(!overlay.includes("s.overlay?.successText||'WIN！'"))throw Error('custom WIN text is not used by overlay');
+  if(html.includes('countdown_overlay.html'))throw Error('obsolete countdown overlay URL remains');
+  const effectsOverlay=fs.readFileSync(path.join(root,'effects_overlay.html'),'utf8');
+  if(effectsOverlay.includes('"現在 "+e.effectiveLabel'))throw Error('unnecessary current prefix remains');
   console.log('PASS UI tabs, settings, effect cards and gift catalog picker');
 });
 

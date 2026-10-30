@@ -1,7 +1,7 @@
 :root{color-scheme:dark;--bg:#0c0e13;--card:#171a22;--line:#303542;--red:#ef334e;--green:#38d17b;--text:#f4f5f8;--muted:#aab0bf}
 [hidden]{display:none!important}
 .effectCard{display:block!important;border:1px solid var(--line);border-radius:14px;padding:16px!important;margin:14px 0;transition:box-shadow .3s,border-color .3s}
-.effectMain{display:grid;grid-template-columns:64px 1fr 1fr auto;align-items:end;gap:12px}
+.effectMain{display:grid;grid-template-columns:64px 1fr 1fr auto auto;align-items:end;gap:12px}
 .effectSettings{margin-top:14px;grid-template-columns:repeat(3,minmax(0,1fr))}
 .effectCard.fever{border-color:#ffd34e;box-shadow:0 0 18px #ffb02a55}
 .effectiveAmount{display:block;margin-top:12px;color:#91e9b5}.effectCard.fever .effectiveAmount{color:#ffd34e}

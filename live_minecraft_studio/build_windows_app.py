@@ -18,7 +18,6 @@ PyInstaller.__main__.run([
     "--add-data", f"{root / 'effects_overlay.html'};.",
     "--add-data", f"{root / 'fever_overlay.html'};.",
     "--add-data", f"{root / 'event_overlay.html'};.",
-    "--add-data", f"{root / 'countdown_overlay.html'};.",
     "--add-data", f"{root / 'app.js'};.",
     "--add-data", f"{root / 'style.css'};.",
     "--add-data", f"{bridge};.",

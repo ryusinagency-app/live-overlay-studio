@@ -6,6 +6,7 @@ from queue import Queue, Empty
 from threading import Thread, Lock
 from urllib.parse import urlparse
 import json
+import base64
 import os
 import secrets
 import time
@@ -17,7 +18,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 STATE_FILE = DATA_DIR / "state.json"
@@ -396,6 +397,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"ok": True, "software": software, "detail": detail})
             if path == "/api/arena/build":
                 commands = ENGINE.frame_commands()
+                success = base64.b64encode(STATE["overlay"]["successText"].encode("utf-8")).decode("ascii")
+                commands.append(f"lmsarena success_text {success}")
                 with STATE_LOCK:
                     rcon = dict(STATE["rcon"])
                 with RconClient(rcon["host"], int(rcon["port"]), rcon["password"]) as client:
@@ -479,8 +482,15 @@ class Handler(SimpleHTTPRequestHandler):
             if isinstance(body.get("effects"), dict):
                 STATE["effects"] = body["effects"]
         save_state()
-        if isinstance(body.get("arena"), dict) and ENGINE.world_state.get("active"):
-            queue_commands([ENGINE.settings_command()])
+        if ENGINE.world_state.get("active"):
+            commands = []
+            if isinstance(body.get("arena"), dict):
+                commands.append(ENGINE.settings_command())
+            if isinstance(body.get("overlay"), dict):
+                encoded = base64.b64encode(STATE["overlay"]["successText"].encode("utf-8")).decode("ascii")
+                commands.append(f"lmsarena success_text {encoded}")
+            if commands:
+                queue_commands(commands)
 
 
 def make_server():

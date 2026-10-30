@@ -57,6 +57,12 @@ class EngineTests(unittest.TestCase):
         self.assertEqual("lmsarena fill_percent 50", percent["commands"][0])
         self.assertEqual(0, e.snapshot()["arena"]["filled"])
 
+    def test_fill_all_uses_safe_server_effect(self):
+        e = self.engine()
+        result = e.receive({"eventId": "all", "giftId": "all"},
+                           {"all": {"kind": "fill_all", "amount": 1}})
+        self.assertEqual("lmsarena fill_all", result["commands"][0])
+
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))

@@ -20,8 +20,7 @@ function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier
  $('prepareLocalServer').disabled=running;$('startLocalServer').disabled=!prepared||running;$('stopLocalServer').disabled=!running;
  $('specialStock').textContent=`全埋めボム ${a.bombCharges||0}回 ／ 連鎖ブロック ${a.chainCharges||0}回 ／ 現在の枠 ${a.actualWidth||a.width}×${a.actualDepth||a.depth}×${a.actualHeight||a.height} ／ 規定 ${a.holdSeconds}秒`;
  if(!workingEffects){workingEffects=structuredClone(c.effects);renderEffectCards()}
- document.querySelectorAll('.effectCard').forEach(card=>{const p=s.effectPreviews?.[card.dataset.id];if(p){card.classList.toggle('fever',p.feverApplied);card.querySelector('.effectiveAmount').textContent='現在：'+p.effectiveLabel}});
- $('testButtons').replaceChildren(...Object.entries(c.effects).map(([id,e])=>{const b=document.createElement('button');b.textContent=e.name||id;b.onclick=()=>test(id);return b}));
+ document.querySelectorAll('.effectCard').forEach(card=>{const p=s.effectPreviews?.[card.dataset.id];if(p){card.classList.toggle('fever',p.feverApplied);card.querySelector('.effectiveAmount').textContent=p.effectiveLabel}});
 }
 const kindOptions=[['fill','指定個数を埋める'],['fill_layers','空きのある下段から指定段数を埋める'],['fill_percent','枠全体の指定割合分を追加で埋める'],['fill_all','全埋め'],['clear_all','全消し'],['tnt','TNT'],['repair','底の耐久回復'],['shield','シールド'],['bomb','全埋めボム補充'],['chain','連鎖ブロック補充'],['resize','枠サイズ変更'],['freeze','移動停止'],['launch','上へ吹き飛ばす'],['countdown','規定カウント変更'],['clear','指定個数を消去']];
 function field(label,type,v,key,options){
@@ -45,8 +44,9 @@ function renderEffectCards(){
   const main=document.createElement('div');main.className='effectMain';
   const img=document.createElement('img');img.src=e.giftImageUrl||'';img.alt='';
   const del=document.createElement('button');del.className='danger';del.textContent='削除';del.onclick=()=>{collectEffectCards();delete workingEffects[id];renderEffectCards()};
-  main.append(img,field('表示名','text',e.name||e.giftName||id,'name'),field('効果','select',e.kind||'fill','kind',kindOptions),del);
-  const amount=document.createElement('strong');amount.className='effectiveAmount';amount.textContent='現在：保存後に反映';
+  const tryButton=document.createElement('button');tryButton.className='accent effectTestButton';tryButton.textContent='この効果をテスト';tryButton.onclick=()=>testConfigured(id);
+  main.append(img,field('表示名','text',e.name||e.giftName||id,'name'),field('効果','select',e.kind||'fill','kind',kindOptions),tryButton,del);
+  const amount=document.createElement('strong');amount.className='effectiveAmount';amount.textContent='保存後に反映';
   const settings=document.createElement('div');settings.className='form effectSettings';
   function add(label,type,key,fallback,kinds,options){const l=field(label,type,e[key]??fallback,key,options);if(kinds)l.dataset.kinds=kinds.join(',');settings.append(l);}
   add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
@@ -76,6 +76,7 @@ function renderGiftCatalog(){const q=$('giftSearch').value.trim().toLowerCase();
 async function refresh(){try{render(await api('/api/state'))}catch(e){$('connection').textContent='停止';}}
 async function save(body,message='保存しました'){try{const r=await api('/api/config',body);document.querySelectorAll('[data-dirty="1"]').forEach(el=>delete el.dataset.dirty);render(r.state);toast(message)}catch(e){toast(e.message,true)}}
 async function test(id){try{const r=await api('/api/test-effect',{giftId:id,coins:0});toast(r.message||'テストを開始しました');refresh()}catch(e){toast(e.message,true)}}
+async function testConfigured(id){collectEffectCards();try{const saved=await api('/api/config',{effects:workingEffects});document.querySelectorAll('[data-dirty="1"]').forEach(el=>delete el.dataset.dirty);render(saved.state);const r=await api('/api/test-effect',{giftId:id,coins:0});toast(r.message||'テストを開始しました');refresh()}catch(e){toast(e.message,true)}}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-page]').forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab)});
 document.addEventListener('input',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
 document.addEventListener('change',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
