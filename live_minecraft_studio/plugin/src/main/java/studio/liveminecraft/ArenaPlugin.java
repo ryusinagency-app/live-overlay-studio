@@ -44,6 +44,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     private long tick = 0, sweep = 0, fullSweep = -1;
     private boolean clear = true, ready = false, started = false;
     private boolean floorEnabled = false;
+    private boolean daylightFixed = true, clearWeather = true;
     private int floorMax = 100, floorHealth = 100, floorDamage = 10, floorPenalty = 1;
     private final Random random = new Random();
     private int minWidth = 3, maxWidth = 64, minHeight = 3, maxHeight = 64;
@@ -59,6 +60,8 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         itemKey = new NamespacedKey(this, "special-item");
         bombs = getConfig().getInt("bombs", 0); chains = getConfig().getInt("chains", 0); spread = getConfig().getInt("spread", 27);
         successText = getConfig().getString("successText", "WIN！");
+        daylightFixed = getConfig().getBoolean("daylightFixed", true);
+        clearWeather = getConfig().getBoolean("clearWeather", true);
         Objects.requireNonNull(getCommand("lmsarena")).setExecutor(this);
         String pending = getConfig().getString("pendingWins", "[]");
         List<Map<String, Object>> restored = json.fromJson(pending, new TypeToken<List<Map<String, Object>>>(){}.getType());
@@ -338,7 +341,13 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
 
     private void update() {
         tick++;
-        if (tick % 20 == 0) supplyItems();
+        if (tick % 20 == 0) {
+            supplyItems();
+            if (world != null && daylightFixed) world.setTime(6000);
+            if (world != null && clearWeather && (world.hasStorm() || world.isThundering())) {
+                world.setStorm(false); world.setThundering(false); world.setWeatherDuration(0); world.setThunderDuration(0);
+            }
+        }
         if (!started || bounds == null) return;
         // Bound work per tick; event tracking provides immediate countdown cancellation.
         for (int n = 0; n < 2048 && !edits.isEmpty(); n++) edits.removeFirst().run();
@@ -443,6 +452,12 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                     if (successText.isEmpty()) successText = "WIN！";
                     if (successText.length() > 80) successText = successText.substring(0, 80);
                     getConfig().set("successText", successText); saveConfig();
+                }
+                else if (a[0].equals("environment")) {
+                    daylightFixed = Boolean.parseBoolean(a[1]); clearWeather = Boolean.parseBoolean(a[2]);
+                    getConfig().set("daylightFixed", daylightFixed); getConfig().set("clearWeather", clearWeather); saveConfig();
+                    if (daylightFixed) world.setTime(6000);
+                    if (clearWeather) { world.setStorm(false); world.setThundering(false); world.setWeatherDuration(0); world.setThunderDuration(0); }
                 }
                 else if (a[0].equals("tnt")) {
                     int count = Math.max(0, Math.min(256, Integer.parseInt(a[1])));

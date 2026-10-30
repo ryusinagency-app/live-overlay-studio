@@ -30,7 +30,8 @@ DEFAULT = {
               "frameBlock": "minecraft:glass", "fillBlock": "minecraft:diamond_block", "maxHealth": 100,
               "floorEnabled": False, "floorDamage": 10, "floorPenalty": 1,
               "minWidth": 3, "maxWidth": 64, "minHeight": 3, "maxHeight": 64,
-              "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True},
+              "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True,
+              "daylightFixed": True, "clearWeather": True},
     "overlay": {"successText": "WIN！"},
     "multiplier": {"threshold": 5000, "durationSeconds": 300, "multiplier": 2,
                    "applyFill": True, "applyTnt": True, "applyWin": True, "applyRepair": True,
@@ -399,6 +400,7 @@ class Handler(SimpleHTTPRequestHandler):
                 commands = ENGINE.frame_commands()
                 success = base64.b64encode(STATE["overlay"]["successText"].encode("utf-8")).decode("ascii")
                 commands.append(f"lmsarena success_text {success}")
+                commands.append(f"lmsarena environment {str(STATE['arena'].get('daylightFixed', True)).lower()} {str(STATE['arena'].get('clearWeather', True)).lower()}")
                 with STATE_LOCK:
                     rcon = dict(STATE["rcon"])
                 with RconClient(rcon["host"], int(rcon["port"]), rcon["password"]) as client:
@@ -486,6 +488,7 @@ class Handler(SimpleHTTPRequestHandler):
             commands = []
             if isinstance(body.get("arena"), dict):
                 commands.append(ENGINE.settings_command())
+                commands.append(f"lmsarena environment {str(STATE['arena'].get('daylightFixed', True)).lower()} {str(STATE['arena'].get('clearWeather', True)).lower()}")
             if isinstance(body.get("overlay"), dict):
                 encoded = base64.b64encode(STATE["overlay"]["successText"].encode("utf-8")).decode("ascii")
                 commands.append(f"lmsarena success_text {encoded}")
