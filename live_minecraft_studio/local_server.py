@@ -19,7 +19,7 @@ from rcon import RconClient
 PAPER_VERSION = "1.21.1"
 PAPER_API = f"https://fill.papermc.io/v3/projects/paper/versions/{PAPER_VERSION}/builds"
 JAVA_21_URL = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
-APP_USER_AGENT = "LiveMinecraftStudio/0.4.2 (https://github.com/ryusinagency-app/live-overlay-studio)"
+APP_USER_AGENT = "LiveMinecraftStudio/0.4.3 (https://github.com/ryusinagency-app/live-overlay-studio)"
 
 
 class LocalMinecraftServer:
