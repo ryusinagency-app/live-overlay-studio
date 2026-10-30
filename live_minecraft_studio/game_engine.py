@@ -20,6 +20,7 @@ def clamp(value: Any, low: float, high: float, fallback: float) -> float:
 
 @dataclass
 class MultiplierState:
+    enabled: bool = True
     threshold: int = 5000
     duration_seconds: int = 300
     multiplier: float = 2.0
@@ -47,11 +48,15 @@ class MultiplierState:
             self.bonus = 0
 
     def active(self, now: float | None = None) -> bool:
+        if not self.enabled:
+            return False
         now = time() if now is None else now
         self._advance(now)
         return now < self.active_until
 
     def add_coins(self, coins: int, now: float | None = None) -> int:
+        if not self.enabled:
+            return 0
         now = time() if now is None else now
         self._advance(now)
         self.total_coins += max(0, int(coins))
@@ -82,6 +87,7 @@ class MultiplierState:
         now = time() if now is None else now
         active = self.active(now)
         return {
+            "enabled": self.enabled,
             "threshold": self.threshold, "durationSeconds": self.duration_seconds,
             "multiplier": min(100, self.multiplier + self.bonus) if active else self.multiplier,
             "baseMultiplier": self.multiplier, "totalCoins": self.total_coins,

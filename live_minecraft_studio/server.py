@@ -36,13 +36,21 @@ DEFAULT = {
               "minWidth": 3, "maxWidth": 64, "minHeight": 3, "maxHeight": 64,
               "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True,
               "daylightFixed": True, "clearWeather": True},
-    "overlay": {"successText": "WIN！", "effectListStyle": {
+    "overlay": {"successText": "WIN！",
+        "arenaStyle": {"width": 620, "padding": 18, "borderRadius": 20, "backgroundOpacity": 88,
+                       "titleFontSize": 26, "textFontSize": 16, "backgroundColor": "#080a0f",
+                       "borderColor": "#ef334e", "textColor": "#ffffff", "accentColor": "#35bc75"},
+        "feverStyle": {"width": 600, "padding": 22, "borderRadius": 18, "backgroundOpacity": 91,
+                        "titleFontSize": 40, "timerFontSize": 42, "textFontSize": 22,
+                        "backgroundColor": "#111521", "borderColor": "#ffd34e",
+                        "textColor": "#ffffff", "accentColor": "#ffd34e"},
+        "effectListStyle": {
         "columns": 5, "cardWidth": 180, "cardHeight": 180, "gap": 8, "borderRadius": 14,
         "backgroundColor": "#61294f", "borderColor": "#ef334e", "textColor": "#ffffff",
         "accentColor": "#a4f4bf", "feverGlowColor": "#ffd34e", "nameFontSize": 18, "effectFontSize": 20,
         "descriptionFontSize": 13, "imageSize": 74
     }},
-    "multiplier": {"threshold": 5000, "durationSeconds": 300, "multiplier": 2,
+    "multiplier": {"enabled": True, "waitingText": "次のフィーバーまで", "threshold": 5000, "durationSeconds": 300, "multiplier": 2,
                    "applyFill": True, "applyTnt": True, "applyWin": True, "applyRepair": True,
                    "applyItems": True, "applyResize": False, "applyCountdown": False, "applyPlayer": False, "stackingMode": "extend"},
     "commandDelayMs": 35,
@@ -128,7 +136,8 @@ ENGINE = GameEngine(
           min_height=int(arena_config.get("minHeight", 3)), max_height=int(arena_config.get("maxHeight", 64)),
           hold_seconds=int(arena_config.get("holdSeconds", 10)), hold_win=int(arena_config.get("holdWin", 1)),
           clear_after_success=arena_config.get("clearAfterSuccess", True) is True),
-    MultiplierState(threshold=int(multiplier_config["threshold"]),
+    MultiplierState(enabled=multiplier_config.get("enabled", True) is True,
+                    threshold=int(multiplier_config["threshold"]),
                     duration_seconds=int(multiplier_config["durationSeconds"]),
                     multiplier=float(multiplier_config["multiplier"]),
                     total_coins=int(STATE.get("runtime", {}).get("totalCoins", 0)),
@@ -524,9 +533,11 @@ class Handler(SimpleHTTPRequestHandler):
                         if target.startswith("gacha:"): label = STATE.get("gachas", {}).get(target[7:], {}).get("name", target)
                         effects.append({"name": name, "effectiveLabel": str(label or "未設定"), "description": "いいね・フォロー連動", "kind": "social-card"})
                 overlay = dict(STATE.get("overlay", {}))
+                multiplier_config = {"waitingText": STATE.get("multiplier", {}).get("waitingText", "次のフィーバーまで")}
             with GACHA_LOCK:
                 gacha_events = list(GACHA_EVENTS)
-            return self._json({"game": game, "effects": effects, "overlay": overlay, "gachaEvents": gacha_events, "version": APP_VERSION})
+            return self._json({"game": game, "effects": effects, "overlay": overlay, "multiplierConfig": multiplier_config,
+                               "gachaEvents": gacha_events, "version": APP_VERSION})
         if path == "/api/gift-catalog":
             try:
                 with urllib.request.urlopen("http://127.0.0.1:8765/api/tiktok/gifts", timeout=3) as response:
@@ -575,6 +586,25 @@ class Handler(SimpleHTTPRequestHandler):
                     STATE["socialRuntime"] = {"followedUsers": [], "individualLikes": {}, "totalLikes": 0}
                 save_state()
                 return self._json({"ok": True, "message": "フォロー・いいね履歴をリセットしました", "state": public_state()})
+            if path == "/api/reset-all":
+                with ENGINE.lock:
+                    m = ENGINE.multiplier
+                    m.total_coins = 0
+                    m.next_target = max(1, m.threshold)
+                    m.active_until = 0
+                    m.bonus = 0
+                    m.queued = 0
+                commands = ENGINE.frame_commands()
+                success = base64.b64encode(STATE["overlay"]["successText"].encode("utf-8")).decode("ascii")
+                commands.append(f"lmsarena success_text {success}")
+                commands.append(f"lmsarena environment {str(STATE['arena'].get('daylightFixed', True)).lower()} {str(STATE['arena'].get('clearWeather', True)).lower()}")
+                with STATE_LOCK:
+                    rcon = dict(STATE["rcon"])
+                with RconClient(rcon["host"], int(rcon["port"]), rcon["password"]) as client:
+                    for command in commands:
+                        bridge_command(client, command)
+                save_state()
+                return self._json({"ok": True, "message": "倍率・耐久・埋め立て・枠サイズをリセットしました", "state": public_state()})
             if path == "/api/local-server/prepare":
                 result = LOCAL_SERVER.prepare(body.get("eulaAccepted") is True)
                 with STATE_LOCK:
@@ -673,6 +703,21 @@ class Handler(SimpleHTTPRequestHandler):
                         value = str(style.get(key, current.get(key, ""))).strip()
                         if len(value) <= 40:
                             current[key] = value
+                for style_key in ("arenaStyle", "feverStyle"):
+                    if not isinstance(body["overlay"].get(style_key), dict):
+                        continue
+                    style = body["overlay"][style_key]
+                    current = STATE["overlay"].setdefault(style_key, {})
+                    numeric = {"width": (260, 1920), "padding": (0, 100), "borderRadius": (0, 100),
+                               "backgroundOpacity": (0, 100), "titleFontSize": (10, 120),
+                               "textFontSize": (8, 80), "timerFontSize": (10, 140)}
+                    for key, bounds in numeric.items():
+                        if key in style:
+                            current[key] = int(clamp(style[key], bounds[0], bounds[1], current.get(key, bounds[0])))
+                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor"):
+                        value = str(style.get(key, current.get(key, ""))).strip()
+                        if len(value) <= 40:
+                            current[key] = value
             if isinstance(body.get("arena"), dict):
                 STATE["arena"].update(body["arena"])
                 config = STATE["arena"]
@@ -695,6 +740,12 @@ class Handler(SimpleHTTPRequestHandler):
                 STATE["multiplier"].update(body["multiplier"])
                 config = STATE["multiplier"]
                 m = ENGINE.multiplier
+                m.enabled = config.get("enabled", True) is True
+                config["waitingText"] = str(config.get("waitingText") or "次のフィーバーまで")[:100]
+                if not m.enabled:
+                    m.active_until = 0
+                    m.bonus = 0
+                    m.queued = 0
                 m.threshold = int(clamp(config["threshold"], 1, 10**9, 5000))
                 m.duration_seconds = int(clamp(config["durationSeconds"], 1, 86400, 300))
                 m.multiplier = clamp(config["multiplier"], 1, 100, 2)

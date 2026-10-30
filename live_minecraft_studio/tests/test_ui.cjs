@@ -19,6 +19,9 @@ setImmediate(async()=>{
   if(d.getElementById('successText').value!=='CUSTOM WIN!')throw Error('custom WIN text not rendered');
   if(html.includes('countdown_overlay.html'))throw Error('obsolete countdown overlay URL remains');
   if(!html.includes('gacha_overlay.html'))throw Error('gacha overlay URL missing');
+  if(!html.includes('data-tab="overlays"'))throw Error('overlay settings tab missing');
+  if(html.includes('event_overlay.html'))throw Error('gift message overlay URL remains visible');
+  if(!d.getElementById('arenaOverlayBackground')||!d.getElementById('feverOverlayTimerSize'))throw Error('overlay design controls missing');
   if(!d.getElementById('addGiftEffectBottom'))throw Error('bottom gift add button missing');
   const effectsOverlay=fs.readFileSync(path.join(root,'effects_overlay.html'),'utf8');
   if(effectsOverlay.includes('"現在 "+e.effectiveLabel'))throw Error('unnecessary current prefix remains');

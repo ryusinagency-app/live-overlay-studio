@@ -1,18 +1,423 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Live Minecraft Studio</title><link rel="stylesheet" href="style.css"></head><body>
-<main><header><div><h1>Live Minecraft Studio</h1><p>Minecraft埋め立てゲーム</p></div><div id="connection" class="badge">確認中</div></header>
-<nav><button data-tab="dashboard" class="active">ダッシュボード</button><button data-tab="arena">枠・埋め立て</button><button data-tab="effects">ギフト効果</button><button data-tab="gacha">ガチャ・反応</button><button data-tab="fever">倍率タイム</button><button data-tab="connection">接続</button></nav>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Minecraft Studio</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<header>
+<div>
+<h1>Live Minecraft Studio</h1>
+<p>Minecraft埋め立てゲーム</p>
+</div>
+<div id="connection" class="badge">確認中</div>
+</header>
+<nav>
+<button data-tab="dashboard" class="active">ダッシュボード</button>
+<button data-tab="arena">枠・埋め立て</button>
+<button data-tab="effects">ギフト効果</button>
+<button data-tab="gacha">ガチャ・反応</button>
+<button data-tab="fever">倍率タイム</button>
+<button data-tab="overlays">オーバーレイ</button>
+<button data-tab="connection">接続</button>
+</nav>
 
-<section data-page="dashboard"><div class="grid stats"><article id="floorHealthCard"><span>底の耐久ゲージ</span><strong id="health">-</strong><div class="meter"><i id="healthBar"></i></div></article><article><span>埋め立て</span><strong id="filled">-</strong><div class="meter"><i id="fillBar"></i></div></article><article><span>倍率</span><strong id="feverState">通常</strong><small id="feverRemaining"></small></article><article><span>カウント</span><strong id="countdownState">待機中</strong><small id="worldBridgeState"></small></article><article><span>処理待ち</span><strong id="queued">0</strong></article></div><article><p id="specialStock"></p></article><article><h2>専用オーバーレイ</h2><p>埋め立て状況</p><code>http://127.0.0.1:8775/overlay.html</code><p>フィーバー専用</p><code>http://127.0.0.1:8775/fever_overlay.html</code><p>ギフトメッセージ（背景透過）</p><code>http://127.0.0.1:8775/event_overlay.html</code></article></section>
+<section data-page="dashboard">
+<div class="grid stats">
+<article id="floorHealthCard">
+<span>底の耐久ゲージ</span>
+<strong id="health">-</strong>
+<div class="meter">
+<i id="healthBar">
+</i>
+</div>
+</article>
+<article>
+<span>埋め立て</span>
+<strong id="filled">-</strong>
+<div class="meter">
+<i id="fillBar">
+</i>
+</div>
+</article>
+<article>
+<span>倍率</span>
+<strong id="feverState">通常</strong>
+<small id="feverRemaining">
+</small>
+</article>
+<article>
+<span>カウント</span>
+<strong id="countdownState">待機中</strong>
+<small id="worldBridgeState">
+</small>
+</article>
+<article>
+<span>処理待ち</span>
+<strong id="queued">0</strong>
+</article>
+</div>
+<article>
+<p id="specialStock">
+</p>
+<button id="resetAll" class="danger">倍率・耐久・埋め立て・枠サイズをすべてリセット</button>
+</article>
+</section>
 
-<section data-page="arena" hidden><article><h2>埋め立て用の枠</h2><div class="form six"><label>X<input id="x" type="number"></label><label>Y<input id="y" type="number"></label><label>Z<input id="z" type="number"></label><label>幅<input id="width" type="number"></label><label>奥行<input id="depth" type="number"></label><label>高さ<input id="height" type="number"></label></div><div class="form"><label>枠ブロック<input id="frameBlock"></label><label>埋め立てブロック<input id="fillBlock"></label><label>カウント（秒）<input id="holdSeconds" type="number"></label><label>獲得WIN<input id="holdWin" type="number"></label><label>WIN時に画面中央へ表示する文字<input id="successText" maxlength="80" placeholder="WIN！"></label><label>コマンド間隔（ms）<input id="commandDelayMs" type="number"></label></div><h3>ギフトで変更できるサイズの範囲</h3><div class="form"><label>横（幅・奥行）の最小<input id="minWidth" type="number" min="3" max="64"></label><label>横（幅・奥行）の最大<input id="maxWidth" type="number" min="3" max="64"></label><label>高さの最小<input id="minHeight" type="number" min="3" max="64"></label><label>高さの最大<input id="maxHeight" type="number" min="3" max="64"></label></div><p class="note">対応範囲は各辺3〜64ブロック。拡大時は既存の中身を残し、縮小で切り取られる部分は消去します。</p><label class="toggle"><input id="floorEnabled" type="checkbox">底の耐久ルールを使う（底が露出してTNTが当たると減少）</label><div class="form"><label>底の最大耐久<input id="maxHealth" type="number" min="1"></label><label>TNT直撃1回のダメージ<input id="floorDamage" type="number" min="1"></label><label>耐久ゼロ時に減らすWIN<input id="floorPenalty" type="number" min="0"></label></div><label class="toggle"><input id="clearAfterSuccess" type="checkbox">成功後に枠内を空にして次ラウンドへ</label><label class="toggle"><input id="daylightFixed" type="checkbox">ワールドを昼間に固定</label><label class="toggle"><input id="clearWeather" type="checkbox">天気を晴れに固定</label><div class="buttons"><button id="saveArena">設定を保存</button><button id="buildArena" class="accent">枠を生成</button></div><p class="note">プレイヤーが枠内を埋め、満杯から指定秒数キープするとWIN。1個でも壊れるとカウントを解除し、埋め直すと最初から開始します。枠は底と四方の壁のみで壊れません。好きなブロックを持ち、上空から狙って右クリックすると最大256ブロック先にも置けます。枠内を狙って左クリックすると、遠くから1ブロックずつ壊せます。枠の上には積み足せません。設定変更後は「設定を保存」→「枠を生成」で適用します（枠内は空になります）。</p></article></section>
+<section data-page="arena" hidden>
+<article>
+<h2>埋め立て用の枠</h2>
+<div class="form six">
+<label>X<input id="x" type="number">
+</label>
+<label>Y<input id="y" type="number">
+</label>
+<label>Z<input id="z" type="number">
+</label>
+<label>幅<input id="width" type="number">
+</label>
+<label>奥行<input id="depth" type="number">
+</label>
+<label>高さ<input id="height" type="number">
+</label>
+</div>
+<div class="form">
+<label>枠ブロック<input id="frameBlock">
+</label>
+<label>埋め立てブロック<input id="fillBlock">
+</label>
+<label>カウント（秒）<input id="holdSeconds" type="number">
+</label>
+<label>獲得WIN<input id="holdWin" type="number">
+</label>
+<label>WIN時に画面中央へ表示する文字<input id="successText" maxlength="80" placeholder="WIN！">
+</label>
+<label>コマンド間隔（ms）<input id="commandDelayMs" type="number">
+</label>
+</div>
+<h3>ギフトで変更できるサイズの範囲</h3>
+<div class="form">
+<label>横（幅・奥行）の最小<input id="minWidth" type="number" min="3" max="64">
+</label>
+<label>横（幅・奥行）の最大<input id="maxWidth" type="number" min="3" max="64">
+</label>
+<label>高さの最小<input id="minHeight" type="number" min="3" max="64">
+</label>
+<label>高さの最大<input id="maxHeight" type="number" min="3" max="64">
+</label>
+</div>
+<p class="note">対応範囲は各辺3〜64ブロック。拡大時は既存の中身を残し、縮小で切り取られる部分は消去します。</p>
+<label class="toggle">
+<input id="floorEnabled" type="checkbox">底の耐久ルールを使う（底が露出してTNTが当たると減少）</label>
+<div class="form">
+<label>底の最大耐久<input id="maxHealth" type="number" min="1">
+</label>
+<label>TNT直撃1回のダメージ<input id="floorDamage" type="number" min="1">
+</label>
+<label>耐久ゼロ時に減らすWIN<input id="floorPenalty" type="number" min="0">
+</label>
+</div>
+<label class="toggle">
+<input id="clearAfterSuccess" type="checkbox">成功後に枠内を空にして次ラウンドへ</label>
+<label class="toggle">
+<input id="daylightFixed" type="checkbox">ワールドを昼間に固定</label>
+<label class="toggle">
+<input id="clearWeather" type="checkbox">天気を晴れに固定</label>
+<div class="buttons">
+<button id="saveArena">設定を保存</button>
+<button id="buildArena" class="accent">枠を生成</button>
+</div>
+<p class="note">プレイヤーが枠内を埋め、満杯から指定秒数キープするとWIN。1個でも壊れるとカウントを解除し、埋め直すと最初から開始します。枠は底と四方の壁のみで壊れません。好きなブロックを持ち、上空から狙って右クリックすると最大256ブロック先にも置けます。枠内を狙って左クリックすると、遠くから1ブロックずつ壊せます。枠の上には積み足せません。設定変更後は「設定を保存」→「枠を生成」で適用します（枠内は空になります）。</p>
+</article>
+</section>
 
-<section data-page="effects" hidden><article><div class="sectionHead"><div><h2>効果一覧のデザイン</h2><p class="note">個別デザインをONにしていないカードへ一括で反映します。</p></div></div><div class="form effectDesignForm"><label>横に並べる数<input id="effectColumns" type="number" min="1" max="10"></label><label>カード幅<input id="effectCardWidth" type="number" min="100" max="600"></label><label>カード高さ<input id="effectCardHeight" type="number" min="100" max="600"></label><label>カード間隔<input id="effectGap" type="number" min="0" max="100"></label><label>角の丸み<input id="effectRadius" type="number" min="0" max="100"></label><label>背景色<input id="effectBackgroundColor" type="color"></label><label>枠線色<input id="effectBorderColor" type="color"></label><label>文字色<input id="effectTextColor" type="color"></label><label>効果量の色<input id="effectAccentColor" type="color"></label><label>フィーバー中の発光色<input id="effectGlowColor" type="color"></label><label>ギフト名の文字サイズ<input id="effectNameFontSize" type="number" min="8" max="80"></label><label>効果量の文字サイズ<input id="effectAmountFontSize" type="number" min="8" max="100"></label><label>説明の文字サイズ<input id="effectDescriptionFontSize" type="number" min="8" max="60"></label><label>画像サイズ<input id="effectImageSize" type="number" min="0" max="300"></label></div><div class="buttons"><button id="saveEffectDesign">一括デザインを保存</button><button id="resetCardStyles">全カードを一括デザインへ揃える</button></div></article><article><div class="sectionHead"><div><h2>ギフト効果</h2><p class="note">「↑・↓」または「移動」をドラッグして並び替えできます。</p></div><button id="addGiftEffect" class="accent">ギフト一覧から追加</button></div><div id="effectCards"></div><details><summary>上級者向けJSON編集</summary><textarea id="effectsJson" rows="14"></textarea><button id="applyEffectsJson">JSONを画面へ反映</button></details><div class="buttons"><button id="saveEffects">効果を保存</button><button id="addGiftEffectBottom" class="accent">ギフト一覧から追加</button></div><p class="note">ギフト音源はMP3・WAV・OGGなど20MB以内。音量と再生時間をギフトごとに設定できます。「この効果をテスト」では、この画面でも音を確認できます。配信で音を流すには、OBSへ「ギフトメッセージ」オーバーレイをブラウザソースとして追加してください。</p><p class="note">全埋めボム・連鎖ブロックはギフトで補充され、Minecraftの持ち物へ専用アイテムが入ります。プレイヤーが選択して右クリックで使用します。規定カウントのギフト変更は次のラウンドにも残ります。</p></article><article><h2>効果一覧オーバーレイ</h2><code>http://127.0.0.1:8775/effects_overlay.html</code></article></section>
+<section data-page="effects" hidden>
+<article>
+<div class="sectionHead">
+<div>
+<h2>効果一覧のデザイン</h2>
+<p class="note">個別デザインをONにしていないカードへ一括で反映します。</p>
+</div>
+</div>
+<div class="form effectDesignForm">
+<label>横に並べる数<input id="effectColumns" type="number" min="1" max="10">
+</label>
+<label>カード幅<input id="effectCardWidth" type="number" min="100" max="600">
+</label>
+<label>カード高さ<input id="effectCardHeight" type="number" min="100" max="600">
+</label>
+<label>カード間隔<input id="effectGap" type="number" min="0" max="100">
+</label>
+<label>角の丸み<input id="effectRadius" type="number" min="0" max="100">
+</label>
+<label>背景色<input id="effectBackgroundColor" type="color">
+</label>
+<label>枠線色<input id="effectBorderColor" type="color">
+</label>
+<label>文字色<input id="effectTextColor" type="color">
+</label>
+<label>効果量の色<input id="effectAccentColor" type="color">
+</label>
+<label>フィーバー中の発光色<input id="effectGlowColor" type="color">
+</label>
+<label>ギフト名の文字サイズ<input id="effectNameFontSize" type="number" min="8" max="80">
+</label>
+<label>効果量の文字サイズ<input id="effectAmountFontSize" type="number" min="8" max="100">
+</label>
+<label>説明の文字サイズ<input id="effectDescriptionFontSize" type="number" min="8" max="60">
+</label>
+<label>画像サイズ<input id="effectImageSize" type="number" min="0" max="300">
+</label>
+</div>
+<div class="buttons">
+<button id="saveEffectDesign">一括デザインを保存</button>
+<button id="resetCardStyles">全カードを一括デザインへ揃える</button>
+</div>
+</article>
+<article>
+<div class="sectionHead">
+<div>
+<h2>ギフト効果</h2>
+<p class="note">「↑・↓」または「移動」をドラッグして並び替えできます。</p>
+</div>
+<button id="addGiftEffect" class="accent">ギフト一覧から追加</button>
+</div>
+<div id="effectCards">
+</div>
+<details>
+<summary>上級者向けJSON編集</summary>
+<textarea id="effectsJson" rows="14">
+</textarea>
+<button id="applyEffectsJson">JSONを画面へ反映</button>
+</details>
+<div class="buttons">
+<button id="saveEffects">効果を保存</button>
+<button id="addGiftEffectBottom" class="accent">ギフト一覧から追加</button>
+</div>
+<p class="note">ギフト音源はMP3・WAV・OGGなど20MB以内。音量と再生時間をギフトごとに設定できます。「この効果をテスト」では、この画面でも音を確認できます。配信で音を流すには、「埋め立て状況」オーバーレイをブラウザソースとして追加してください。</p>
+<p class="note">全埋めボム・連鎖ブロックはギフトで補充され、Minecraftの持ち物へ専用アイテムが入ります。プレイヤーが選択して右クリックで使用します。規定カウントのギフト変更は次のラウンドにも残ります。</p>
+</article>
+<article>
+<h2>効果一覧オーバーレイ</h2>
+<div class="urlCopy"><code>http://127.0.0.1:8775/effects_overlay.html</code><button data-copy-url>コピー</button></div>
+</article>
+</section>
 
-<section data-page="gacha" hidden><article><div class="sectionHead"><div><h2>スピナーガチャ</h2><p class="note">ガチャごとに中身・確率・継続率・音源を設定します。</p></div><button id="addGacha" class="accent">＋ ガチャを追加</button></div><div id="gachaCards"></div><button id="saveGachas">ガチャ設定を保存</button></article><article><h2>いいね・フォロー連動</h2><p class="note">新規フォローはユーザーIDを保存し、フォロー解除後のリフォローでは再発動しません。</p><div class="socialRule"><label class="toggle"><input id="followEnabled" type="checkbox">新規フォローで発動</label><label>発動する効果・ガチャ<select id="followTarget"></select></label></div><div class="socialRule"><label class="toggle"><input id="individualLikeEnabled" type="checkbox">個人いいねで発動</label><label>何回ごと<input id="individualLikeEvery" type="number" min="1"></label><label>発動する効果・ガチャ<select id="individualLikeTarget"></select></label></div><div class="socialRule"><label class="toggle"><input id="totalLikeEnabled" type="checkbox">累計いいねで発動</label><label>何回ごと<input id="totalLikeEvery" type="number" min="1"></label><label>発動する効果・ガチャ<select id="totalLikeTarget"></select></label></div><p id="socialStats" class="note"></p><div class="buttons"><button id="saveSocial">いいね・フォロー設定を保存</button><button id="resetSocial" class="danger">検知履歴をリセット</button></div></article><article><h2>スピナー専用オーバーレイ</h2><code>http://127.0.0.1:8775/gacha_overlay.html</code><p class="note">OBSまたはTikTok LIVE Studioへブラウザソースとして追加してください。</p></article></section>
+<section data-page="gacha" hidden>
+<article>
+<div class="sectionHead">
+<div>
+<h2>スピナーガチャ</h2>
+<p class="note">ガチャごとに中身・確率・継続率・音源を設定します。</p>
+</div>
+<button id="addGacha" class="accent">＋ ガチャを追加</button>
+</div>
+<div id="gachaCards">
+</div>
+<button id="saveGachas">ガチャ設定を保存</button>
+</article>
+<article>
+<h2>いいね・フォロー連動</h2>
+<p class="note">新規フォローはユーザーIDを保存し、フォロー解除後のリフォローでは再発動しません。</p>
+<div class="socialRule">
+<label class="toggle">
+<input id="followEnabled" type="checkbox">新規フォローで発動</label>
+<label>発動する効果・ガチャ<select id="followTarget">
+</select>
+</label>
+</div>
+<div class="socialRule">
+<label class="toggle">
+<input id="individualLikeEnabled" type="checkbox">個人いいねで発動</label>
+<label>何回ごと<input id="individualLikeEvery" type="number" min="1">
+</label>
+<label>発動する効果・ガチャ<select id="individualLikeTarget">
+</select>
+</label>
+</div>
+<div class="socialRule">
+<label class="toggle">
+<input id="totalLikeEnabled" type="checkbox">累計いいねで発動</label>
+<label>何回ごと<input id="totalLikeEvery" type="number" min="1">
+</label>
+<label>発動する効果・ガチャ<select id="totalLikeTarget">
+</select>
+</label>
+</div>
+<p id="socialStats" class="note">
+</p>
+<div class="buttons">
+<button id="saveSocial">いいね・フォロー設定を保存</button>
+<button id="resetSocial" class="danger">検知履歴をリセット</button>
+</div>
+</article>
+<article>
+<h2>スピナー専用オーバーレイ</h2>
+<div class="urlCopy"><code>http://127.0.0.1:8775/gacha_overlay.html</code><button data-copy-url>コピー</button></div>
+<p class="note">OBSまたはTikTok LIVE Studioへブラウザソースとして追加してください。</p>
+</article>
+</section>
 
-<section data-page="fever" hidden><article><h2>倍率タイム</h2><div class="form"><label>必要累計コイン<input id="threshold" type="number"></label><label>継続時間（秒）<input id="durationSeconds" type="number"></label><label>倍率<input id="multiplier" type="number" step="0.1"></label></div><div class="checks"><label><input id="applyFill" type="checkbox">埋め立て</label><label><input id="applyTnt" type="checkbox">TNT</label><label><input id="applyWin" type="checkbox">WIN増減</label><label><input id="applyRepair" type="checkbox">底の耐久回復</label><label><input id="applyItems" type="checkbox">アイテム補充・シールド</label><label><input id="applyResize" type="checkbox">枠サイズ変更</label><label><input id="applyCountdown" type="checkbox">規定カウント変更</label><label><input id="applyPlayer" type="checkbox">移動停止・吹き飛ばし</label></div><label>フィーバー中に次の必要コインへ到達した場合<select id="stackingMode"><option value="extend">時間追加：残り時間へ継続時間を追加</option><option value="increase">倍率上昇：倍率を1段階上げる（終了時刻は維持）</option><option value="queue">予約：終了後に次のフィーバーを開始</option><option value="overwrite">上書き：残り時間を設定した継続時間へ戻す</option></select></label><p class="note">ギフトごとの「フィーバー倍率を適用」でも個別にOFFにできます。倍率は各効果へ一度だけ適用します。</p><button id="saveFever">設定を保存</button></article></section>
+<section data-page="fever" hidden>
+<article>
+<h2>倍率タイム</h2>
+<label class="toggle"><input id="multiplierEnabled" type="checkbox">倍率タイムを使用する</label>
+<div class="form">
+<label>待機中の表示文字<input id="waitingText" type="text" placeholder="次のフィーバーまで"></label>
+<label>必要累計コイン<input id="threshold" type="number">
+</label>
+<label>継続時間（秒）<input id="durationSeconds" type="number">
+</label>
+<label>倍率<input id="multiplier" type="number" step="0.1">
+</label>
+</div>
+<div class="checks">
+<label>
+<input id="applyFill" type="checkbox">埋め立て</label>
+<label>
+<input id="applyTnt" type="checkbox">TNT</label>
+<label>
+<input id="applyWin" type="checkbox">WIN増減</label>
+<label>
+<input id="applyRepair" type="checkbox">底の耐久回復</label>
+<label>
+<input id="applyItems" type="checkbox">アイテム補充・シールド</label>
+<label>
+<input id="applyResize" type="checkbox">枠サイズ変更</label>
+<label>
+<input id="applyCountdown" type="checkbox">規定カウント変更</label>
+<label>
+<input id="applyPlayer" type="checkbox">移動停止・吹き飛ばし</label>
+</div>
+<label>フィーバー中に次の必要コインへ到達した場合<select id="stackingMode">
+<option value="extend">時間追加：残り時間へ継続時間を追加</option>
+<option value="increase">倍率上昇：倍率を1段階上げる（終了時刻は維持）</option>
+<option value="queue">予約：終了後に次のフィーバーを開始</option>
+<option value="overwrite">上書き：残り時間を設定した継続時間へ戻す</option>
+</select>
+</label>
+<p class="note">ギフトごとの「フィーバー倍率を適用」でも個別にOFFにできます。倍率は各効果へ一度だけ適用します。</p>
+<button id="saveFever">設定を保存</button>
+</article>
+</section>
 
-<section data-page="connection" hidden><article><h2>個人用かんたん接続</h2><p class="note">初回だけサーバーを準備します。次回からは「サーバーを起動」を押すだけです。登録やポート開放は必要ありません。</p><div class="serverStatus"><span id="localServerLamp"></span><div><strong id="localServerState">確認中</strong><small id="localServerMessage"></small></div></div><label class="toggle"><input id="eulaAccepted" type="checkbox">Minecraft EULAを確認して同意しました</label><div class="buttons"><button id="prepareLocalServer">初回：サーバーを準備</button><button id="startLocalServer" class="accent">サーバーを起動</button><button id="stopLocalServer">安全に停止</button></div><p class="joinAddress">Minecraftの参加先：<code>localhost</code></p><p id="javaStatus" class="note"></p><p class="note">更新後は「安全に停止」→「サーバーを起動」でゲーム連携を自動更新します。初回準備のやり直しは不要です。</p></article><details class="advanced"><summary>上級者向け：手動接続設定</summary><article><h2>Minecraft Javaサーバー</h2><div class="form"><label>RCONホスト<input id="rconHost"></label><label>RCONポート<input id="rconPort" type="number"></label><label>RCONパスワード<input id="rconPassword" type="password" autocomplete="new-password"></label><label>サーバー種類<input id="serverSoftware" readonly></label></div><div class="buttons"><button id="saveConnection">保存</button><button id="testConnection" class="accent">接続テスト</button><button id="detectServer">サーバー種類を自動判定</button></div><p id="serverVersionText" class="note"></p></article></details><article><h2>現在WIN連携</h2><label class="toggle"><input id="winEnabled" type="checkbox">Live Overlay Studioへ結果を反映</label><div class="form"><label>連携URL<input id="winUrl"></label><label>連携トークン<input id="winToken" type="password"></label></div><button id="saveWin">保存</button><p class="note">WINやTNTによる結果を、重複防止ID付きで現在WINへ返します。</p></article></section>
-</main><dialog id="giftDialog"><div class="dialogHead"><h2>ギフトを選択</h2><button id="closeGiftDialog">×</button></div><input id="giftSearch" placeholder="ギフト名または価格で検索"><div id="giftCatalog"></div></dialog><div id="toast"></div><script src="app.js"></script></body></html>
+<section data-page="overlays" hidden>
+<article>
+<h2>埋め立て状況オーバーレイ</h2>
+<div class="urlCopy"><code>http://127.0.0.1:8775/overlay.html</code><button data-copy-url>コピー</button></div>
+<div class="form overlayDesignForm">
+<label>横幅<input id="arenaOverlayWidth" type="number" min="260" max="1920"></label>
+<label>内側の余白<input id="arenaOverlayPadding" type="number" min="0" max="100"></label>
+<label>角の丸み<input id="arenaOverlayRadius" type="number" min="0" max="100"></label>
+<label>背景の透明度（0〜100）<input id="arenaOverlayOpacity" type="number" min="0" max="100"></label>
+<label>タイトル文字サイズ<input id="arenaOverlayTitleSize" type="number" min="10" max="120"></label>
+<label>通常文字サイズ<input id="arenaOverlayTextSize" type="number" min="8" max="80"></label>
+<label>背景色<input id="arenaOverlayBackground" type="color"></label>
+<label>枠線色<input id="arenaOverlayBorder" type="color"></label>
+<label>文字色<input id="arenaOverlayText" type="color"></label>
+<label>ゲージ色<input id="arenaOverlayAccent" type="color"></label>
+</div>
+</article>
+<article>
+<h2>フィーバー専用オーバーレイ</h2>
+<div class="urlCopy"><code>http://127.0.0.1:8775/fever_overlay.html</code><button data-copy-url>コピー</button></div>
+<div class="form overlayDesignForm">
+<label>横幅<input id="feverOverlayWidth" type="number" min="260" max="1920"></label>
+<label>内側の余白<input id="feverOverlayPadding" type="number" min="0" max="100"></label>
+<label>角の丸み<input id="feverOverlayRadius" type="number" min="0" max="100"></label>
+<label>背景の透明度（0〜100）<input id="feverOverlayOpacity" type="number" min="0" max="100"></label>
+<label>倍率文字サイズ<input id="feverOverlayTitleSize" type="number" min="10" max="120"></label>
+<label>時間文字サイズ<input id="feverOverlayTimerSize" type="number" min="10" max="140"></label>
+<label>通常文字サイズ<input id="feverOverlayTextSize" type="number" min="8" max="80"></label>
+<label>背景色<input id="feverOverlayBackground" type="color"></label>
+<label>枠線色<input id="feverOverlayBorder" type="color"></label>
+<label>文字色<input id="feverOverlayText" type="color"></label>
+<label>発光・ゲージ色<input id="feverOverlayAccent" type="color"></label>
+</div>
+</article>
+<button id="saveOverlayDesign" class="accent">オーバーレイのデザインを保存</button>
+</section>
+
+<section data-page="connection" hidden>
+<article>
+<h2>個人用かんたん接続</h2>
+<p class="note">初回だけサーバーを準備します。次回からは「サーバーを起動」を押すだけです。登録やポート開放は必要ありません。</p>
+<div class="serverStatus">
+<span id="localServerLamp">
+</span>
+<div>
+<strong id="localServerState">確認中</strong>
+<small id="localServerMessage">
+</small>
+</div>
+</div>
+<label class="toggle">
+<input id="eulaAccepted" type="checkbox">Minecraft EULAを確認して同意しました</label>
+<div class="buttons">
+<button id="prepareLocalServer">初回：サーバーを準備</button>
+<button id="startLocalServer" class="accent">サーバーを起動</button>
+<button id="stopLocalServer">安全に停止</button>
+</div>
+<p class="joinAddress">Minecraftの参加先：<code>localhost</code>
+</p>
+<p id="javaStatus" class="note">
+</p>
+<p class="note">更新後は「安全に停止」→「サーバーを起動」でゲーム連携を自動更新します。初回準備のやり直しは不要です。</p>
+</article>
+<details class="advanced">
+<summary>上級者向け：手動接続設定</summary>
+<article>
+<h2>Minecraft Javaサーバー</h2>
+<div class="form">
+<label>RCONホスト<input id="rconHost">
+</label>
+<label>RCONポート<input id="rconPort" type="number">
+</label>
+<label>RCONパスワード<input id="rconPassword" type="password" autocomplete="new-password">
+</label>
+<label>サーバー種類<input id="serverSoftware" readonly>
+</label>
+</div>
+<div class="buttons">
+<button id="saveConnection">保存</button>
+<button id="testConnection" class="accent">接続テスト</button>
+<button id="detectServer">サーバー種類を自動判定</button>
+</div>
+<p id="serverVersionText" class="note">
+</p>
+</article>
+</details>
+<article>
+<h2>現在WIN連携</h2>
+<label class="toggle">
+<input id="winEnabled" type="checkbox">Live Overlay Studioへ結果を反映</label>
+<div class="form">
+<label>連携URL<input id="winUrl">
+</label>
+<label>連携トークン<input id="winToken" type="password">
+</label>
+</div>
+<button id="saveWin">保存</button>
+<p class="note">WINやTNTによる結果を、重複防止ID付きで現在WINへ返します。</p>
+</article>
+</section>
+</main>
+<dialog id="giftDialog">
+<div class="dialogHead">
+<h2>ギフトを選択</h2>
+<button id="closeGiftDialog">×</button>
+</div>
+<input id="giftSearch" placeholder="ギフト名または価格で検索">
+<div id="giftCatalog">
+</div>
+</dialog>
+<div id="toast">
+</div>
+<script src="app.js">
+</script>
+</body>
+</html>
 
