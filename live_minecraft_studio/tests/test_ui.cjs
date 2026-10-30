@@ -34,6 +34,7 @@ setImmediate(async()=>{
   if(![...d.querySelectorAll('button')].some(b=>b.textContent.includes('ギフト一覧から発動ギフトを選択')))throw Error('gacha trigger gift picker missing');
   if(!d.querySelector('.gachaReactionSettings [data-gacha-key="followTriggerEnabled"]'))throw Error('per-gacha follow trigger missing');
   if(!d.querySelector('.effectCard [data-effect-key="individualLikeTriggerEnabled"]'))throw Error('per-effect like trigger missing');
+  if(!d.querySelector('.effectCard [data-effect-key="allowedGiftUserId"]'))throw Error('per-effect gift user filter missing');
   if(fs.readFileSync(path.join(root,'app.js'),'utf8').includes("add('オーバーレイでの表示名'"))throw Error('obsolete additional display name remains');
   const gachaOverlay=fs.readFileSync(path.join(root,'gacha_overlay.html'),'utf8');
   if(!gachaOverlay.includes('giftSoundVolume')||!gachaOverlay.includes('spinSoundSeconds')||!gachaOverlay.includes('resultSoundVolume'))throw Error('per-sound gacha controls missing');
@@ -41,6 +42,8 @@ setImmediate(async()=>{
   const effectsOverlay=fs.readFileSync(path.join(root,'effects_overlay.html'),'utf8');
   if(effectsOverlay.includes('"現在 "+e.effectiveLabel'))throw Error('unnecessary current prefix remains');
   if(!effectsOverlay.includes("n.hidden=!n.textContent"))throw Error('blank display name is not hidden');
+  const serverSource=fs.readFileSync(path.join(root,'server.py'),'utf8');
+  if(!serverSource.includes('effects.append({"name": "", "effectiveLabel": gacha_name'))throw Error('gacha overlay text is not name-only');
   console.log('PASS UI tabs, settings, effect cards and gift catalog picker');
 });
 
