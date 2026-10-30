@@ -168,6 +168,28 @@ class EngineTests(unittest.TestCase):
             with server.STATE_LOCK:
                 for key, value in original.items(): server.STATE[key] = value
 
+    def test_social_accepts_tiktok_event_names_and_nested_users(self):
+        old_effects = server.STATE.get("effects")
+        old_gachas = server.STATE.get("gachas")
+        old_runtime = server.STATE.get("socialRuntime")
+        try:
+            server.STATE["effects"] = {
+                "follow": {"enabled": True, "followTriggerEnabled": True},
+                "likes": {"enabled": True, "individualLikeTriggerEnabled": True, "individualLikeEvery": 5},
+            }
+            server.STATE["gachas"] = {}
+            server.STATE["socialRuntime"] = {"followedUsers": [], "individualLikes": {}, "totalLikes": 0}
+            with patch.object(server, "trigger_target", return_value=True):
+                follow = receive_social({"eventName": "FollowEvent", "user": {"uniqueId": "viewer1", "nickname": "視聴者"}})
+                likes = receive_social({"event": "like_event", "user": {"uniqueId": "viewer1"}, "likeCount": 5})
+            self.assertEqual(1, follow["triggered"])
+            self.assertEqual(1, likes["triggered"])
+            self.assertEqual(5, likes["totalLikes"])
+        finally:
+            server.STATE["effects"] = old_effects
+            server.STATE["gachas"] = old_gachas
+            server.STATE["socialRuntime"] = old_runtime
+
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))
