@@ -107,6 +107,7 @@ function renderEffectCards(){
   function add(label,type,key,fallback,kinds,options){const l=field(label,type,e[key]??fallback,key,options);if(kinds)l.dataset.kinds=kinds.join(',');settings.append(l);}
   add('この効果を有効にする','checkbox','enabled',true);
   settings.append(effectTriggerPicker(id,e));
+  add('ギフト発動を許可するユーザーID（空欄は全員）','text','allowedGiftUserId','');
   add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
   add('追加のWIN増減（通常は0）','number','win',0);
   add('TNTの種類','select','tntType','normal',['tnt'],[['normal','通常TNT'],['piercing','貫通TNT（縦一列）'],['timed','時限TNT'],['giant','巨大TNT（底ダメージ4倍）']]);
@@ -210,7 +211,7 @@ function targetOptions(){return [['','選択してください'],...Object.entri
 function setTargetSelect(id,target){const el=$(id);if(el.dataset.dirty==='1')return;el.replaceChildren(...targetOptions().map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o}));el.value=target||''}
 function renderSocial(c){const runtime=c.socialRuntime||{};$('socialStats').textContent=`記録済み新規フォロー ${runtime.followedUsers?.length||0}人 ／ 累計いいね ${runtime.totalLikes||0}回`}
 async function testGacha(id){collectGachas();try{await api('/api/config',{gachas:workingGachas});const r=await api('/api/test-gacha',{gachaId:id});toast(r.message);refresh()}catch(e){toast(e.message,true)}}
-function addBlankEffect(){collectEffectCards();const id='effect-'+Date.now();workingEffects[id]={name:'',kind:'fill',amount:1,win:0,enabled:true,giftId:'',giftName:'',giftImageUrl:'',imageMode:'none',displayText:'',description:'',overlayVisible:true,useMultiplier:true};renderEffectCards();setTimeout(()=>document.querySelector(`.effectCard[data-id="${id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0)}
+function addBlankEffect(){collectEffectCards();const id='effect-'+Date.now();workingEffects[id]={name:'',kind:'fill',amount:1,win:0,enabled:true,giftId:'',giftName:'',giftImageUrl:'',imageMode:'none',allowedGiftUserId:'',displayText:'',description:'',overlayVisible:true,useMultiplier:true};renderEffectCards();setTimeout(()=>document.querySelector(`.effectCard[data-id="${id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0)}
 function renderGiftCatalog(){const q=$('giftSearch').value.trim().toLowerCase();$('giftCatalog').replaceChildren(...giftCatalog.filter(g=>!q||String(g.name).toLowerCase().includes(q)||String(g.price).includes(q)).map(g=>{const b=document.createElement('button');b.className='giftChoice';const img=document.createElement('img');img.src=g.imageUrl||'';const n=document.createElement('b');n.textContent=g.name||'ギフト';const p=document.createElement('small');p.textContent=`${g.price||0}コイン`;b.append(img,n,p);b.onclick=()=>giftCatalogHandler?.(g);return b}))}
 async function refresh(){try{render(await api('/api/state'))}catch(e){$('connection').textContent='停止';}}
 async function save(body,message='保存しました'){try{const r=await api('/api/config',body);document.querySelectorAll('[data-dirty="1"]').forEach(el=>delete el.dataset.dirty);render(r.state);toast(message)}catch(e){toast(e.message,true)}}
