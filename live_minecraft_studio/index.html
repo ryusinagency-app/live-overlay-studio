@@ -183,7 +183,7 @@
 <h2>ギフト効果</h2>
 <p class="note">「↑・↓」または「移動」をドラッグして並び替えできます。</p>
 </div>
-<button id="addGiftEffect" class="accent">ギフト一覧から追加</button>
+<button id="addGiftEffect" class="accent">＋ 効果追加</button>
 </div>
 <div id="effectCards">
 </div>
@@ -195,7 +195,7 @@
 </details>
 <div class="buttons">
 <button id="saveEffects">効果を保存</button>
-<button id="addGiftEffectBottom" class="accent">ギフト一覧から追加</button>
+<button id="addGiftEffectBottom" class="accent">＋ 効果追加</button>
 </div>
 <p class="note">ギフト音源はMP3・WAV・OGGなど20MB以内。音量と再生時間をギフトごとに設定できます。「この効果をテスト」では、この画面でも音を確認できます。配信で音を流すには、「埋め立て状況」オーバーレイをブラウザソースとして追加してください。</p>
 <p class="note">全埋めボム・連鎖ブロックはギフトで補充され、Minecraftの持ち物へ専用アイテムが入ります。プレイヤーが選択して右クリックで使用します。規定カウントのギフト変更は次のラウンドにも残ります。</p>
@@ -220,44 +220,13 @@
 <button id="saveGachas">ガチャ設定を保存</button>
 </article>
 <article>
-<h2>いいね・フォロー連動</h2>
-<p class="note">新規フォローはユーザーIDを保存し、フォロー解除後のリフォローでは再発動しません。</p>
-<div class="socialRule">
-<label class="toggle">
-<input id="followEnabled" type="checkbox">新規フォローで発動</label>
-<label>発動する効果・ガチャ<select id="followTarget">
-</select>
-</label>
-</div>
-<div class="socialRule">
-<label class="toggle">
-<input id="individualLikeEnabled" type="checkbox">個人いいねで発動</label>
-<label>何回ごと<input id="individualLikeEvery" type="number" min="1">
-</label>
-<label>発動する効果・ガチャ<select id="individualLikeTarget">
-</select>
-</label>
-</div>
-<div class="socialRule">
-<label class="toggle">
-<input id="totalLikeEnabled" type="checkbox">累計いいねで発動</label>
-<label>何回ごと<input id="totalLikeEvery" type="number" min="1">
-</label>
-<label>発動する効果・ガチャ<select id="totalLikeTarget">
-</select>
-</label>
-</div>
+<h2>いいね・フォロー検知履歴</h2>
+<p class="note">発動方法は各ギフト効果・各ガチャの設定内で選択します。新規フォローはリフォローでは再発動しません。</p>
 <p id="socialStats" class="note">
 </p>
 <div class="buttons">
-<button id="saveSocial">いいね・フォロー設定を保存</button>
 <button id="resetSocial" class="danger">検知履歴をリセット</button>
 </div>
-</article>
-<article>
-<h2>スピナー専用オーバーレイ</h2>
-<div class="urlCopy"><code>http://127.0.0.1:8775/gacha_overlay.html</code><button data-copy-url>コピー</button></div>
-<p class="note">OBSまたはTikTok LIVE Studioへブラウザソースとして追加してください。</p>
 </article>
 </section>
 
@@ -336,6 +305,25 @@
 <label>枠線色<input id="feverOverlayBorder" type="color"></label>
 <label>文字色<input id="feverOverlayText" type="color"></label>
 <label>発光・ゲージ色<input id="feverOverlayAccent" type="color"></label>
+</div>
+</article>
+<article>
+<h2>ガチャ専用オーバーレイ</h2>
+<div class="urlCopy"><code>http://127.0.0.1:8775/gacha_overlay.html</code><button data-copy-url>コピー</button></div>
+<div class="form overlayDesignForm">
+<label>横幅<input id="gachaOverlayWidth" type="number" min="260" max="1920"></label>
+<label>内側の余白<input id="gachaOverlayPadding" type="number" min="0" max="100"></label>
+<label>角の丸み<input id="gachaOverlayRadius" type="number" min="0" max="100"></label>
+<label>背景の透明度（0〜100）<input id="gachaOverlayOpacity" type="number" min="0" max="100"></label>
+<label>ガチャ名の文字サイズ<input id="gachaOverlayTitleSize" type="number" min="10" max="120"></label>
+<label>ギフター名の文字サイズ<input id="gachaOverlaySenderSize" type="number" min="8" max="100"></label>
+<label>リール文字サイズ<input id="gachaOverlayReelSize" type="number" min="10" max="120"></label>
+<label>結果文字サイズ<input id="gachaOverlayResultSize" type="number" min="10" max="120"></label>
+<label>継続文字サイズ<input id="gachaOverlayContinueSize" type="number" min="10" max="120"></label>
+<label>背景色<input id="gachaOverlayBackground" type="color"></label>
+<label>枠線色<input id="gachaOverlayBorder" type="color"></label>
+<label>文字色<input id="gachaOverlayText" type="color"></label>
+<label>発光・強調色<input id="gachaOverlayAccent" type="color"></label>
 </div>
 </article>
 <button id="saveOverlayDesign" class="accent">オーバーレイのデザインを保存</button>
