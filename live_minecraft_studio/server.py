@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.3"
+APP_VERSION = "0.4.4"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -380,10 +380,27 @@ def trigger_gachas_for_gift(body, event_id, already_triggered=None):
     return started
 
 
+def _social_kind(body):
+    raw = str(body.get("type") or body.get("eventType") or body.get("event") or
+              body.get("eventName") or body.get("name") or "").lower().replace("-", "_")
+    if "follow" in raw:
+        return "follow"
+    if "like" in raw:
+        return "like"
+    return raw
+
+
 def receive_social(body):
-    kind = str(body.get("type") or body.get("eventType") or "").lower()
-    user_id = str(body.get("userId") or body.get("uniqueId") or body.get("senderId") or body.get("userName") or "")[:160]
-    user_name = str(body.get("userName") or body.get("senderName") or body.get("nickname") or user_id)[:80]
+    kind = _social_kind(body)
+    user = body.get("user") if isinstance(body.get("user"), dict) else {}
+    sender = body.get("sender") if isinstance(body.get("sender"), dict) else {}
+    user_id = str(body.get("userId") or body.get("uniqueId") or body.get("senderId") or
+                  user.get("uniqueId") or user.get("userId") or user.get("id") or
+                  sender.get("uniqueId") or sender.get("userId") or sender.get("id") or
+                  body.get("userName") or user.get("nickname") or sender.get("nickname") or "")[:160]
+    user_name = str(body.get("userName") or body.get("senderName") or body.get("nickname") or
+                    user.get("nickname") or user.get("displayName") or user.get("uniqueId") or
+                    sender.get("nickname") or sender.get("displayName") or sender.get("uniqueId") or user_id)[:80]
     with STATE_LOCK:
         runtime = STATE.setdefault("socialRuntime", {"followedUsers": [], "individualLikes": {}, "totalLikes": 0})
         targets = [("effect:" + item_id, item) for item_id, item in STATE.get("effects", {}).items()
@@ -397,7 +414,7 @@ def receive_social(body):
                 followed.add(user_id); runtime["followedUsers"] = list(followed)[-100000:]
                 triggers += [(target, "follow") for target, item in targets if item.get("followTriggerEnabled") is True]
         elif kind == "like":
-            count = int(clamp(body.get("count", body.get("likeCount", 1)), 1, 1000000, 1))
+            count = int(clamp(body.get("count", body.get("likeCount", body.get("repeatCount", 1))), 1, 1000000, 1))
             likes = runtime.setdefault("individualLikes", {}); before = int(likes.get(user_id, 0)); likes[user_id] = before + count
             total_before = int(runtime.get("totalLikes", 0)); runtime["totalLikes"] = total_before + count
             for target, item in targets:
@@ -692,8 +709,6 @@ class Handler(SimpleHTTPRequestHandler):
                 self._update_config(body)
                 return self._json({"ok": True, "state": public_state()})
             if path == "/api/social":
-                if not ENGINE.world_state.get("ready"):
-                    raise RuntimeError("先にサーバーへ接続して枠を生成してください")
                 return self._json(receive_social(body))
             if path == "/api/test-gacha":
                 if not ENGINE.world_state.get("ready"):
@@ -773,10 +788,12 @@ class Handler(SimpleHTTPRequestHandler):
                         bridge_command(client, command)
                 return self._json({"ok": True, "queued": len(commands)})
             if path == "/api/gift":
-                if not ENGINE.world_state.get("ready"):
-                    raise RuntimeError("先にサーバーへ接続して枠を生成してください")
                 if str(body.get("eventType") or body.get("type") or "").lower() in {"follow", "like"}:
                     return self._json(receive_social(body))
+                if _social_kind(body) in {"follow", "like"}:
+                    return self._json(receive_social(body))
+                if not ENGINE.world_state.get("ready"):
+                    raise RuntimeError("先にサーバーへ接続して枠を生成してください")
                 result = ENGINE.receive(body, STATE["effects"])
                 handle_multiplier_sounds(result)
                 dispatch_effect(result, body.get("senderName", ""))
