@@ -26,7 +26,7 @@ from slot_machine import (EMPTY_EVENT as SLOT_EMPTY_EVENT, apply_spin as apply_s
                           default_pattern as default_slot_pattern,
                           normalize_slot_machine, run_slot_draw, visible_spin_count)
 
-APP_VERSION = '0.67.21'
+APP_VERSION = '0.67.22'
 SOURCE_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 FROZEN_APP = bool(getattr(sys, 'frozen', False))
 
@@ -2274,7 +2274,7 @@ def apply_gacha_round(event_id, round_index):
         write_state_file(data)
         return True
 
-def queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info):
+def queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info, sender_id=''):
     bridge = data.get('minecraftStudioBridge') if isinstance(data.get('minecraftStudioBridge'), dict) else {}
     if bridge.get('enabled') is not True:
         return False
@@ -2287,6 +2287,8 @@ def queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info):
         'giftName': str((item_info or {}).get('name') or gift_name)[:120],
         'giftImageUrl': str((item_info or {}).get('imageUrl') or '')[:2000],
         'senderName': str(sender_name or '')[:80],
+        'userId': str(sender_id or '')[:160],
+        'uniqueId': str(sender_id or '')[:160],
         'repeatCount': max(1, min(1000000, safe_int(count, 1))),
         'coins': price,
         'timestamp': time.time(),
@@ -2299,6 +2301,26 @@ def queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info):
     except queue.Full:
         MINECRAFT_STUDIO_STATUS.update(status='error', message='Minecraft連携の待機列が上限に達しました')
         return False
+
+def queue_minecraft_studio_social(kind, user_id, user_name, count=1):
+    data = read_cached_overlay_source()
+    bridge = data.get('minecraftStudioBridge') if isinstance(data.get('minecraftStudioBridge'), dict) else {}
+    if bridge.get('enabled') is not True:
+        return False
+    event = {
+        'eventId': 'tiktok-social-' + hashlib.sha256(
+            f"{time.time_ns()}|{kind}|{user_id}|{count}".encode('utf-8')
+        ).hexdigest()[:24],
+        'eventType': str(kind), 'type': str(kind), 'source': 'social',
+        'userId': str(user_id or '')[:160], 'uniqueId': str(user_id or '')[:160],
+        'userName': str(user_name or user_id or '')[:80],
+        'senderName': str(user_name or user_id or '')[:80],
+        'count': max(1, min(1000000, safe_int(count, 1))), 'timestamp': time.time(),
+    }
+    try:
+        MINECRAFT_STUDIO_QUEUE.put_nowait(event); return True
+    except queue.Full:
+        MINECRAFT_STUDIO_STATUS.update(status='error', message='Minecraft連携の待機列が上限に達しました'); return False
 
 def minecraft_studio_worker():
     while True:
@@ -2334,7 +2356,7 @@ def minecraft_studio_worker():
                     pass
             MINECRAFT_STUDIO_QUEUE.task_done()
 
-def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avatar_url=''):
+def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avatar_url='', sender_id=''):
     name = normalize_gift_name(gift_name)
     if not name:
         return False
@@ -2350,7 +2372,7 @@ def process_gift_event(gift_name, count=1, sender_name='', gift_info=None, avata
             if cached:
                 item_info = {**(item_info or {}), **{k:v for k,v in cached.items() if not (item_info or {}).get(k)}}
         item_info = item_info or {'name':gift_name, 'price':0, 'imageUrl':''}
-        minecraft_forwarded = queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info)
+        minecraft_forwarded = queue_minecraft_studio_gift(data, gift_name, count, sender_name, item_info, sender_id)
         price=max(0,int(item_info.get('price') or 0))
         total_coins=price*count
         wall=data['giftWall']
@@ -2462,7 +2484,7 @@ def tiktok_gift_listener(username):
     while True:
         try:
             from TikTokLive import TikTokLiveClient
-            from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent
+            from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent, LikeEvent, FollowEvent
             client = TikTokLiveClient(unique_id=username)
             @client.on(ConnectEvent)
             async def on_connect(event):
@@ -2490,14 +2512,30 @@ def tiktok_gift_listener(username):
                 remember_gift(gift)
                 sender = getattr(event, 'user', None) or getattr(event, 'user_info', None)
                 sender_name = str(_gift_value(sender, 'nickname', 'unique_id', 'uniqueId', 'username') or '').strip()
+                sender_id = str(_gift_value(sender, 'unique_id', 'uniqueId', 'username', 'user_id', 'userId', 'id') or '').strip()
                 avatar_url = _gift_image_url({'image':_gift_value(sender, 'avatar', 'avatar_thumb', 'avatarThumb', 'profile_picture', 'profilePicture')})
                 gift_items = normalize_gift_catalog([gift])
                 gift_info = gift_items[0] if gift_items else None
-                matched = process_gift_event(gift_name, getattr(event, 'repeat_count', 1), sender_name, gift_info, avatar_url)
+                matched = process_gift_event(gift_name, getattr(event, 'repeat_count', 1), sender_name, gift_info, avatar_url, sender_id)
                 if matched:
                     update_status('connected', f'ギフト反応: {gift_name}（タイマー／WINガチャ）')
                 else:
                     update_status('connected', f'ギフト受信: {gift_name}（ギフト設定の名前と一致しません）')
+            @client.on(LikeEvent)
+            async def on_like(event):
+                if not TIKTOK_GIFT_ENABLED: return
+                user=getattr(event,'user',None) or getattr(event,'user_info',None)
+                user_id=str(_gift_value(user,'unique_id','uniqueId','username','user_id','userId','id') or '').strip()
+                user_name=str(_gift_value(user,'nickname','unique_id','uniqueId','username') or user_id).strip()
+                count=getattr(event,'count',None) or getattr(event,'like_count',None) or getattr(event,'likeCount',None) or 1
+                queue_minecraft_studio_social('like',user_id,user_name,count)
+            @client.on(FollowEvent)
+            async def on_follow(event):
+                if not TIKTOK_GIFT_ENABLED: return
+                user=getattr(event,'user',None) or getattr(event,'user_info',None)
+                user_id=str(_gift_value(user,'unique_id','uniqueId','username','user_id','userId','id') or '').strip()
+                user_name=str(_gift_value(user,'nickname','unique_id','uniqueId','username') or user_id).strip()
+                queue_minecraft_studio_social('follow',user_id,user_name,1)
             if TIKTOK_GIFT_ENABLED: update_status('connecting', f'@{username} のLIVEを待っています')
             client.run(fetch_gift_info=True)
             if TIKTOK_GIFT_ENABLED: update_status('reconnecting', 'LIVE接続が終了しました。再接続します')
