@@ -210,6 +210,12 @@ class GameEngine:
             if not effect:
                 effect = {"kind": "none", "name": gift_name or "コイン集計", "amount": 0}
             source = str(payload.get("source") or "gift")
+            allowed_user = str(effect.get("allowedGiftUserId") or "").strip().lstrip("@").casefold()
+            sender_user = str(payload.get("userId") or payload.get("uniqueId") or payload.get("senderId") or
+                              payload.get("userName") or payload.get("senderUniqueId") or "").strip().lstrip("@").casefold()
+            if source == "gift" and allowed_user and sender_user != allowed_user:
+                effect = {"kind": "none", "name": gift_name or "対象外ユーザー", "amount": 0,
+                          "displayEnabled": False}
             if effect.get("enabled", True) is False:
                 effect = {"kind": "none", "name": gift_name or "無効な効果", "amount": 0, "displayEnabled": False}
             if effect.get("gachaOnly") is True and source not in {"gacha", "social", "test"}:
