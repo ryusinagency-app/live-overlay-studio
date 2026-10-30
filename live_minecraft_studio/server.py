@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -592,10 +592,9 @@ class Handler(SimpleHTTPRequestHandler):
                     total = sum(max(0, float(entry.get("weight", 0))) for entry in entries) or 1
                     details = [f'{entry.get("label") or STATE["effects"][entry["effectId"]].get("name", "効果")} {max(0,float(entry.get("weight",0)))/total*100:.1f}%'
                                for entry in entries]
-                    trigger_name = str(gacha.get("triggerGiftName") or "手動・効果・反応から発動")
                     gacha_name = str(gacha.get("name") or "スピナーガチャ")
-                    effects.append({"name": gacha_name, "effectiveLabel": gacha_name,
-                                    "description": f'発動：{trigger_name} ／ ' + " ／ ".join(details), "overlayVisible": True,
+                    effects.append({"name": "", "effectiveLabel": gacha_name,
+                                    "description": "", "overlayVisible": True,
                                     "useCustomStyle": False, "kind": "gacha-card", "giftImageUrl": gacha.get("triggerGiftImageUrl", "")})
                 overlay = dict(STATE.get("overlay", {}))
                 multiplier_config = {"waitingText": STATE.get("multiplier", {}).get("waitingText", "次のフィーバーまで")}
