@@ -18,6 +18,8 @@ setImmediate(async()=>{
   const countdown=d.getElementById('holdSeconds');if(countdown.value!=='10')throw Error('hold seconds not rendered');
   if(d.getElementById('successText').value!=='CUSTOM WIN!')throw Error('custom WIN text not rendered');
   if(html.includes('countdown_overlay.html'))throw Error('obsolete countdown overlay URL remains');
+  if(!html.includes('gacha_overlay.html'))throw Error('gacha overlay URL missing');
+  if(!d.getElementById('addGiftEffectBottom'))throw Error('bottom gift add button missing');
   const effectsOverlay=fs.readFileSync(path.join(root,'effects_overlay.html'),'utf8');
   if(effectsOverlay.includes('"現在 "+e.effectiveLabel'))throw Error('unnecessary current prefix remains');
   console.log('PASS UI tabs, settings, effect cards and gift catalog picker');
