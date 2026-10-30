@@ -7,7 +7,7 @@ function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier
  $('connection').textContent=s.status.rcon;$('connection').className='badge '+(s.status.rcon==='接続中'?'ok':'');
  $('floorHealthCard').hidden=!a.floorEnabled;$('countdownState').textContent=a.defending?`残り ${a.holdRemainingSeconds}秒`:'埋め立て中';$('worldBridgeState').textContent=s.status.lastError||s.status.worldBridge||'';
  $('health').textContent=`${a.health} / ${a.maxHealth}`;$('healthBar').style.width=`${a.maxHealth?a.health/a.maxHealth*100:0}%`;
- $('filled').textContent=`${a.filled} / ${a.capacity}`;$('fillBar').style.width=`${a.capacity?a.filled/a.capacity*100:0}%`;
+ $('filled').textContent=a.topLayerWin?'最上段ルール ON':`${a.filled} / ${a.capacity}`;$('fillBar').style.width=a.topLayerWin?'0%':`${a.capacity?a.filled/a.capacity*100:0}%`;
  $('feverState').textContent=m.enabled===false?'OFF':m.active?`${m.multiplier}倍タイム`:'通常';$('feverRemaining').textContent=m.enabled===false?'':m.active?`残り ${m.remainingSeconds}秒`:`次まで ${m.progress} / ${m.threshold}`;$('queued').textContent=s.status.queuedCommands;
  Object.entries(c.arena).forEach(([k,v])=>set(k,v));set('commandDelayMs',c.commandDelayMs);
  set('multiplierEnabled',c.multiplier.enabled!==false);set('waitingText',c.multiplier.waitingText||'次のフィーバーまで');set('threshold',c.multiplier.threshold);set('durationSeconds',c.multiplier.durationSeconds);set('multiplier',c.multiplier.multiplier);set('applyFill',c.multiplier.applyFill);set('applyTnt',c.multiplier.applyTnt);set('applyWin',c.multiplier.applyWin);['Repair','Items','Resize','Countdown','Player'].forEach(k=>set('apply'+k,c.multiplier['apply'+k]));set('stackingMode',c.multiplier.stackingMode);
@@ -31,7 +31,7 @@ function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier
  document.querySelectorAll('.effectCard').forEach(card=>{const p=s.effectPreviews?.[card.dataset.id];if(p){card.classList.toggle('fever',p.feverApplied);card.querySelector('.effectiveAmount').textContent=p.effectiveLabel}});
  document.querySelectorAll('.systemSound').forEach(w=>{const p=w.dataset.soundPrefix,url=$(p+'SoundUrl')?.value||'';w.querySelector('.systemSoundStatus').textContent=url?'設定済み':'未設定'});
 }
-const actionKindOptions=[['fill','指定個数を埋める'],['fill_layers','空きのある下段から指定段数を埋める'],['fill_percent','枠全体の指定割合分を追加で埋める'],['fill_all','全埋め'],['clear_all','全消し'],['tnt','TNT'],['repair','底の耐久回復'],['shield','シールド'],['bomb','全埋めボム補充'],['chain','連鎖ブロック補充'],['resize','枠サイズ変更'],['freeze','移動停止'],['launch','上へ吹き飛ばす'],['countdown','規定カウント変更'],['clear','指定個数を消去']];
+const actionKindOptions=[['fill','指定個数を埋める'],['fill_layers','空きのある下段から指定段数を埋める'],['fill_percent','枠全体の指定割合分を追加で埋める'],['fill_all','全埋め'],['clear_all','全消し'],['tnt','TNT'],['repair','底の耐久回復'],['shield','シールド'],['bomb','全埋めボム補充'],['chain','連鎖ブロック補充'],['resize','枠サイズ変更'],['freeze','牢屋へ閉じ込める'],['launch','TNTロケットで吹き飛ばす'],['darkness','暗闇'],['enderman','エンダーマンが持ち去る'],['countdown','規定カウント変更'],['clear','指定個数を消去']];
 const kindOptions=[...actionKindOptions,['gacha','スピナーガチャを回す']];
 function gachaOptions(){const entries=Object.entries(workingGachas||current?.config?.gachas||{}).map(([id,g])=>[id,g.name||'スピナーガチャ']);return entries.length?entries:[['','先にガチャを追加してください']]}
 function field(label,type,v,key,options){
@@ -111,14 +111,14 @@ function renderEffectCards(){
   add('この効果を有効にする','checkbox','enabled',true);
   settings.append(effectTriggerPicker(id,e));
   add('ギフト発動を許可するユーザーID（空欄は全員）','text','allowedGiftUserId','');
-  add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
+  add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear','enderman']);
   add('追加のWIN増減（通常は0）','number','win',0);
   add('TNTの種類','select','tntType','normal',['tnt'],[['normal','通常TNT'],['piercing','貫通TNT（縦一列）'],['timed','時限TNT'],['giant','巨大TNT（底ダメージ4倍）']]);
   add('時限TNT：爆発までの秒数','number','fuseSeconds',5,['tnt']);
   add('連鎖で広がる総ブロック数','number','spreadBlocks',27,['chain']);
   add('変更する方向','select','resizeAxis','both',['resize'],[['horizontal','横（幅・奥行）'],['height','高さ'],['both','横と高さの両方']]);
   add('サイズの増減（縮小はマイナス）','number','resizeDelta',1,['resize']);
-  add('秒数（カウント短縮はマイナス）','number','seconds',5,['countdown','freeze']);
+  add('秒数（カウント短縮はマイナス）','number','seconds',5,['countdown','freeze','darkness']);
   add('規定カウントの変更方法','select','countdownMode','add',['countdown'],[['add','規定秒数へ加算・減算'],['set','規定秒数を指定値へ変更']]);
   add('上へ飛ばす強さ（0.1〜10）','number','strength',2,['launch']);
   add('回すガチャ','select','gachaId','',['gacha'],gachaOptions());
@@ -176,14 +176,14 @@ function renderAdditionalEffect(cardId,action,index){
  const fields=document.createElement('div');fields.className='form effectSettings';
  function add(label,type,key,fallback,kinds,options){const wrap=field(label,type,action[key]??fallback,key,options);const el=wrap.querySelector('[data-effect-key]');delete el.dataset.effectKey;el.dataset.additionalKey=key;if(kinds)wrap.dataset.kinds=kinds.join(',');fields.append(wrap)}
  add('効果','select','kind','fill',null,actionKindOptions);
- add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
+ add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear','enderman']);
  add('WIN増減','number','win',0);
  add('TNTの種類','select','tntType','normal',['tnt'],[['normal','通常TNT'],['piercing','貫通TNT'],['timed','時限TNT'],['giant','巨大TNT']]);
  add('時限TNT：爆発までの秒数','number','fuseSeconds',5,['tnt']);
  add('連鎖で広がる総ブロック数','number','spreadBlocks',27,['chain']);
  add('変更する方向','select','resizeAxis','both',['resize'],[['horizontal','横'],['height','高さ'],['both','横と高さ']]);
  add('サイズの増減','number','resizeDelta',1,['resize']);
- add('秒数','number','seconds',5,['countdown','freeze']);
+ add('秒数','number','seconds',5,['countdown','freeze','darkness']);
  add('規定カウントの変更方法','select','countdownMode','add',['countdown'],[['add','加算・減算'],['set','指定値へ変更']]);
  add('上へ飛ばす強さ','number','strength',2,['launch']);
  add('フィーバー倍率を適用','checkbox','useMultiplier',true);
@@ -223,7 +223,7 @@ async function testConfigured(id){collectEffectCards();try{const effect=workingE
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-page]').forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab)});
 document.addEventListener('input',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
 document.addEventListener('change',event=>{if(event.target.matches('input,select,textarea'))event.target.dataset.dirty='1'});
-$('saveArena').onclick=()=>save({arena:{x:value('x'),y:value('y'),z:value('z'),width:value('width'),depth:value('depth'),height:value('height'),frameBlock:value('frameBlock'),fillBlock:value('fillBlock'),minWidth:value('minWidth'),maxWidth:value('maxWidth'),minHeight:value('minHeight'),maxHeight:value('maxHeight'),maxHealth:value('maxHealth'),floorEnabled:value('floorEnabled'),floorDamage:value('floorDamage'),floorPenalty:value('floorPenalty'),floorBreakSoundUrl:value('floorBreakSoundUrl'),floorBreakSoundVolume:value('floorBreakSoundVolume'),floorBreakSoundSeconds:value('floorBreakSoundSeconds'),holdSeconds:value('holdSeconds'),holdWin:value('holdWin'),clearAfterSuccess:value('clearAfterSuccess'),daylightFixed:value('daylightFixed'),clearWeather:value('clearWeather')},overlay:{successText:value('successText')},commandDelayMs:value('commandDelayMs')});
+$('saveArena').onclick=()=>save({arena:{x:value('x'),y:value('y'),z:value('z'),width:value('width'),depth:value('depth'),height:value('height'),frameBlock:value('frameBlock'),fillBlock:value('fillBlock'),minWidth:value('minWidth'),maxWidth:value('maxWidth'),minHeight:value('minHeight'),maxHeight:value('maxHeight'),maxHealth:value('maxHealth'),floorEnabled:value('floorEnabled'),floorDamage:value('floorDamage'),floorPenalty:value('floorPenalty'),floorBreakSoundUrl:value('floorBreakSoundUrl'),floorBreakSoundVolume:value('floorBreakSoundVolume'),floorBreakSoundSeconds:value('floorBreakSoundSeconds'),holdSeconds:value('holdSeconds'),holdWin:value('holdWin'),clearAfterSuccess:value('clearAfterSuccess'),topLayerWin:value('topLayerWin'),gravityFill:value('gravityFill'),daylightFixed:value('daylightFixed'),clearWeather:value('clearWeather')},overlay:{successText:value('successText')},commandDelayMs:value('commandDelayMs')});
 $('buildArena').onclick=async()=>{try{const r=await api('/api/arena/build',{});toast('天井なしの保護された枠を生成しています')}catch(e){toast(e.message,true)}};
 $('saveEffects').onclick=async()=>{collectEffectCards();await save({effects:workingEffects});workingEffects=undefined};
 $('saveEffectDesign').onclick=()=>save({overlay:{effectListStyle:effectListStyle()}},'一括デザインを保存しました');
