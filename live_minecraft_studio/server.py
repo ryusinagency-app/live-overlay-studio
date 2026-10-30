@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.4"
+APP_VERSION = "0.4.5"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -69,30 +69,8 @@ DEFAULT = {
                "totalLikeEvery": 1000, "totalLikeTarget": ""},
     "socialRuntime": {"followedUsers": [], "individualLikes": {}, "totalLikes": 0},
     "winBridge": {"enabled": False, "url": "http://127.0.0.1:8765/api/minecraft-studio/win", "token": ""},
-    "effects": {
-        "demo-fill": {"name": "10ブロック埋め", "kind": "fill", "amount": 10, "win": 0,
-                      "description": "埋め立てブロックを10個追加します"},
-        "demo-tnt": {"name": "TNT", "kind": "tnt", "amount": 1,
-                     "win": 0, "description": "TNTを1個落とし、枠内のブロックを爆破します。枠は壊れません"},
-        "demo-shield": {"name": "シールド", "kind": "shield", "amount": 1, "win": 0,
-                        "description": "次のブロック破壊を1回無効化します"},
-        "demo-time-plus": {"name": "カウント＋5秒", "kind": "countdown", "countdownMode": "add",
-                           "seconds": 5, "win": 0, "description": "カウントの残り時間を5秒増やします"},
-        "demo-time-minus": {"name": "カウント－3秒", "kind": "countdown", "countdownMode": "add",
-                            "seconds": -3, "win": 0, "description": "カウントの残り時間を3秒短くします"},
-        "demo-all": {"name": "全埋め", "kind": "fill_all", "amount": 1, "win": 0,
-                     "description": "枠内を埋める救済です。カウント完了でWINになります"},
-        "demo-bomb": {"name": "全埋めボム補充", "kind": "bomb", "amount": 1, "win": 0, "description": "全埋めボムを1回補充。プレイヤーが右クリックで使用します"},
-        "demo-chain": {"name": "連鎖ブロック補充", "kind": "chain", "amount": 1, "spreadBlocks": 27, "win": 0, "description": "連鎖ブロックを1回補充。置いた場所から27個へ広がります"},
-        "demo-piercing": {"name": "貫通TNT", "kind": "tnt", "tntType": "piercing", "amount": 1, "win": 0, "description": "着弾した縦一列を破壊します"},
-        "demo-timed": {"name": "時限TNT", "kind": "tnt", "tntType": "timed", "fuseSeconds": 5, "amount": 1, "win": 0, "description": "5秒後に爆発します"},
-        "demo-giant": {"name": "巨大TNT", "kind": "tnt", "tntType": "giant", "amount": 1, "win": 0, "description": "広範囲を爆破。露出した底へのダメージは通常の4倍です"},
-        "demo-expand": {"name": "横を拡大", "kind": "resize", "resizeAxis": "horizontal", "resizeDelta": 1, "amount": 1, "win": 0, "description": "幅と奥行を1ブロック拡大します"},
-        "demo-shrink": {"name": "高さを縮小", "kind": "resize", "resizeAxis": "height", "resizeDelta": -1, "amount": 1, "win": 0, "description": "高さを1ブロック縮めます"},
-        "demo-freeze": {"name": "移動停止", "kind": "freeze", "amount": 1, "seconds": 5, "win": 0, "description": "プレイヤーを5秒間動けなくします"},
-        "demo-launch": {"name": "上へ吹き飛ばす", "kind": "launch", "amount": 1, "strength": 2, "win": 0, "description": "TNT演出でプレイヤーを上へ吹き飛ばします"},
-        "demo-clear-all": {"name": "全消し", "kind": "clear_all", "amount": 1, "win": 0, "description": "枠を残して中のブロックを全消しします"},
-    },
+    # Effects are user-managed. Never repopulate deleted sample cards on startup.
+    "effects": {},
 }
 
 STATE_LOCK = Lock()
