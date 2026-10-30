@@ -390,7 +390,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     private void dropFill(Block target) {
         if (!inside(target)) return;
         FallingBlock falling=world.spawnFallingBlock(target.getLocation().add(.5,.05,.5),fill.createBlockData());
-        falling.setDropItem(false); falling.setCancelDrop(true); falling.addScoreboardTag("lms-fill");
+        falling.setDropItem(false); falling.setCancelDrop(false); falling.addScoreboardTag("lms-fill");
     }
 
     private void update() {
@@ -468,10 +468,29 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     }
 
     private void rocket(Player p, double strength) {
-        boolean allowed=p.getAllowFlight(), flying=p.isFlying(); p.setFlying(false); p.setAllowFlight(false);
+        // Keep the creative-flight permission itself enabled. Only leave the
+        // active flying state so velocity and gravity can launch the player.
+        // Disabling allowFlight made double-jump flight unavailable afterwards.
+        boolean flying=p.isFlying();
+        if (flying) p.setFlying(false);
         TNTPrimed visual=world.spawn(p.getLocation(),TNTPrimed.class); visual.setFuseTicks(35); visual.setYield(0); visual.addScoreboardTag("lms-launch");
         p.setVelocity(new Vector(0,Math.max(1.2,strength),0));
-        getServer().getScheduler().runTaskLater(this,()->{if(p.isOnline()){p.setAllowFlight(allowed);p.setFlying(flying&&allowed);}},45L);
+        getServer().getScheduler().runTaskLater(this,()->{
+            if (!p.isOnline()) return;
+            if (p.getGameMode()==GameMode.CREATIVE || p.getGameMode()==GameMode.SPECTATOR) p.setAllowFlight(true);
+            if (flying && p.getAllowFlight()) p.setFlying(true);
+        },45L);
+    }
+
+    private void destroyFallingFill(Location center, int radius) {
+        double radiusSquared=radius*radius;
+        for (org.bukkit.entity.Entity entity : world.getNearbyEntities(center,radius,radius,radius)) {
+            if (!(entity instanceof FallingBlock falling) || !falling.getScoreboardTags().contains("lms-fill") ||
+                falling.getLocation().distanceSquared(center)>radiusSquared) continue;
+            Location at=falling.getLocation(); falling.remove();
+            world.spawnParticle(Particle.BLOCK,at,18,.35,.35,.35,.08,fill.createBlockData());
+            world.playSound(at,fill.createBlockData().getSoundGroup().getBreakSound(),.8f,1f);
+        }
     }
 
     private void endermanRaid(int amount) {
@@ -700,6 +719,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         if (bounds == null) return;
         Set<String> tags = e.getEntity().getScoreboardTags();
         if (tags.contains("lms-launch")) { e.blockList().clear(); return; }
+        destroyFallingFill(e.getLocation(),tags.contains("lms-giant") ? 10 : 3);
         if (tags.contains("lms-piercing")) {
             e.blockList().clear(); int x = e.getLocation().getBlockX(), z = e.getLocation().getBlockZ();
             if (bounds.inside(x,bounds.y(),z)) for (int y = bounds.y()-1; y < bounds.y()+bounds.height(); y++) e.blockList().add(world.getBlockAt(x,y,z));
@@ -730,13 +750,18 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     public void burn(BlockBurnEvent e) { if (protectedBlock(e.getBlock())) e.setCancelled(true); }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void fade(BlockFadeEvent e) { if (protectedBlock(e.getBlock())) e.setCancelled(true); }
-    @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
+    @EventHandler(priority=EventPriority.HIGHEST)
     public void entityChange(EntityChangeBlockEvent e) {
         if (e.getEntity().getScoreboardTags().contains("lms-fill")) {
-            e.setCancelled(true);
             Block landing=e.getBlock();
-            if (inside(landing)) { landing.setType(fill,false); changed(landing); }
-            e.getEntity().remove(); return;
+            if (inside(landing)) {
+                // Let Minecraft perform the actual landing so the block becomes
+                // solid and can subsequently be broken by TNT like any other fill.
+                e.setCancelled(false); later(landing);
+            } else {
+                e.setCancelled(true); e.getEntity().remove();
+            }
+            return;
         }
         if (protectedBlock(e.getBlock())) e.setCancelled(true);
     }
