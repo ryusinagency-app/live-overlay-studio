@@ -83,6 +83,34 @@ class EngineTests(unittest.TestCase):
         e.receive({"eventId": "external-sound", "giftId": "sound"}, effect)
         self.assertEqual([], e.snapshot()["announcements"])
 
+    def test_one_gift_can_apply_multiple_effects_once_each(self):
+        e = self.engine()
+        effect = {"combo": {"name": "複合ギフト", "kind": "fill", "amount": 4, "win": 1,
+                            "additionalEffects": [
+                                {"kind": "tnt", "amount": 2, "tntType": "piercing", "win": -1},
+                                {"kind": "freeze", "seconds": 3, "win": 0}
+                            ]}}
+        result = e.receive({"eventId": "combo", "giftId": "combo"}, effect)
+        self.assertEqual(["lmsarena fill 4", "lmsarena tnt 2 piercing 60", "lmsarena freeze 3"], result["commands"][:3])
+        self.assertEqual(0, result["win"])
+        self.assertEqual(3, len(result["effects"]))
+        self.assertIn("4ブロック", e.snapshot()["announcements"][-1]["text"])
+        self.assertIn("TNT×2", e.snapshot()["announcements"][-1]["text"])
+
+    def test_gacha_only_effect_does_not_fire_as_a_normal_gift(self):
+        e = self.engine()
+        effects = {"prize": {"kind": "tnt", "amount": 10, "gachaOnly": True}}
+        normal = e.receive({"eventId": "normal", "giftId": "prize"}, effects)
+        prize = e.receive({"eventId": "prize", "giftId": "prize", "source": "gacha"}, effects)
+        self.assertEqual([], normal["commands"])
+        self.assertEqual("lmsarena tnt 10 normal 60", prize["commands"][0])
+
+    def test_disabled_effect_never_fires(self):
+        e = self.engine()
+        result = e.receive({"eventId": "disabled", "giftId": "off", "source": "social"},
+                           {"off": {"kind": "fill_all", "enabled": False}})
+        self.assertEqual([], result["commands"])
+
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))
