@@ -1,4 +1,4 @@
-const $=id=>document.getElementById(id);let current,workingEffects,giftCatalog=[];
+const $=id=>document.getElementById(id);let current,workingEffects,workingGachas,giftCatalog=[],draggedEffectCard=null,dragPointerY=0,dragScrollFrame=0;
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.message||'通信エラー');return j}
 function toast(message,error=false){const el=$('toast');el.textContent=message;el.className=error?'show error':'show';setTimeout(()=>el.className='',2600)}
 function value(id){const el=$(id);return el.type==='number'?Number(el.value):el.type==='checkbox'?el.checked:el.value}
@@ -21,9 +21,13 @@ function render(s){current=s;const c=s.config,a=s.game.arena,m=s.game.multiplier
  $('prepareLocalServer').disabled=running;$('startLocalServer').disabled=!prepared||running;$('stopLocalServer').disabled=!running;
  $('specialStock').textContent=`全埋めボム ${a.bombCharges||0}回 ／ 連鎖ブロック ${a.chainCharges||0}回 ／ 現在の枠 ${a.actualWidth||a.width}×${a.actualDepth||a.depth}×${a.actualHeight||a.height} ／ 規定 ${a.holdSeconds}秒`;
  if(!workingEffects){workingEffects=structuredClone(c.effects);renderEffectCards()}
+ if(!workingGachas){workingGachas=structuredClone(c.gachas||{});renderGachas()}
+ renderSocial(c);
  document.querySelectorAll('.effectCard').forEach(card=>{const p=s.effectPreviews?.[card.dataset.id];if(p){card.classList.toggle('fever',p.feverApplied);card.querySelector('.effectiveAmount').textContent=p.effectiveLabel}});
 }
-const kindOptions=[['fill','指定個数を埋める'],['fill_layers','空きのある下段から指定段数を埋める'],['fill_percent','枠全体の指定割合分を追加で埋める'],['fill_all','全埋め'],['clear_all','全消し'],['tnt','TNT'],['repair','底の耐久回復'],['shield','シールド'],['bomb','全埋めボム補充'],['chain','連鎖ブロック補充'],['resize','枠サイズ変更'],['freeze','移動停止'],['launch','上へ吹き飛ばす'],['countdown','規定カウント変更'],['clear','指定個数を消去']];
+const actionKindOptions=[['fill','指定個数を埋める'],['fill_layers','空きのある下段から指定段数を埋める'],['fill_percent','枠全体の指定割合分を追加で埋める'],['fill_all','全埋め'],['clear_all','全消し'],['tnt','TNT'],['repair','底の耐久回復'],['shield','シールド'],['bomb','全埋めボム補充'],['chain','連鎖ブロック補充'],['resize','枠サイズ変更'],['freeze','移動停止'],['launch','上へ吹き飛ばす'],['countdown','規定カウント変更'],['clear','指定個数を消去']];
+const kindOptions=[...actionKindOptions,['gacha','スピナーガチャを回す']];
+function gachaOptions(){const entries=Object.entries(workingGachas||current?.config?.gachas||{}).map(([id,g])=>[id,g.name||'スピナーガチャ']);return entries.length?entries:[['','先にガチャを追加してください']]}
 function field(label,type,v,key,options){
  const wrap=document.createElement('label');wrap.textContent=label;
  const el=document.createElement(type==='select'?'select':'input');el.dataset.effectKey=key;el.className='effect'+key[0].toUpperCase()+key.slice(1);
@@ -51,6 +55,8 @@ function collectEffectCards(){
  const result={};
  document.querySelectorAll('.effectCard').forEach(card=>{const e={...(workingEffects[card.dataset.id]||{})};
  card.querySelectorAll('[data-effect-key]').forEach(el=>e[el.dataset.effectKey]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value);
+ e.additionalEffects=[...card.querySelectorAll('.additionalEffect')].map(editor=>{const action={};editor.querySelectorAll('[data-additional-key]').forEach(el=>action[el.dataset.additionalKey]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value);return action});
+ if(!e.additionalEffects.length)delete e.additionalEffects;
  result[card.dataset.id]=e;});
  workingEffects=result;$('effectsJson').value=JSON.stringify(result,null,2);return result;
 }
@@ -71,6 +77,7 @@ function renderEffectCards(){
   const amount=document.createElement('strong');amount.className='effectiveAmount';amount.textContent='保存後に反映';
   const settings=document.createElement('div');settings.className='form effectSettings';
   function add(label,type,key,fallback,kinds,options){const l=field(label,type,e[key]??fallback,key,options);if(kinds)l.dataset.kinds=kinds.join(',');settings.append(l);}
+  add('この効果を有効にする','checkbox','enabled',true);
   add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
   add('追加のWIN増減（通常は0）','number','win',0);
   add('TNTの種類','select','tntType','normal',['tnt'],[['normal','通常TNT'],['piercing','貫通TNT（縦一列）'],['timed','時限TNT'],['giant','巨大TNT（底ダメージ4倍）']]);
@@ -81,6 +88,8 @@ function renderEffectCards(){
   add('秒数（カウント短縮はマイナス）','number','seconds',5,['countdown','freeze']);
   add('規定カウントの変更方法','select','countdownMode','add',['countdown'],[['add','規定秒数へ加算・減算'],['set','規定秒数を指定値へ変更']]);
   add('上へ飛ばす強さ（0.1〜10）','number','strength',2,['launch']);
+  add('回すガチャ','select','gachaId','',['gacha'],gachaOptions());
+  add('ガチャの中身専用（通常ギフトでは発動しない）','checkbox','gachaOnly',false);
   add('このギフトにフィーバー倍率を適用','checkbox','useMultiplier',true);
   add('画面にメッセージを表示','checkbox','displayEnabled',true);
   add('ギフター名も表示','checkbox','showSender',true);
@@ -91,6 +100,12 @@ function renderEffectCards(){
   add('音量（0〜100）','number','soundVolume',100);
   add('再生時間（秒、0で最後まで）','number','soundSeconds',0);
   settings.append(soundPicker(card,e));
+  const additional=document.createElement('div');additional.className='additionalEffects';
+  const additionalTitle=document.createElement('div');additionalTitle.className='sectionHead';
+  const additionalHeading=document.createElement('h3');additionalHeading.textContent='このギフトで同時に発動する効果';
+  const addEffect=document.createElement('button');addEffect.type='button';addEffect.className='addEffectButton';addEffect.textContent='＋ 効果を追加';addEffect.onclick=()=>{collectEffectCards();const item=workingEffects[id];item.additionalEffects=[...(item.additionalEffects||[]),{kind:'fill',amount:1,win:0,useMultiplier:true}];renderEffectCards()};
+  additionalTitle.append(additionalHeading,addEffect);additional.append(additionalTitle);
+  (e.additionalEffects||[]).forEach((action,index)=>additional.append(renderAdditionalEffect(id,action,index)));
   const design=document.createElement('details');design.className='cardDesign';
   const designTitle=document.createElement('summary');designTitle.textContent='このカードの見た目・表示設定';
   const designFields=document.createElement('div');designFields.className='form effectSettings';
@@ -109,17 +124,50 @@ function renderEffectCards(){
   designAdd('説明の文字サイズ','number','descriptionFontSize',13);
   designAdd('画像サイズ','number','imageSize',74);
   design.append(designTitle,designFields);
-  const hint=document.createElement('p');hint.className='note';hint.textContent='表示文で {amount}＝確定数量、{seconds}＝秒数、{strength}＝強さ、{name}＝ギフター名、{gift}＝ギフト名を使用できます。例：TNT{amount}個 ／ TNTやめろ！';
+  const hint=document.createElement('p');hint.className='note';hint.textContent='表示文で {amount}＝最初の効果量、{effects}＝すべての確定効果、{seconds}＝秒数、{strength}＝強さ、{name}＝ギフター名、{gift}＝ギフト名を使用できます。';
   const kind=main.querySelector('select');const visibility=()=>settings.querySelectorAll('[data-kinds]').forEach(l=>l.hidden=!l.dataset.kinds.split(',').includes(kind.value));kind.onchange=visibility;visibility();
-  card.append(main,amount,settings,design,hint);host.append(card);
+  card.append(main,amount,settings,additional,design,hint);host.append(card);
  }
  enableEffectDrag();
  $('effectsJson').value=JSON.stringify(workingEffects,null,2);
 }
+function renderAdditionalEffect(cardId,action,index){
+ const editor=document.createElement('details');editor.className='additionalEffect';editor.open=true;
+ const summary=document.createElement('summary');summary.textContent=`追加効果 ${index+1}`;
+ const fields=document.createElement('div');fields.className='form effectSettings';
+ function add(label,type,key,fallback,kinds,options){const wrap=field(label,type,action[key]??fallback,key,options);const el=wrap.querySelector('[data-effect-key]');delete el.dataset.effectKey;el.dataset.additionalKey=key;if(kinds)wrap.dataset.kinds=kinds.join(',');fields.append(wrap)}
+ add('効果','select','kind','fill',null,actionKindOptions);
+ add('数量・段数・割合（%）・補充回数','number','amount',1,['fill','fill_layers','fill_percent','tnt','repair','shield','bomb','chain','clear']);
+ add('WIN増減','number','win',0);
+ add('TNTの種類','select','tntType','normal',['tnt'],[['normal','通常TNT'],['piercing','貫通TNT'],['timed','時限TNT'],['giant','巨大TNT']]);
+ add('時限TNT：爆発までの秒数','number','fuseSeconds',5,['tnt']);
+ add('連鎖で広がる総ブロック数','number','spreadBlocks',27,['chain']);
+ add('変更する方向','select','resizeAxis','both',['resize'],[['horizontal','横'],['height','高さ'],['both','横と高さ']]);
+ add('サイズの増減','number','resizeDelta',1,['resize']);
+ add('秒数','number','seconds',5,['countdown','freeze']);
+ add('規定カウントの変更方法','select','countdownMode','add',['countdown'],[['add','加算・減算'],['set','指定値へ変更']]);
+ add('上へ飛ばす強さ','number','strength',2,['launch']);
+ add('フィーバー倍率を適用','checkbox','useMultiplier',true);
+ const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.textContent='この追加効果を削除';remove.onclick=()=>{collectEffectCards();workingEffects[cardId].additionalEffects.splice(index,1);renderEffectCards()};fields.append(remove);
+ const kind=fields.querySelector('[data-additional-key="kind"]');const visibility=()=>fields.querySelectorAll('[data-kinds]').forEach(w=>w.hidden=!w.dataset.kinds.split(',').includes(kind.value));kind.onchange=visibility;visibility();
+ editor.append(summary,fields);return editor;
+}
 function moveEffectCard(card,direction){const sibling=direction<0?card.previousElementSibling:card.nextElementSibling;if(!sibling)return;if(direction<0)card.parentElement.insertBefore(card,sibling);else card.parentElement.insertBefore(sibling,card);collectEffectCards()}
-function enableEffectDrag(){let dragging=null;document.querySelectorAll('.effectCard').forEach(card=>{card.ondragstart=e=>{if(card.dataset.dragReady!=='1'){e.preventDefault();return}dragging=card;card.classList.add('dragging');e.dataTransfer.effectAllowed='move'};card.ondragend=()=>{delete card.dataset.dragReady;card.classList.remove('dragging');dragging=null;collectEffectCards()};card.ondragover=e=>{if(!dragging||dragging===card)return;e.preventDefault();const box=card.getBoundingClientRect();card.parentElement.insertBefore(dragging,e.clientY<box.top+box.height/2?card:card.nextElementSibling)}})}
+function dragAutoScroll(){if(!draggedEffectCard){dragScrollFrame=0;return}const edge=Math.min(160,window.innerHeight*.22);let speed=0;if(dragPointerY<edge)speed=-Math.ceil((edge-dragPointerY)/edge*24);else if(dragPointerY>window.innerHeight-edge)speed=Math.ceil((dragPointerY-(window.innerHeight-edge))/edge*24);if(speed)window.scrollBy(0,speed);dragScrollFrame=requestAnimationFrame(dragAutoScroll)}
+document.addEventListener('dragover',e=>{if(!draggedEffectCard)return;e.preventDefault();dragPointerY=e.clientY;if(!dragScrollFrame)dragScrollFrame=requestAnimationFrame(dragAutoScroll)});
+function enableEffectDrag(){document.querySelectorAll('.effectCard').forEach(card=>{card.ondragstart=e=>{if(card.dataset.dragReady!=='1'){e.preventDefault();return}draggedEffectCard=card;dragPointerY=e.clientY;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';if(!dragScrollFrame)dragScrollFrame=requestAnimationFrame(dragAutoScroll)};card.ondragend=()=>{delete card.dataset.dragReady;card.classList.remove('dragging');draggedEffectCard=null;if(dragScrollFrame)cancelAnimationFrame(dragScrollFrame);dragScrollFrame=0;collectEffectCards()};card.ondragover=e=>{if(!draggedEffectCard||draggedEffectCard===card)return;e.preventDefault();const box=card.getBoundingClientRect();card.parentElement.insertBefore(draggedEffectCard,e.clientY<box.top+box.height/2?card:card.nextElementSibling)}})}
 function effectListStyle(){return {columns:value('effectColumns'),cardWidth:value('effectCardWidth'),cardHeight:value('effectCardHeight'),gap:value('effectGap'),borderRadius:value('effectRadius'),backgroundColor:value('effectBackgroundColor'),borderColor:value('effectBorderColor'),textColor:value('effectTextColor'),accentColor:value('effectAccentColor'),feverGlowColor:value('effectGlowColor'),nameFontSize:value('effectNameFontSize'),effectFontSize:value('effectAmountFontSize'),descriptionFontSize:value('effectDescriptionFontSize'),imageSize:value('effectImageSize')}}
-function addGift(gift){collectEffectCards();const id=String(gift.id||gift.name);if(!id)return;workingEffects[id]={...(workingEffects[id]||{}),giftId:String(gift.id||''),giftName:String(gift.name||''),giftImageUrl:String(gift.imageUrl||''),name:String(gift.name||'ギフト効果'),kind:'fill',amount:1,win:0,description:'1ブロック埋めます'};$('giftDialog').close();renderEffectCards()}
+function gfield(label,type,v,key,options){const wrap=document.createElement('label');wrap.textContent=label;const el=document.createElement(type==='select'?'select':'input');el.dataset.gachaKey=key;if(type==='select'){for(const [value,text] of options||[]){const o=document.createElement('option');o.value=value;o.textContent=text;el.append(o)}el.value=v??''}else{el.type=type;if(type==='checkbox'){el.checked=!!v;wrap.className='toggle'}else el.value=v??''}wrap.append(el);return wrap}
+function effectOptions(){return Object.entries(workingEffects||{}).filter(([,e])=>e.kind!=='gacha').map(([id,e])=>[id,e.name||e.giftName||id])}
+function gachaSoundPicker(g,key,label){const wrap=document.createElement('div');wrap.className='soundPicker';const title=document.createElement('span');title.textContent=label;const status=document.createElement('small');status.textContent=g[key]?'設定済み':'未設定';const hidden=document.createElement('input');hidden.type='hidden';hidden.dataset.gachaKey=key;hidden.value=g[key]||'';const input=document.createElement('input');input.type='file';input.accept='audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac';const remove=document.createElement('button');remove.type='button';remove.textContent='音源を外す';remove.onclick=()=>{hidden.value='';status.textContent='未設定';input.value=''};input.onchange=async()=>{const file=input.files?.[0];if(!file)return;if(file.size>20_000_000){toast('音声ファイルは20MB以内にしてください',true);return}try{status.textContent='アップロード中…';const data=await new Promise((ok,ng)=>{const reader=new FileReader();reader.onload=()=>ok(String(reader.result).split(',')[1]||'');reader.onerror=ng;reader.readAsDataURL(file)});const r=await api('/api/sound-upload',{name:file.name,data});hidden.value=r.url;status.textContent=file.name;toast('音源を設定しました')}catch(err){toast(err.message,true)}};wrap.append(title,status,input,remove,hidden);return wrap}
+function collectGachas(){const result={};document.querySelectorAll('.gachaCard').forEach(card=>{const g={...(workingGachas[card.dataset.id]||{})};card.querySelectorAll('[data-gacha-key]').forEach(el=>g[el.dataset.gachaKey]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value);g.entries=[...card.querySelectorAll('.gachaEntry')].map(row=>{const entry={};row.querySelectorAll('[data-entry-key]').forEach(el=>entry[el.dataset.entryKey]=el.type==='number'?Number(el.value):el.value);return entry});result[card.dataset.id]=g});workingGachas=result;return result}
+function renderGachas(){const host=$('gachaCards');host.replaceChildren();for(const [id,g] of Object.entries(workingGachas||{})){const card=document.createElement('div');card.className='gachaCard';card.dataset.id=id;const head=document.createElement('div');head.className='sectionHead';const title=document.createElement('h3');title.textContent=g.name||'スピナーガチャ';const test=document.createElement('button');test.className='accent';test.textContent='このガチャをテスト';test.onclick=()=>testGacha(id);const del=document.createElement('button');del.className='danger';del.textContent='削除';del.onclick=()=>{collectGachas();delete workingGachas[id];renderGachas()};head.append(title,test,del);const form=document.createElement('div');form.className='form effectSettings';form.append(gfield('ガチャ名','text',g.name||'スピナーガチャ','name'),gfield('使用する','checkbox',g.enabled!==false,'enabled'),gfield('効果一覧に表示','checkbox',g.showInEffectList!==false,'showInEffectList'),gfield('回転時間（秒）','number',g.spinSeconds??5,'spinSeconds'),gfield('継続システム','checkbox',g.continueEnabled===true,'continueEnabled'),gfield('継続率（%）','number',g.continueRate??70,'continueRate'),gfield('最大継続回数','number',g.maxSpins??20,'maxSpins'),gfield('継続時の次回転まで（秒）','number',g.continueDelaySeconds??2,'continueDelaySeconds'),gfield('音量（0〜100）','number',g.soundVolume??100,'soundVolume'));form.append(gachaSoundPicker(g,'giftSoundUrl','ギフトを受けた時の音源'),gachaSoundPicker(g,'spinSoundUrl','回転中のリール音'),gachaSoundPicker(g,'resultSoundUrl','結果決定音'));const entries=document.createElement('div');entries.className='gachaEntries';const entryHead=document.createElement('div');entryHead.className='sectionHead';const h=document.createElement('h4');h.textContent='ガチャの中身と確率';const add=document.createElement('button');add.textContent='＋ 中身を追加';add.onclick=()=>{collectGachas();const options=effectOptions();if(!options.length){toast('先にギフト効果を追加してください',true);return}workingGachas[id].entries.push({effectId:options[0][0],weight:1,label:''});renderGachas()};entryHead.append(h,add);entries.append(entryHead);const total=(g.entries||[]).reduce((n,e)=>n+Math.max(0,Number(e.weight)||0),0)||1;(g.entries||[]).forEach((entry,index)=>entries.append(renderGachaEntry(id,entry,index,total)));card.append(head,form,entries);host.append(card)}}
+function renderGachaEntry(gachaId,entry,index,total){const row=document.createElement('div');row.className='gachaEntry';function ef(label,type,key,val,options){const wrap=document.createElement('label');wrap.textContent=label;const el=document.createElement(type==='select'?'select':'input');el.dataset.entryKey=key;if(type==='select'){for(const [v,t] of options){const o=document.createElement('option');o.value=v;o.textContent=t;el.append(o)}el.value=val}else{el.type=type;el.value=val??''}wrap.append(el);row.append(wrap)}ef('発動する効果','select','effectId',entry.effectId,effectOptions());ef('表示名（空欄は効果名）','text','label',entry.label||'');ef('確率の重み','number','weight',entry.weight??1);const percent=document.createElement('strong');percent.textContent=`${(Math.max(0,Number(entry.weight)||0)/total*100).toFixed(1)}%`;const remove=document.createElement('button');remove.className='danger';remove.textContent='削除';remove.onclick=()=>{collectGachas();workingGachas[gachaId].entries.splice(index,1);renderGachas()};row.append(percent,remove);return row}
+function targetOptions(){return [['','選択してください'],...Object.entries(workingEffects||{}).map(([id,e])=>['effect:'+id,'効果：'+(e.name||id)]),...Object.entries(workingGachas||{}).map(([id,g])=>['gacha:'+id,'ガチャ：'+(g.name||id)])]}
+function setTargetSelect(id,target){const el=$(id);if(el.dataset.dirty==='1')return;el.replaceChildren(...targetOptions().map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o}));el.value=target||''}
+function renderSocial(c){const s=c.social||{};set('followEnabled',s.followEnabled);set('individualLikeEnabled',s.individualLikeEnabled);set('individualLikeEvery',s.individualLikeEvery??100);set('totalLikeEnabled',s.totalLikeEnabled);set('totalLikeEvery',s.totalLikeEvery??1000);setTargetSelect('followTarget',s.followTarget);setTargetSelect('individualLikeTarget',s.individualLikeTarget);setTargetSelect('totalLikeTarget',s.totalLikeTarget);const runtime=c.socialRuntime||{};$('socialStats').textContent=`記録済み新規フォロー ${runtime.followedUsers?.length||0}人 ／ 累計いいね ${runtime.totalLikes||0}回`}
+async function testGacha(id){collectGachas();try{await api('/api/config',{gachas:workingGachas});const r=await api('/api/test-gacha',{gachaId:id});toast(r.message);refresh()}catch(e){toast(e.message,true)}}
+function addGift(gift){collectEffectCards();const rawId=String(gift.id||gift.name);if(!rawId)return;const existing=Object.entries(workingEffects).find(([,e])=>String(e.giftId||'')===rawId);const id=existing?.[0]||('gift-'+rawId);workingEffects[id]={...(workingEffects[id]||{}),giftId:String(gift.id||''),giftName:String(gift.name||''),giftImageUrl:String(gift.imageUrl||''),name:String(gift.name||'ギフト効果'),kind:workingEffects[id]?.kind||'fill',amount:workingEffects[id]?.amount??1,win:workingEffects[id]?.win??0,enabled:true,description:workingEffects[id]?.description||'1ブロック埋めます'};$('giftDialog').close();renderEffectCards()}
 function renderGiftCatalog(){const q=$('giftSearch').value.trim().toLowerCase();$('giftCatalog').replaceChildren(...giftCatalog.filter(g=>!q||String(g.name).toLowerCase().includes(q)||String(g.price).includes(q)).map(g=>{const b=document.createElement('button');b.className='giftChoice';const img=document.createElement('img');img.src=g.imageUrl||'';const n=document.createElement('b');n.textContent=g.name||'ギフト';const p=document.createElement('small');p.textContent=`${g.price||0}コイン`;b.append(img,n,p);b.onclick=()=>addGift(g);return b}))}
 async function refresh(){try{render(await api('/api/state'))}catch(e){$('connection').textContent='停止';}}
 async function save(body,message='保存しました'){try{const r=await api('/api/config',body);document.querySelectorAll('[data-dirty="1"]').forEach(el=>delete el.dataset.dirty);render(r.state);toast(message)}catch(e){toast(e.message,true)}}
@@ -134,8 +182,13 @@ $('saveEffects').onclick=async()=>{collectEffectCards();await save({effects:work
 $('saveEffectDesign').onclick=()=>save({overlay:{effectListStyle:effectListStyle()}},'一括デザインを保存しました');
 $('resetCardStyles').onclick=async()=>{collectEffectCards();Object.values(workingEffects).forEach(e=>e.useCustomStyle=false);renderEffectCards();await save({effects:workingEffects,overlay:{effectListStyle:effectListStyle()}},'全カードを一括デザインへ揃えました');workingEffects=undefined};
 $('applyEffectsJson').onclick=()=>{try{workingEffects=JSON.parse($('effectsJson').value);renderEffectCards();toast('JSONを画面へ反映しました')}catch(e){toast('JSONの形式を確認してください',true)}};
-$('addGiftEffect').onclick=async()=>{try{const r=await api('/api/gift-catalog');giftCatalog=r.gifts||[];renderGiftCatalog();$('giftDialog').showModal()}catch(e){toast(e.message,true)}};
+async function openGiftCatalog(){try{const r=await api('/api/gift-catalog');giftCatalog=r.gifts||[];renderGiftCatalog();$('giftDialog').showModal()}catch(e){toast(e.message,true)}}
+$('addGiftEffect').onclick=openGiftCatalog;$('addGiftEffectBottom').onclick=openGiftCatalog;
 $('closeGiftDialog').onclick=()=>$('giftDialog').close();$('giftSearch').oninput=renderGiftCatalog;
+$('addGacha').onclick=()=>{collectGachas();const id='gacha-'+Date.now();workingGachas[id]={name:'新しいスピナーガチャ',enabled:true,showInEffectList:true,spinSeconds:5,continueEnabled:false,continueRate:70,maxSpins:20,continueDelaySeconds:2,soundVolume:100,entries:[]};renderGachas();collectEffectCards();renderEffectCards()};
+$('saveGachas').onclick=async()=>{collectGachas();await save({gachas:workingGachas},'ガチャ設定を保存しました');workingGachas=undefined};
+$('saveSocial').onclick=()=>save({social:{followEnabled:value('followEnabled'),followTarget:value('followTarget'),individualLikeEnabled:value('individualLikeEnabled'),individualLikeEvery:value('individualLikeEvery'),individualLikeTarget:value('individualLikeTarget'),totalLikeEnabled:value('totalLikeEnabled'),totalLikeEvery:value('totalLikeEvery'),totalLikeTarget:value('totalLikeTarget')}},'いいね・フォロー設定を保存しました');
+$('resetSocial').onclick=async()=>{if(!confirm('新規フォロー判定といいね回数をすべてリセットしますか？'))return;try{const r=await api('/api/reset-social',{});render(r.state);toast(r.message)}catch(e){toast(e.message,true)}};
 $('saveFever').onclick=()=>save({multiplier:{threshold:value('threshold'),durationSeconds:value('durationSeconds'),multiplier:value('multiplier'),applyFill:value('applyFill'),applyTnt:value('applyTnt'),applyWin:value('applyWin'),applyRepair:value('applyRepair'),applyItems:value('applyItems'),applyResize:value('applyResize'),applyCountdown:value('applyCountdown'),applyPlayer:value('applyPlayer'),stackingMode:value('stackingMode')}});
 async function localServerAction(path,body,message){const buttons=['prepareLocalServer','startLocalServer','stopLocalServer'].map($);buttons.forEach(b=>b.disabled=true);toast(message);try{const r=await api(path,body||{});render(r.state);toast(r.message||'完了しました')}catch(e){toast(e.message,true)}finally{setTimeout(refresh,400)}}
 $('prepareLocalServer').onclick=()=>localServerAction('/api/local-server/prepare',{eulaAccepted:value('eulaAccepted')},'サーバーを準備しています');
