@@ -122,6 +122,22 @@ class EngineTests(unittest.TestCase):
         self.assertEqual([], blocked["commands"])
         self.assertTrue(allowed["commands"])
 
+    def test_gift_user_filter_accepts_nested_tiktok_user(self):
+        effects = {"only": {"kind": "fill", "amount": 3, "allowedGiftUserId": "@viewer_01"}}
+        result = self.engine().receive(
+            {"eventId": "nested-user", "giftId": "only", "source": "gift",
+             "user": {"uniqueId": "Viewer_01"}}, effects)
+        self.assertEqual("lmsarena fill 3", result["commands"][0])
+
+    def test_new_player_effect_commands(self):
+        engine = self.engine()
+        darkness = engine.receive({"eventId": "dark", "giftId": "dark"},
+                                  {"dark": {"kind": "darkness", "seconds": 7}})
+        enderman = engine.receive({"eventId": "ender", "giftId": "ender"},
+                                  {"ender": {"kind": "enderman", "amount": 4}})
+        self.assertEqual("lmsarena darkness 7", darkness["commands"][0])
+        self.assertEqual("lmsarena enderman 4", enderman["commands"][0])
+
     def test_disabled_multiplier_does_not_count_or_activate(self):
         multiplier = MultiplierState(enabled=False, threshold=100)
         self.assertEqual(0, multiplier.add_coins(500))
@@ -194,9 +210,9 @@ class EngineTests(unittest.TestCase):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))
         self.assertIn("lmsarena generate world", e.frame_commands()[0])
-        self.assertTrue(e.frame_commands()[0].endswith("false 100 10 1 3 64 3 64"))
+        self.assertTrue(e.frame_commands()[0].endswith("false 100 10 1 3 64 3 64 false false"))
         e.arena.floor_enabled = True
-        self.assertTrue(e.frame_commands()[0].endswith("true 100 10 1 3 64 3 64"))
+        self.assertTrue(e.frame_commands()[0].endswith("true 100 10 1 3 64 3 64 false false"))
 
     def test_missing_plugin_and_server_error_not_reported_as_success(self):
         class Client:
