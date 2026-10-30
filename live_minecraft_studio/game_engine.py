@@ -223,8 +223,13 @@ class GameEngine:
                           "displayEnabled": False}
 
             repeat = max(1, int(clamp(payload.get("repeatCount", 1), 1, 10000, 1)))
-            coins = max(0, int(clamp(payload.get("coins", 0), 0, 10**9, 0))) * repeat
+            raw_coins = payload.get("coins", payload.get("giftCoins", payload.get("diamondCount",
+                        payload.get("coinValue", payload.get("totalCoins", 0)))))
+            coins = max(0, int(clamp(raw_coins, 0, 10**9, 0))) * repeat
+            was_active = self.multiplier.active()
+            previous_level = self.multiplier.multiplier + self.multiplier.bonus
             activations = self.multiplier.add_coins(coins)
+            current_level = self.multiplier.multiplier + self.multiplier.bonus
             result = self._apply_effects(effect, repeat)
             self.processed_events.add(event_id)
             entry = {
@@ -269,6 +274,8 @@ class GameEngine:
                 "message": result["message"],
                 "effects": result["resolvedEffects"],
                 "multiplierActivations": activations,
+                "multiplierStarted": bool(activations and not was_active),
+                "multiplierLevelUps": max(0, int(current_level - previous_level)) if was_active else 0,
             }
 
     def _apply_effects(self, effect: dict[str, Any], repeat: int) -> dict[str, Any]:
