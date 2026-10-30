@@ -8,6 +8,8 @@ import org.bukkit.block.Block;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Firework;
 import org.bukkit.event.*;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
@@ -17,10 +19,14 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
+import org.bukkit.util.Transformation;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import java.nio.charset.StandardCharsets;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -38,10 +44,12 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     private long tick = 0, sweep = 0, fullSweep = -1;
     private boolean clear = true, ready = false, started = false;
     private boolean floorEnabled = false;
+    private boolean daylightFixed = true, clearWeather = true;
     private int floorMax = 100, floorHealth = 100, floorDamage = 10, floorPenalty = 1;
     private final Random random = new Random();
     private int minWidth = 3, maxWidth = 64, minHeight = 3, maxHeight = 64;
     private int bombs = 0, chains = 0, spread = 27;
+    private String successText = "WIN！";
     private long generation = 0, announcementUntil = 0;
     private String resizeRevision = UUID.randomUUID().toString();
     private final Map<UUID, Long> frozen = new HashMap<>();
@@ -51,6 +59,9 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         itemKey = new NamespacedKey(this, "special-item");
         bombs = getConfig().getInt("bombs", 0); chains = getConfig().getInt("chains", 0); spread = getConfig().getInt("spread", 27);
+        successText = getConfig().getString("successText", "WIN！");
+        daylightFixed = getConfig().getBoolean("daylightFixed", true);
+        clearWeather = getConfig().getBoolean("clearWeather", true);
         Objects.requireNonNull(getCommand("lmsarena")).setExecutor(this);
         String pending = getConfig().getString("pendingWins", "[]");
         List<Map<String, Object>> restored = json.fromJson(pending, new TypeToken<List<Map<String, Object>>>(){}.getType());
@@ -166,6 +177,46 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         fillSome(amount, false);
     }
 
+    private void evacuateInterior() {
+        Location safe = new Location(world, bounds.x() + bounds.width() / 2.0 + .5,
+            bounds.y() + bounds.height() + 1.0, bounds.z() + bounds.depth() / 2.0 + .5);
+        for (Player p : world.getPlayers()) {
+            Location at = p.getLocation();
+            if (bounds.inside(at.getBlockX(), at.getBlockY(), at.getBlockZ())) {
+                Location destination = safe.clone();
+                destination.setYaw(at.getYaw()); destination.setPitch(at.getPitch());
+                p.teleport(destination); p.setFallDistance(0);
+            }
+        }
+    }
+
+    private void celebration(boolean filling) {
+        Color primary = filling ? Color.LIME : Color.RED;
+        Color fade = filling ? Color.AQUA : Color.ORANGE;
+        int[][] points = {{1,1},{Math.max(1,bounds.width()-2),1},{bounds.width()/2,Math.max(1,bounds.depth()-2)}};
+        for (int[] point : points) {
+            Location at = new Location(world, bounds.x()+point[0]+.5, bounds.y()+bounds.height()+2, bounds.z()+point[1]+.5);
+            Firework firework = world.spawn(at, Firework.class);
+            firework.addScoreboardTag("lms-celebration");
+            FireworkMeta meta = firework.getFireworkMeta();
+            meta.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE).withColor(primary).withFade(fade).flicker(true).trail(true).build());
+            meta.setPower(1); firework.setFireworkMeta(meta);
+        }
+        world.playSound(new Location(world,bounds.x()+bounds.width()/2.0,bounds.y()+bounds.height(),bounds.z()+bounds.depth()/2.0),
+            filling ? Sound.ENTITY_PLAYER_LEVELUP : Sound.ENTITY_GENERIC_EXPLODE, 1, filling ? 1.2f : .8f);
+    }
+
+    private void fillAll(boolean effects) {
+        evacuateInterior();
+        fillSome(bounds.capacity(), false);
+        if (effects) celebration(true);
+    }
+
+    private void clearAll(boolean effects) {
+        clearInterior();
+        if (effects) celebration(false);
+    }
+
     private void saveArenaToken(int index, String value) {
         String[] saved = getConfig().getString("arena").split(" ");
         saved[index] = value; getConfig().set("arena", String.join(" ", saved)); saveConfig();
@@ -225,7 +276,40 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(type.equals("bomb") ? "§6全埋めボム（右クリック）" : "§d連鎖ブロック（右クリック）");
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, type); item.setItemMeta(meta);
-        p.getInventory().addItem(item);
+        int slot = -1;
+        for (int i = 8; i >= 0; i--) {
+            ItemStack current = p.getInventory().getItem(i);
+            if (current == null || current.getType().isAir()) { slot = i; break; }
+        }
+        if (slot < 0) {
+            for (int i = 8; i >= 0; i--) if (special(p.getInventory().getItem(i)).isEmpty()) { slot = i; break; }
+        }
+        if (slot < 0) slot = 8;
+        ItemStack displaced = p.getInventory().getItem(slot);
+        p.getInventory().setItem(slot, item);
+        if (displaced != null && !displaced.getType().isAir()) {
+            for (ItemStack leftover : p.getInventory().addItem(displaced).values())
+                world.dropItemNaturally(p.getLocation(), leftover);
+        }
+        p.updateInventory();
+    }
+    private void consumeSpecial(Player p) {
+        p.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+        p.updateInventory();
+    }
+
+    private void showGiantTnt(TNTPrimed tnt, int fuse) {
+        BlockDisplay display = world.spawn(tnt.getLocation().clone().subtract(1,1,1), BlockDisplay.class);
+        display.setBlock(Material.TNT.createBlockData());
+        display.setTransformation(new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(3,3,3), new Quaternionf()));
+        display.addScoreboardTag("lms-giant-visual");
+        new BukkitRunnable() {
+            int life = 0;
+            public void run() {
+                if (!tnt.isValid() || life++ > fuse + 10) { display.remove(); cancel(); return; }
+                display.teleport(tnt.getLocation().clone().subtract(1,1,1));
+            }
+        }.runTaskTimer(this, 0, 1);
     }
     private void supplyItems() {
         if (world == null) return;
@@ -257,7 +341,13 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
 
     private void update() {
         tick++;
-        if (tick % 20 == 0) supplyItems();
+        if (tick % 20 == 0) {
+            supplyItems();
+            if (world != null && daylightFixed) world.setTime(6000);
+            if (world != null && clearWeather && (world.hasStorm() || world.isThundering())) {
+                world.setStorm(false); world.setThundering(false); world.setWeatherDuration(0); world.setThunderDuration(0);
+            }
+        }
         if (!started || bounds == null) return;
         // Bound work per tick; event tracking provides immediate countdown cancellation.
         for (int n = 0; n < 2048 && !edits.isEmpty(); n++) edits.removeFirst().run();
@@ -277,11 +367,21 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             wins.add(Map.of("eventId", UUID.randomUUID().toString(), "win", win, "reason", "WIN"));
             saveWins();
             Bukkit.broadcastMessage("§aWIN！ +" + win);
+            for (Player p : world.getPlayers()) {
+                p.sendTitle("§a" + successText, "§f+" + win + " WIN", 2, 50, 10);
+                p.playSound(p.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, .9f, 1);
+            }
             if (clear) clearInterior();
         }
         if (tick % 20 == 0 && tick >= announcementUntil && round.counting()) {
-            String title = "§e" + round.remaining(tick);
-            for (Player p : world.getPlayers()) p.sendTitle(title, "埋め立てカウント", 0, 22, 0);
+            long remaining = round.remaining(tick);
+            if (remaining == 0) return;
+            String title = "§e" + remaining;
+            float pitch = remaining <= 3 ? 1.5f : 1.1f;
+            for (Player p : world.getPlayers()) {
+                p.sendTitle(title, "", 0, 22, 0);
+                p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, .8f, pitch);
+            }
         }
     }
 
@@ -315,10 +415,11 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                 if (a[0].equals("build")) build();
                 else if (a[0].equals("settings")) settings(a);
                 else if (a[0].equals("fill")) fillSome(Math.max(0, Math.min(bounds.capacity(), Integer.parseInt(a[1]))), false);
+                else if (a[0].equals("fill_all")) fillAll(true);
                 else if (a[0].equals("fill_layers")) fillLayers(Integer.parseInt(a[1]));
                 else if (a[0].equals("fill_percent")) fillByPercent(Integer.parseInt(a[1]));
                 else if (a[0].equals("clear")) fillSome(Math.max(0, Math.min(bounds.capacity(), Integer.parseInt(a[1]))), true);
-                else if (a[0].equals("clear_all")) clearInterior();
+                else if (a[0].equals("clear_all")) clearAll(true);
                 else if (a[0].equals("bomb")) { bombs = Math.min(1000000, bombs + Math.max(0, Integer.parseInt(a[1]))); saveItems(); supplyItems(); }
                 else if (a[0].equals("chain")) { chains = Math.min(1000000, chains + Math.max(0, Integer.parseInt(a[1]))); spread = Math.clamp(Integer.parseInt(a[2]),1,10000); saveItems(); supplyItems(); }
                 else if (a[0].equals("resize")) resize(a[1], Math.clamp(Integer.parseInt(a[2]), -64, 64));
@@ -346,15 +447,29 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
                     announcementUntil = tick + duration * 20L;
                     for (Player p : world.getPlayers()) p.sendTitle(String.valueOf(text.get("text")), String.valueOf(text.get("sender")), 2,duration*20,5);
                 }
+                else if (a[0].equals("success_text")) {
+                    successText = new String(Base64.getDecoder().decode(a[1]), StandardCharsets.UTF_8).trim();
+                    if (successText.isEmpty()) successText = "WIN！";
+                    if (successText.length() > 80) successText = successText.substring(0, 80);
+                    getConfig().set("successText", successText); saveConfig();
+                }
+                else if (a[0].equals("environment")) {
+                    daylightFixed = Boolean.parseBoolean(a[1]); clearWeather = Boolean.parseBoolean(a[2]);
+                    getConfig().set("daylightFixed", daylightFixed); getConfig().set("clearWeather", clearWeather); saveConfig();
+                    if (daylightFixed) world.setTime(6000);
+                    if (clearWeather) { world.setStorm(false); world.setThundering(false); world.setWeatherDuration(0); world.setThunderDuration(0); }
+                }
                 else if (a[0].equals("tnt")) {
                     int count = Math.max(0, Math.min(256, Integer.parseInt(a[1])));
                     for (int i = 0; i < count; i++) {
                         Location at = new Location(world, bounds.x() + .5 + random.nextInt(bounds.width()), bounds.y() + bounds.height() + 1, bounds.z() + .5 + random.nextInt(bounds.depth()));
                         TNTPrimed tnt = world.spawn(at, TNTPrimed.class);
                         String type = a.length > 2 ? a[2] : "normal";
-                        tnt.setFuseTicks(type.equals("timed") && a.length > 3 ? Math.clamp(Integer.parseInt(a[3]),20,1200) : 60);
-                        tnt.setYield(type.equals("giant") ? 6f : 3f);
+                        int fuse = type.equals("timed") && a.length > 3 ? Math.clamp(Integer.parseInt(a[3]),20,1200) : 60;
+                        tnt.setFuseTicks(fuse);
+                        tnt.setYield(type.equals("giant") ? 12f : 3f);
                         tnt.addScoreboardTag("lms-arena"); tnt.addScoreboardTag("lms-" + type);
+                        if (type.equals("giant")) showGiantTnt(tnt, fuse);
                     }
                 } else throw new IllegalArgumentException("Unknown bridge command");
             }
@@ -373,6 +488,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     public void protectPlace(BlockPlaceEvent e) {
         Block b = e.getBlock();
         if (protectedBlock(b) || aboveArena(b)) e.setCancelled(true);
+        else if (inside(b)) b.setType(fill, false);
     }
     @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
     public void trackPlace(BlockPlaceEvent e) { later(e.getBlock()); }
@@ -380,6 +496,23 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     private boolean aboveArena(Block b) {
         return bounds != null && sameWorld(b) && b.getX() >= bounds.x() - 1 && b.getX() <= bounds.x() + bounds.width()
             && b.getZ() >= bounds.z() - 1 && b.getZ() <= bounds.z() + bounds.depth() && b.getY() >= bounds.y() + bounds.height();
+    }
+
+    @EventHandler(priority=EventPriority.HIGHEST)
+    public void remoteBreak(PlayerInteractEvent e) {
+        if (!started || !ready || !edits.isEmpty() || e.getHand() != EquipmentSlot.HAND
+            || (e.getAction() != Action.LEFT_CLICK_AIR && e.getAction() != Action.LEFT_CLICK_BLOCK)) return;
+        Player p = e.getPlayer();
+        if (!world.equals(p.getWorld()) || p.getGameMode() == GameMode.SPECTATOR
+            || p.getGameMode() == GameMode.ADVENTURE) return;
+        RayTraceResult hit = p.rayTraceBlocks(256, FluidCollisionMode.NEVER);
+        if (hit == null || hit.getHitBlock() == null) return;
+        Block target = hit.getHitBlock();
+        if (!inside(target) || target.getType() != fill) return;
+        e.setCancelled(true);
+        target.setType(Material.AIR, false);
+        changed(target);
+        p.playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, .6f, 1);
     }
 
     @EventHandler(priority=EventPriority.HIGHEST)
@@ -393,11 +526,11 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         String action = special(item);
         if (action.equals("bomb")) {
             e.setCancelled(true);
-            if (bombs > 0 && filled.cardinality() < bounds.capacity()) { bombs--; saveItems(); fillSome(bounds.capacity(),false); }
+            if (bombs > 0 && filled.cardinality() < bounds.capacity()) { bombs--; saveItems(); consumeSpecial(p); fillAll(true); }
             else p.sendMessage("§e全埋めボムの残り: " + bombs);
             return;
         }
-        if (item.getType() != fill) return;
+        if (!item.getType().isBlock() || item.getType().isAir()) return;
         // Bukkit marks air interactions cancelled by default; do not use ignoreCancelled here.
         RayTraceResult hit = p.rayTraceBlocks(256, FluidCollisionMode.NEVER);
         if (hit == null || hit.getHitBlock() == null || hit.getHitBlockFace() == null) return;
@@ -407,7 +540,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         if (!inside(target) || (!target.isEmpty() && !target.isLiquid())) return;
         if (action.equals("chain")) {
             if (chains <= 0) { p.sendMessage("§e連鎖ブロックはギフトで補充できます"); return; }
-            chains--; saveItems(); chainFrom(target); return;
+            chains--; saveItems(); consumeSpecial(p); chainFrom(target); return;
         }
         target.setType(fill, false);
         changed(target);
@@ -459,7 +592,21 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             e.blockList().clear(); int x = e.getLocation().getBlockX(), z = e.getLocation().getBlockZ();
             if (bounds.inside(x,bounds.y(),z)) for (int y = bounds.y()-1; y < bounds.y()+bounds.height(); y++) e.blockList().add(world.getBlockAt(x,y,z));
         }
-        explosion(e.blockList(), tags.contains("lms-arena"), e.getEntity() instanceof TNTPrimed, tags.contains("lms-giant") ? 4 : 1);
+        if (tags.contains("lms-arena") && !tags.contains("lms-piercing")) {
+            Location center = e.getLocation();
+            int radius = tags.contains("lms-giant") ? 10 : 3;
+            for (int y = Math.max(bounds.y(),center.getBlockY()-radius); y < Math.min(bounds.y()+bounds.height(),center.getBlockY()+radius+1); y++)
+                for (int z = Math.max(bounds.z(),center.getBlockZ()-radius); z < Math.min(bounds.z()+bounds.depth(),center.getBlockZ()+radius+1); z++)
+                    for (int x = Math.max(bounds.x(),center.getBlockX()-radius); x < Math.min(bounds.x()+bounds.width(),center.getBlockX()+radius+1); x++) {
+                        Block b = world.getBlockAt(x,y,z);
+                        if (b.getLocation().add(.5,.5,.5).distanceSquared(center) <= radius*radius && !e.blockList().contains(b)) e.blockList().add(b);
+                    }
+        }
+        explosion(e.blockList(), tags.contains("lms-arena"), e.getEntity() instanceof TNTPrimed, tags.contains("lms-giant") ? 8 : 1);
+    }
+    @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
+    public void celebrationDamage(EntityDamageByEntityEvent e) {
+        if (e.getDamager().getScoreboardTags().contains("lms-celebration")) e.setCancelled(true);
     }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void blockExplosion(BlockExplodeEvent e) { if (bounds != null) explosion(e.blockList(), false, false, 1); }

@@ -238,9 +238,10 @@ class GameEngine:
         win = effect["win"]
         commands: list[str] = []
         message = str(effect.get("name") or kind)
-        if kind in {"fill", "fill_all"}:
-            count = self.arena.capacity if kind == "fill_all" else amount
-            commands = [f"lmsarena fill {min(count, self.arena.capacity)}"]
+        if kind == "fill":
+            commands = [f"lmsarena fill {min(amount, self.arena.capacity)}"]
+        elif kind == "fill_all":
+            commands = ["lmsarena fill_all"]
         elif kind == "fill_layers":
             commands = [f"lmsarena fill_layers {min(amount, self.arena.height)}"]
         elif kind == "fill_percent":
