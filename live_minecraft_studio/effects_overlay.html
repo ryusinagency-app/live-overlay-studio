@@ -14,7 +14,7 @@ function card(e,g){
  c.style.color=take('textColor','cardTextColor','#ffffff');
  c.style.setProperty('--glow',take('feverGlowColor','cardGlowColor','#ffd34e'));
  if(e.giftImageUrl){const i=document.createElement('img');const size=number(take('imageSize','imageSize',74),74,0,300);i.src=e.giftImageUrl;i.style.width=size+'px';i.style.height=size+'px';c.append(i)}
- const n=document.createElement('div');n.className='name';n.textContent=e.name||e.giftName||'ギフト効果';n.style.fontSize=number(take('nameFontSize','nameFontSize',18),18,8,80)+'px';
+ const n=document.createElement('div');n.className='name';n.textContent=String(e.name??'').trim();n.style.fontSize=number(take('nameFontSize','nameFontSize',18),18,8,80)+'px';n.hidden=!n.textContent;
  const a=document.createElement('div');a.className='effective';a.textContent=e.effectiveLabel;a.style.fontSize=number(take('effectFontSize','effectFontSize',20),20,8,100)+'px';a.style.color=take('accentColor','cardAccentColor','#a4f4bf');
  const d=document.createElement('div');d.className='desc';d.textContent=e.description||'';d.style.fontSize=number(take('descriptionFontSize','descriptionFontSize',13),13,8,60)+'px';
  c.append(n,a,d);return c;
