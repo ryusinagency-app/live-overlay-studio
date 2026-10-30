@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -34,6 +34,7 @@ DEFAULT = {
     "arena": {"x": 0, "y": 64, "z": 0, "width": 9, "depth": 9, "height": 12,
               "frameBlock": "minecraft:glass", "fillBlock": "minecraft:diamond_block", "maxHealth": 100,
               "floorEnabled": False, "floorDamage": 10, "floorPenalty": 1,
+              "floorBreakSoundUrl": "", "floorBreakSoundVolume": 100, "floorBreakSoundSeconds": 0,
               "minWidth": 3, "maxWidth": 64, "minHeight": 3, "maxHeight": 64,
               "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True,
               "daylightFixed": True, "clearWeather": True},
@@ -57,7 +58,10 @@ DEFAULT = {
     }},
     "multiplier": {"enabled": True, "waitingText": "次のフィーバーまで", "threshold": 5000, "durationSeconds": 300, "multiplier": 2,
                    "applyFill": True, "applyTnt": True, "applyWin": True, "applyRepair": True,
-                   "applyItems": True, "applyResize": False, "applyCountdown": False, "applyPlayer": False, "stackingMode": "extend"},
+                   "applyItems": True, "applyResize": False, "applyCountdown": False, "applyPlayer": False, "stackingMode": "extend",
+                   "feverStartSoundUrl": "", "feverStartSoundVolume": 100, "feverStartSoundSeconds": 0,
+                   "feverEndSoundUrl": "", "feverEndSoundVolume": 100, "feverEndSoundSeconds": 0,
+                   "feverLevelSoundUrl": "", "feverLevelSoundVolume": 100, "feverLevelSoundSeconds": 0},
     "commandDelayMs": 35,
     "gachas": {},
     "social": {"followEnabled": False, "followTarget": "", "individualLikeEnabled": False,
@@ -116,6 +120,11 @@ def load_state():
     except Exception:
         raw = {}
     state = deep_merge(DEFAULT, raw)
+    # User-managed collections must not be merged with bundled samples on restart.
+    if isinstance(raw.get("effects"), dict):
+        state["effects"] = raw["effects"]
+    if isinstance(raw.get("gachas"), dict):
+        state["gachas"] = raw["gachas"]
     # Old bundled all-fill awarded WIN immediately, before the countdown.
     if raw.get("rulesVersion", 0) < 3:
         old_all = state.get("effects", {}).get("demo-all", {})
@@ -157,6 +166,7 @@ for name in ("repair", "items", "resize", "countdown", "player"):
 ENGINE.multiplier.stacking_mode = multiplier_config.get("stackingMode", "extend")
 ENGINE.multiplier.bonus = int(STATE.get("runtime", {}).get("feverBonus", 0))
 ENGINE.multiplier.queued = int(STATE.get("runtime", {}).get("feverQueued", 0))
+FEVER_WAS_ACTIVE = ENGINE.multiplier.active()
 ENGINE.processed_events.update(STATE.get("runtime", {}).get("processedEvents", []))
 WIN_OUTBOX = {event["eventId"]: event for event in STATE.get("runtime", {}).get("pendingWins", [])}
 for event in WIN_OUTBOX.values():
@@ -174,6 +184,7 @@ def public_state():
             actions = resolve_effects(effect, 1, ENGINE.multiplier)
             preview = dict(actions[0])
             preview["effectiveLabel"] = effect_preview_label(effect, actions)
+            preview["feverApplied"] = ENGINE.multiplier.active() and effect.get("useMultiplier", True) is not False
             preview["resolvedEffects"] = actions
             previews[key] = preview
     return {"version": APP_VERSION, "config": config, "effectPreviews": previews, "game": ENGINE.snapshot(), "status": status_snapshot(),
@@ -235,6 +246,26 @@ def queue_win(event):
 def queue_commands(commands):
     for command in commands:
         COMMAND_QUEUE.put_nowait(command)
+
+
+def queue_system_sound(config, prefix):
+    url = str(config.get(prefix + "SoundUrl") or "")[:500]
+    if not url.startswith("/user-sounds/"):
+        return
+    notice = {"eventId": prefix + "-" + secrets.token_hex(10), "at": time.time(), "text": "", "sender": "",
+              "duration": 1, "display": False, "soundUrl": url,
+              "soundVolume": int(clamp(config.get(prefix + "SoundVolume", 100), 0, 100, 100)),
+              "soundSeconds": float(clamp(config.get(prefix + "SoundSeconds", 0), 0, 600, 0))}
+    with ENGINE.lock:
+        ENGINE.announcements.append(notice)
+        ENGINE.announcements = ENGINE.announcements[-50:]
+
+
+def handle_multiplier_sounds(result):
+    if result.get("multiplierActivations", 0):
+        queue_system_sound(STATE.get("multiplier", {}), "feverStart")
+    if result.get("multiplierLevelUps", 0):
+        queue_system_sound(STATE.get("multiplier", {}), "feverLevel")
 
 
 def minecraft_announcement(text, sender, duration=4):
@@ -490,6 +521,7 @@ def win_worker():
 
 
 def game_timer_worker():
+    global FEVER_WAS_ACTIVE
     while True:
         try:
             with STATE_LOCK:
@@ -507,6 +539,8 @@ def game_timer_worker():
                         if result["win"]:
                             queue_win({"eventId": result["eventId"], "amount": result["win"],
                                                  "reason": result["message"], "senderName": ""})
+                        if result.get("message") == "底の耐久ゼロ":
+                            queue_system_sound(STATE.get("arena", {}), "floorBreak")
                     if results or revision_changed:
                         save_state()
                     for event in world.get("wins", []):
@@ -515,6 +549,11 @@ def game_timer_worker():
         except Exception as exc:
             STATUS["worldBridge"] = str(exc)[:260]
             ENGINE.world_state = {}
+        fever_active = ENGINE.multiplier.active()
+        if FEVER_WAS_ACTIVE and not fever_active:
+            queue_system_sound(STATE.get("multiplier", {}), "feverEnd")
+            save_state()
+        FEVER_WAS_ACTIVE = fever_active
         time.sleep(0.5)
 
 
@@ -582,6 +621,7 @@ class Handler(SimpleHTTPRequestHandler):
                     actions = resolve_effects(effect, 1, ENGINE.multiplier)
                     preview = dict(actions[0])
                     preview["effectiveLabel"] = effect_preview_label(effect, actions)
+                    preview["feverApplied"] = ENGINE.multiplier.active() and effect.get("useMultiplier", True) is not False
                     preview["name"] = str(effect.get("name", ""))[:100]
                     preview["giftImageUrl"] = effect_image_url(effect)
                     effects.append(preview)
@@ -595,7 +635,8 @@ class Handler(SimpleHTTPRequestHandler):
                     gacha_name = str(gacha.get("name") or "スピナーガチャ")
                     effects.append({"name": "", "effectiveLabel": gacha_name,
                                     "description": "", "overlayVisible": True,
-                                    "useCustomStyle": False, "kind": "gacha-card", "giftImageUrl": gacha.get("triggerGiftImageUrl", "")})
+                                    "useCustomStyle": False, "kind": "gacha-card", "feverApplied": ENGINE.multiplier.active(),
+                                    "giftImageUrl": gacha.get("triggerGiftImageUrl", "")})
                 overlay = dict(STATE.get("overlay", {}))
                 multiplier_config = {"waitingText": STATE.get("multiplier", {}).get("waitingText", "次のフィーバーまで")}
             with GACHA_LOCK:
@@ -737,6 +778,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if str(body.get("eventType") or body.get("type") or "").lower() in {"follow", "like"}:
                     return self._json(receive_social(body))
                 result = ENGINE.receive(body, STATE["effects"])
+                handle_multiplier_sounds(result)
                 dispatch_effect(result, body.get("senderName", ""))
                 if not result.get("duplicate"):
                     action_gachas = {str(action.get("gachaId")) for action in result.get("effects", [])
@@ -818,11 +860,15 @@ class Handler(SimpleHTTPRequestHandler):
                 a.floor_enabled = config.get("floorEnabled", False) is True
                 a.floor_damage = int(clamp(config.get("floorDamage", 10), 1, 1000000, 10))
                 a.floor_penalty = int(clamp(config.get("floorPenalty", 1), 0, 1000000, 1))
+                config["floorBreakSoundUrl"] = str(config.get("floorBreakSoundUrl") or "")[:500]
+                config["floorBreakSoundVolume"] = int(clamp(config.get("floorBreakSoundVolume", 100), 0, 100, 100))
+                config["floorBreakSoundSeconds"] = float(clamp(config.get("floorBreakSoundSeconds", 0), 0, 600, 0))
                 for key, attr in (("minWidth", "min_width"), ("maxWidth", "max_width"), ("minHeight", "min_height"), ("maxHeight", "max_height")):
                     setattr(a, attr, int(config.get(key, getattr(a, attr))))
                 a.clear_after_success = config.get("clearAfterSuccess", True) is True
                 a.normalize()
             if isinstance(body.get("multiplier"), dict):
+                old_threshold = ENGINE.multiplier.threshold
                 STATE["multiplier"].update(body["multiplier"])
                 config = STATE["multiplier"]
                 m = ENGINE.multiplier
@@ -833,6 +879,8 @@ class Handler(SimpleHTTPRequestHandler):
                     m.bonus = 0
                     m.queued = 0
                 m.threshold = int(clamp(config["threshold"], 1, 10**9, 5000))
+                if m.threshold != old_threshold:
+                    m.next_target = (m.total_coins // m.threshold + 1) * m.threshold
                 m.duration_seconds = int(clamp(config["durationSeconds"], 1, 86400, 300))
                 m.multiplier = clamp(config["multiplier"], 1, 100, 2)
                 m.apply_fill = config.get("applyFill", True) is True
@@ -842,6 +890,10 @@ class Handler(SimpleHTTPRequestHandler):
                     setattr(m, "apply_" + name, config.get("apply" + name.title(), name in {"repair", "items"}) is True)
                 mode = config.get("stackingMode", "extend")
                 m.stacking_mode = mode if mode in {"extend", "increase", "queue", "overwrite"} else "extend"
+                for prefix in ("feverStart", "feverEnd", "feverLevel"):
+                    config[prefix + "SoundUrl"] = str(config.get(prefix + "SoundUrl") or "")[:500]
+                    config[prefix + "SoundVolume"] = int(clamp(config.get(prefix + "SoundVolume", 100), 0, 100, 100))
+                    config[prefix + "SoundSeconds"] = float(clamp(config.get(prefix + "SoundSeconds", 0), 0, 600, 0))
                 if m.next_target <= m.total_coins:
                     m.next_target = (m.total_coins // m.threshold + 1) * m.threshold
             if isinstance(body.get("effects"), dict):
