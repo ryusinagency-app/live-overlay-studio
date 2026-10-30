@@ -111,6 +111,13 @@ class EngineTests(unittest.TestCase):
                            {"off": {"kind": "fill_all", "enabled": False}})
         self.assertEqual([], result["commands"])
 
+    def test_disabled_multiplier_does_not_count_or_activate(self):
+        multiplier = MultiplierState(enabled=False, threshold=100)
+        self.assertEqual(0, multiplier.add_coins(500))
+        self.assertEqual(0, multiplier.total_coins)
+        self.assertFalse(multiplier.active())
+        self.assertEqual(1, multiplier.factor("fill"))
+
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))
