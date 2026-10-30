@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.5"
+APP_VERSION = "0.4.6"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -37,6 +37,7 @@ DEFAULT = {
               "floorBreakSoundUrl": "", "floorBreakSoundVolume": 100, "floorBreakSoundSeconds": 0,
               "minWidth": 3, "maxWidth": 64, "minHeight": 3, "maxHeight": 64,
               "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True,
+              "topLayerWin": False, "gravityFill": False,
               "daylightFixed": True, "clearWeather": True},
     "overlay": {"successText": "WIN！",
         "arenaStyle": {"width": 620, "padding": 18, "borderRadius": 20, "backgroundOpacity": 88,
@@ -127,7 +128,9 @@ ENGINE = GameEngine(
           min_width=int(arena_config.get("minWidth", 3)), max_width=int(arena_config.get("maxWidth", 64)),
           min_height=int(arena_config.get("minHeight", 3)), max_height=int(arena_config.get("maxHeight", 64)),
           hold_seconds=int(arena_config.get("holdSeconds", 10)), hold_win=int(arena_config.get("holdWin", 1)),
-          clear_after_success=arena_config.get("clearAfterSuccess", True) is True),
+          clear_after_success=arena_config.get("clearAfterSuccess", True) is True,
+          top_layer_win=arena_config.get("topLayerWin", False) is True,
+          gravity_fill=arena_config.get("gravityFill", False) is True),
     MultiplierState(enabled=multiplier_config.get("enabled", True) is True,
                     threshold=int(multiplier_config["threshold"]),
                     duration_seconds=int(multiplier_config["durationSeconds"]),
@@ -861,6 +864,8 @@ class Handler(SimpleHTTPRequestHandler):
                 for key, attr in (("minWidth", "min_width"), ("maxWidth", "max_width"), ("minHeight", "min_height"), ("maxHeight", "max_height")):
                     setattr(a, attr, int(config.get(key, getattr(a, attr))))
                 a.clear_after_success = config.get("clearAfterSuccess", True) is True
+                a.top_layer_win = config.get("topLayerWin", False) is True
+                a.gravity_fill = config.get("gravityFill", False) is True
                 a.normalize()
             if isinstance(body.get("multiplier"), dict):
                 old_threshold = ENGINE.multiplier.threshold
