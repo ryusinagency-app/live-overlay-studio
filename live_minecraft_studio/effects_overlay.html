@@ -1,5 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;background:transparent;font-family:"Yu Gothic UI",Meiryo,sans-serif;color:#fff}.grid{display:grid;grid-auto-flow:row;padding:8px;align-items:start;justify-items:start}.card{border:2px solid;padding:10px;text-align:center;display:flex;flex-direction:column;justify-content:center;overflow:hidden}.card.fever{box-shadow:0 0 22px var(--glow),0 0 8px var(--glow)}.effective{font-weight:900;margin-top:7px}.card.fever .effective{color:var(--glow)!important}.card img{object-fit:contain;margin:0 auto;max-width:100%}.name{font-weight:900;text-shadow:0 2px 2px #000}.desc{margin-top:5px;text-shadow:0 1px 2px #000}</style></head><body><div id="grid" class="grid"></div><script>
-const grid=document.getElementById('grid');
+const grid=document.getElementById('grid'),seen=new Set();
+function claimSound(id){try{const key='lms-sound-'+id;if(localStorage.getItem(key))return false;localStorage.setItem(key,String(Date.now()));return true}catch(e){return true}}
+function playSound(e){if(!e.soundUrl||!claimSound(e.eventId))return;const audio=new Audio(e.soundUrl);audio.volume=Math.max(0,Math.min(1,Number(e.soundVolume??100)/100));audio.play().catch(()=>{});const seconds=Number(e.soundSeconds||0);if(seconds>0)setTimeout(()=>{audio.pause();audio.currentTime=0},seconds*1000)}
 const number=(value,fallback,min,max)=>Math.max(min,Math.min(max,Number(value??fallback)||fallback));
 function card(e,g){
  if(e.overlayVisible===false)return null;
@@ -19,6 +21,6 @@ function card(e,g){
  const d=document.createElement('div');d.className='desc';d.textContent=e.description||'';d.style.fontSize=number(take('descriptionFontSize','descriptionFontSize',13),13,8,60)+'px';
  c.append(n,a,d);return c;
 }
-async function update(){try{const r=await fetch('/api/overlay',{cache:'no-store'}),s=await r.json(),g=s.overlay?.effectListStyle||{};grid.style.gridTemplateColumns=`repeat(${number(g.columns,5,1,10)}, max-content)`;grid.style.gap=number(g.gap,8,0,100)+'px';grid.replaceChildren(...s.effects.map(e=>card(e,g)).filter(Boolean))}catch(e){}}update();setInterval(update,500)
+async function update(){try{const r=await fetch('/api/overlay',{cache:'no-store'}),s=await r.json(),g=s.overlay?.effectListStyle||{};grid.style.gridTemplateColumns=`repeat(${number(g.columns,5,1,10)}, max-content)`;grid.style.gap=number(g.gap,8,0,100)+'px';grid.replaceChildren(...s.effects.map(e=>card(e,g)).filter(Boolean));for(const e of s.game.announcements||[]){if(seen.has(e.eventId))continue;seen.add(e.eventId);if(Date.now()/1000-e.at<15)playSound(e)}if(seen.size>1000){const latest=[...seen].slice(-100);seen.clear();latest.forEach(id=>seen.add(id))}}catch(e){}}update();setInterval(update,500)
 </script></body></html>
 
