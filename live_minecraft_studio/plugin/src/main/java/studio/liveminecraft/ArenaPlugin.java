@@ -393,6 +393,46 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         falling.setDropItem(false); falling.setCancelDrop(false); falling.addScoreboardTag("lms-fill");
     }
 
+    /**
+     * In gravity mode, turn every supported fill block above a newly-created gap
+     * into a real FallingBlock. Minecraft then handles collision and stacking, and
+     * EntityChangeBlockEvent turns each entity back into a normal, TNT-breakable
+     * arena block when it lands.
+     */
+    private void collapseGravityColumn(int x, int z) {
+        if (!gravityFill || bounds == null || x < bounds.x() || x >= bounds.x()+bounds.width()
+            || z < bounds.z() || z >= bounds.z()+bounds.depth()) return;
+        boolean gap=false;
+        List<Block> unsupported=new ArrayList<>();
+        for (int y=bounds.y(); y<bounds.y()+bounds.height(); y++) {
+            Block b=world.getBlockAt(x,y,z);
+            if (b.getType()!=fill) gap=true;
+            else if (gap) unsupported.add(b);
+        }
+        // Clear every source first so lower falling blocks cannot duplicate or
+        // collide with solid copies of blocks that are meant to fall with them.
+        for (Block b : unsupported) b.setType(Material.AIR,false);
+        for (Block b : unsupported) dropFill(b);
+        if (!unsupported.isEmpty()) {
+            round.lostBlock(); fullSweep=-1;
+            getServer().getScheduler().runTaskLater(this, () -> {
+                for (int y=bounds.y(); y<bounds.y()+bounds.height(); y++) changed(world.getBlockAt(x,y,z));
+            }, 2L);
+        }
+    }
+
+    private void collapseGravityAfter(Collection<Block> removed) {
+        if (!gravityFill || bounds == null || removed.isEmpty()) return;
+        Set<Long> columns=new HashSet<>();
+        for (Block b : removed) if (inside(b))
+            columns.add((((long)b.getX()) << 32) ^ (b.getZ() & 0xffffffffL));
+        final long version=generation;
+        getServer().getScheduler().runTask(this, () -> {
+            if (version!=generation || !gravityFill || bounds==null) return;
+            for (long column : columns) collapseGravityColumn((int)(column >> 32),(int)column);
+        });
+    }
+
     private void update() {
         tick++;
         if (tick % 20 == 0) {
@@ -602,7 +642,10 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
     public void protectBreak(BlockBreakEvent e) { if (protectedBlock(e.getBlock())) e.setCancelled(true); }
     @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
     public void trackBreak(BlockBreakEvent e) {
-        if (inside(e.getBlock()) && e.getBlock().getType() == fill) { round.lostBlock(); fullSweep = -1; later(e.getBlock()); }
+        if (inside(e.getBlock()) && e.getBlock().getType() == fill) {
+            round.lostBlock(); fullSweep = -1; later(e.getBlock());
+            collapseGravityAfter(List.of(e.getBlock()));
+        }
     }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void protectPlace(BlockPlaceEvent e) {
@@ -638,6 +681,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
         e.setCancelled(true);
         target.setType(Material.AIR, false);
         changed(target);
+        collapseGravityAfter(List.of(target));
         p.playSound(target.getLocation(), Sound.BLOCK_STONE_BREAK, .6f, 1);
     }
 
@@ -713,6 +757,7 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             }
         }
         for (Block b : blocks) later(b);
+        collapseGravityAfter(blocks);
     }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void entityExplosion(EntityExplodeEvent e) {
