@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
+import server
 from game_engine import Arena, GameEngine, MultiplierState
-from server import bridge_command, classify_server_software
+from server import bridge_command, classify_server_software, effect_preview_label, receive_social
 
 
 class EngineTests(unittest.TestCase):
@@ -117,6 +119,36 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(0, multiplier.total_coins)
         self.assertFalse(multiplier.active())
         self.assertEqual(1, multiplier.factor("fill"))
+
+    def test_display_text_is_used_for_effect_list_preview_with_additional_effects(self):
+        effect = {"name": "複合ギフト", "displayText": "発動：{effects}", "kind": "fill", "amount": 10,
+                  "additionalEffects": [{"kind": "tnt", "amount": 3}]}
+        actions = [
+            {"effectiveLabel": "10ブロック", "amount": 10, "seconds": 0, "strength": 0, "resizeDelta": 0},
+            {"effectiveLabel": "TNT×3", "amount": 3, "seconds": 0, "strength": 0, "resizeDelta": 0},
+        ]
+        self.assertEqual("発動：10ブロック ＋ TNT×3", effect_preview_label(effect, actions))
+
+    def test_follow_and_likes_trigger_each_effect_and_gacha_directly(self):
+        with server.STATE_LOCK:
+            original = {key: server.STATE.get(key) for key in ("effects", "gachas", "socialRuntime")}
+            server.STATE["effects"] = {"help": {"enabled": True, "followTriggerEnabled": True,
+                                                  "individualLikeTriggerEnabled": True, "individualLikeEvery": 10}}
+            server.STATE["gachas"] = {"chaos": {"enabled": True, "followTriggerEnabled": True,
+                                                   "totalLikeTriggerEnabled": True, "totalLikeEvery": 20}}
+            server.STATE["socialRuntime"] = {"followedUsers": [], "individualLikes": {}, "totalLikes": 0}
+        try:
+            with patch.object(server, "trigger_target") as trigger, patch.object(server, "save_state"):
+                first = receive_social({"type": "follow", "userId": "u1", "userName": "配信者"})
+                self.assertEqual(2, first["triggered"])
+                self.assertEqual({"effect:help", "gacha:chaos"}, {call.args[0] for call in trigger.call_args_list})
+                trigger.reset_mock()
+                likes = receive_social({"type": "like", "userId": "u1", "count": 20})
+                self.assertEqual(3, likes["triggered"])
+                self.assertEqual(3, trigger.call_count)
+        finally:
+            with server.STATE_LOCK:
+                for key, value in original.items(): server.STATE[key] = value
 
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
