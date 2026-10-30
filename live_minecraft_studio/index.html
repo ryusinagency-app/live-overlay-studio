@@ -120,6 +120,7 @@
 <label>耐久ゼロ時に減らすWIN<input id="floorPenalty" type="number" min="0">
 </label>
 </div>
+<div class="systemSound" data-sound-prefix="floorBreak"><h3>底の耐久が0になった時の音源</h3><input id="floorBreakSoundUrl" type="hidden"><input class="systemSoundFile" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac"><button type="button" class="systemSoundRemove">音源を外す</button><label>音量（0〜100）<input id="floorBreakSoundVolume" type="number" min="0" max="100"></label><label>再生時間（秒、0で最後まで）<input id="floorBreakSoundSeconds" type="number" min="0" max="600" step="0.1"></label><small class="systemSoundStatus">未設定</small></div>
 <label class="toggle">
 <input id="clearAfterSuccess" type="checkbox">成功後に枠内を空にして次ラウンドへ</label>
 <label class="toggle">
@@ -269,6 +270,11 @@
 </select>
 </label>
 <p class="note">ギフトごとの「フィーバー倍率を適用」でも個別にOFFにできます。倍率は各効果へ一度だけ適用します。</p>
+<div class="systemSounds">
+<div class="systemSound" data-sound-prefix="feverStart"><h3>必要コイン到達・フィーバー開始音</h3><input id="feverStartSoundUrl" type="hidden"><input class="systemSoundFile" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac"><button type="button" class="systemSoundRemove">音源を外す</button><label>音量（0〜100）<input id="feverStartSoundVolume" type="number" min="0" max="100"></label><label>再生時間（秒、0で最後まで）<input id="feverStartSoundSeconds" type="number" min="0" max="600" step="0.1"></label><small class="systemSoundStatus">未設定</small></div>
+<div class="systemSound" data-sound-prefix="feverLevel"><h3>倍率が1段階上がった時の音</h3><input id="feverLevelSoundUrl" type="hidden"><input class="systemSoundFile" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac"><button type="button" class="systemSoundRemove">音源を外す</button><label>音量（0〜100）<input id="feverLevelSoundVolume" type="number" min="0" max="100"></label><label>再生時間（秒、0で最後まで）<input id="feverLevelSoundSeconds" type="number" min="0" max="600" step="0.1"></label><small class="systemSoundStatus">未設定</small></div>
+<div class="systemSound" data-sound-prefix="feverEnd"><h3>フィーバー終了音（残り時間0）</h3><input id="feverEndSoundUrl" type="hidden"><input class="systemSoundFile" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.webm,.flac"><button type="button" class="systemSoundRemove">音源を外す</button><label>音量（0〜100）<input id="feverEndSoundVolume" type="number" min="0" max="100"></label><label>再生時間（秒、0で最後まで）<input id="feverEndSoundSeconds" type="number" min="0" max="600" step="0.1"></label><small class="systemSoundStatus">未設定</small></div>
+</div>
 <button id="saveFever">設定を保存</button>
 </article>
 </section>
