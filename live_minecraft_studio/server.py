@@ -7,6 +7,8 @@ from threading import Thread, Lock
 from urllib.parse import urlparse
 import json
 import base64
+import binascii
+import mimetypes
 import os
 import secrets
 import time
@@ -18,9 +20,10 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
+SOUNDS_DIR = DATA_DIR / "sounds"
 STATE_FILE = DATA_DIR / "state.json"
 HOST, PORT = "127.0.0.1", 8775
 
@@ -32,7 +35,12 @@ DEFAULT = {
               "minWidth": 3, "maxWidth": 64, "minHeight": 3, "maxHeight": 64,
               "holdSeconds": 10, "holdWin": 1, "clearAfterSuccess": True,
               "daylightFixed": True, "clearWeather": True},
-    "overlay": {"successText": "WIN！"},
+    "overlay": {"successText": "WIN！", "effectListStyle": {
+        "columns": 5, "cardWidth": 180, "cardHeight": 180, "gap": 8, "borderRadius": 14,
+        "backgroundColor": "#61294f", "borderColor": "#ef334e", "textColor": "#ffffff",
+        "accentColor": "#a4f4bf", "feverGlowColor": "#ffd34e", "nameFontSize": 18, "effectFontSize": 20,
+        "descriptionFontSize": 13, "imageSize": 74
+    }},
     "multiplier": {"threshold": 5000, "durationSeconds": 300, "multiplier": 2,
                    "applyFill": True, "applyTnt": True, "applyWin": True, "applyRepair": True,
                    "applyItems": True, "applyResize": False, "applyCountdown": False, "applyPlayer": False, "stackingMode": "extend"},
@@ -328,14 +336,27 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _body(self):
+    def _body(self, limit=2_000_000):
         length = int(self.headers.get("Content-Length", 0))
-        if length > 2_000_000:
+        if length > limit:
             raise ValueError("リクエストが大きすぎます")
         return json.loads(self.rfile.read(length) or b"{}")
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path.startswith("/user-sounds/"):
+            name = Path(path.removeprefix("/user-sounds/")).name
+            target = SOUNDS_DIR / name
+            if not name or not target.is_file():
+                return self.send_error(404)
+            data = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(name)[0] or "application/octet-stream")
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if path == "/api/state":
             return self._json(public_state())
         if path == "/api/overlay":
@@ -357,7 +378,23 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         try:
-            body = self._body()
+            body = self._body(28_000_000 if path == "/api/sound-upload" else 2_000_000)
+            if path == "/api/sound-upload":
+                original = Path(str(body.get("name") or "sound")).name
+                extension = Path(original).suffix.lower()
+                allowed = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".webm", ".flac"}
+                if extension not in allowed:
+                    raise ValueError("MP3・WAV・OGG・M4A・AAC・WebM・FLACを選んでください")
+                try:
+                    data = base64.b64decode(str(body.get("data") or ""), validate=True)
+                except (binascii.Error, ValueError):
+                    raise ValueError("音声ファイルを読み込めませんでした")
+                if not data or len(data) > 20_000_000:
+                    raise ValueError("音声ファイルは20MB以内にしてください")
+                SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
+                stored = secrets.token_hex(16) + extension
+                (SOUNDS_DIR / stored).write_bytes(data)
+                return self._json({"ok": True, "url": "/user-sounds/" + stored, "name": original})
             if path == "/api/config":
                 self._update_config(body)
                 return self._json({"ok": True, "state": public_state()})
@@ -445,8 +482,22 @@ class Handler(SimpleHTTPRequestHandler):
             if "commandDelayMs" in body:
                 STATE["commandDelayMs"] = int(clamp(body["commandDelayMs"], 10, 2000, 35))
             if isinstance(body.get("overlay"), dict):
-                text = str(body["overlay"].get("successText", "WIN！")).strip()[:80]
-                STATE["overlay"]["successText"] = text or "WIN！"
+                if "successText" in body["overlay"]:
+                    text = str(body["overlay"].get("successText", "WIN！")).strip()[:80]
+                    STATE["overlay"]["successText"] = text or "WIN！"
+                if isinstance(body["overlay"].get("effectListStyle"), dict):
+                    style = body["overlay"]["effectListStyle"]
+                    current = STATE["overlay"].setdefault("effectListStyle", {})
+                    numeric = {"columns": (1, 10), "cardWidth": (100, 600), "cardHeight": (100, 600),
+                               "gap": (0, 100), "borderRadius": (0, 100), "nameFontSize": (8, 80),
+                               "effectFontSize": (8, 100), "descriptionFontSize": (8, 60), "imageSize": (0, 300)}
+                    for key, bounds in numeric.items():
+                        if key in style:
+                            current[key] = int(clamp(style[key], bounds[0], bounds[1], current.get(key, bounds[0])))
+                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor", "feverGlowColor"):
+                        value = str(style.get(key, current.get(key, ""))).strip()
+                        if len(value) <= 40:
+                            current[key] = value
             if isinstance(body.get("arena"), dict):
                 STATE["arena"].update(body["arena"])
                 config = STATE["arena"]
@@ -498,6 +549,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def make_server():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
     Thread(target=command_worker, daemon=True).start()
     Thread(target=win_worker, daemon=True).start()
     Thread(target=game_timer_worker, daemon=True).start()

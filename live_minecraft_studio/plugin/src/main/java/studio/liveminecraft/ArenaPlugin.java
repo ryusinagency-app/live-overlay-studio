@@ -548,7 +548,12 @@ public final class ArenaPlugin extends JavaPlugin implements Listener {
             item.setAmount(item.getAmount() - 1);
             p.getInventory().setItemInMainHand(item);
         }
-        p.playSound(target.getLocation(), Sound.BLOCK_STONE_PLACE, .5f, 1);
+        // The arena always receives the configured fill material, but the feedback
+        // should match the block the player actually chose to hold.
+        Sound placeSound = Sound.BLOCK_STONE_PLACE;
+        try { placeSound = item.getType().createBlockData().getSoundGroup().getPlaceSound(); }
+        catch (RuntimeException ignored) { }
+        p.playSound(target.getLocation(), placeSound, .8f, 1);
     }
 
     @EventHandler public void joined(PlayerJoinEvent e) { getServer().getScheduler().runTask(this, this::supplyItems); }

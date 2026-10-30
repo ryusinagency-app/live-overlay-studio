@@ -63,6 +63,26 @@ class EngineTests(unittest.TestCase):
                            {"all": {"kind": "fill_all", "amount": 1}})
         self.assertEqual("lmsarena fill_all", result["commands"][0])
 
+    def test_gift_sound_event_works_without_visible_message(self):
+        e = self.engine()
+        effect = {"sound": {"kind": "fill", "amount": 1, "displayEnabled": False,
+                            "soundEnabled": True, "soundUrl": "/user-sounds/test.mp3",
+                            "soundVolume": 35, "soundSeconds": 2.5}}
+        result = e.receive({"eventId": "sound-only", "giftId": "sound"}, effect)
+        self.assertEqual(["lmsarena fill 1"], result["commands"])
+        notice = e.snapshot()["announcements"][-1]
+        self.assertFalse(notice["display"])
+        self.assertEqual("/user-sounds/test.mp3", notice["soundUrl"])
+        self.assertEqual(35, notice["soundVolume"])
+        self.assertEqual(2.5, notice["soundSeconds"])
+
+    def test_external_sound_url_is_not_forwarded_to_overlay(self):
+        e = self.engine()
+        effect = {"sound": {"kind": "fill", "amount": 1, "displayEnabled": False,
+                            "soundEnabled": True, "soundUrl": "https://example.invalid/x.mp3"}}
+        e.receive({"eventId": "external-sound", "giftId": "sound"}, effect)
+        self.assertEqual([], e.snapshot()["announcements"])
+
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
         self.assertEqual(1, len(e.frame_commands()))
