@@ -25,7 +25,7 @@ CARD_STYLE = {"background":"#171b25","backgroundOpacity":88,"border":"#ef334e","
 DEFAULT = {
  "rcon":{"host":"127.0.0.1","port":25576,"password":""},
  "course":{"world":"world","startX":0,"startY":64,"startZ":0,"goalX":0,"goalY":160,"goalZ":0,
-           "goalRadius":4,"checkpointRise":20,"goalWin":1,"goalHoldSeconds":5,"checkpointsEnabled":True,"deathMinusWin":False,"guideEnabled":True,"daylightFixed":True,"clearWeather":True},
+           "goalRadius":4,"checkpointRise":20,"goalWin":1,"goalHoldSeconds":5,"checkpointsEnabled":True,"deathMinusWin":False,"guideEnabled":True,"hungerDisabled":True,"daylightFixed":True,"clearWeather":True},
  "winBridge":{"enabled":True,"url":"http://127.0.0.1:8765/api/minecraft-studio/win","token":""},
  "guns":{
    "handgun":{"giftAmmo":12,"damage":5,"intervalMs":450,"magazine":6,"reloadSeconds":1.5},
@@ -58,7 +58,7 @@ except Exception: STATE=deepcopy(DEFAULT)
 def make_engine():
  c,m=STATE["course"],STATE["multiplier"]
  return GameEngine(Course(c["world"],float(c["startX"]),float(c["startY"]),float(c["startZ"]),
-  float(c["goalX"]),float(c["goalY"]),float(c["goalZ"]),float(c["goalRadius"]),int(c["checkpointRise"]),int(c["goalWin"]),int(c.get("goalHoldSeconds",5)),bool(c.get("checkpointsEnabled",True)),bool(c.get("deathMinusWin",False)),bool(c.get("guideEnabled",True))),
+  float(c["goalX"]),float(c["goalY"]),float(c["goalZ"]),float(c["goalRadius"]),int(c["checkpointRise"]),int(c["goalWin"]),int(c.get("goalHoldSeconds",5)),bool(c.get("checkpointsEnabled",True)),bool(c.get("deathMinusWin",False)),bool(c.get("guideEnabled",True)),bool(c.get("hungerDisabled",True))),
   MultiplierState(bool(m["enabled"]),int(m["threshold"]),int(m["durationSeconds"]),int(m["multiplier"])))
 ENGINE=make_engine(); LOCAL=LocalMinecraftServer(DATA_DIR)
 STATUS={"rcon":"未接続","lastError":"","lastSync":0,"wins":[]}
