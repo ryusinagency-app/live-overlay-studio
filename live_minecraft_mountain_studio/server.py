@@ -4,7 +4,7 @@ from copy import deepcopy
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Lock, Thread
-import base64, json, mimetypes, os, queue, random, re, time, urllib.parse
+import base64, json, mimetypes, os, queue, random, re, time, urllib.parse, urllib.request
 
 from game_engine import Course, GameEngine, MultiplierState
 from local_server import LocalMinecraftServer
@@ -110,7 +110,7 @@ def gacha_loop():
     if not entries: break
     spin=max(.3,min(60,float(g.get("spinSeconds",4))))
     event={"eventId":str(time.time_ns()),"gachaName":g.get("name","ガチャ"),"sender":sender,"state":"spinning",
-      "result":"","at":time.time(),"spinSeconds":spin,"spinNumber":spin_no,"imageUrl":g.get("imageUrl",""),**audio_fields(g,"spin")}
+      "result":"","at":time.time(),"spinSeconds":spin,"spinNumber":spin_no,"imageUrl":(g.get("customImageUrl","") if g.get("imageMode")=="custom" else "" if g.get("imageMode")=="none" else g.get("triggerGiftImageUrl","") or g.get("imageUrl","")),**audio_fields(g,"spin")}
     GACHA_EVENTS.append(event); time.sleep(spin)
     chosen=random.choices(entries,weights=[float(e.get("weight",1)) for e in entries],k=1)[0]
     effect=STATE.get("effects",{}).get(str(chosen.get("effectId","")))
@@ -171,6 +171,11 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   path=urllib.parse.urlparse(self.path).path
   if path in ("/api/state","/api/overlay"): return self._json(public_state())
+  if path=="/api/gift-catalog":
+   try:
+    with urllib.request.urlopen("http://127.0.0.1:8765/api/tiktok/gifts",timeout=3) as response: catalog=json.load(response)
+    return self._json(catalog)
+   except Exception as exc: return self._json({"gifts":[],"message":f"Live Overlay Studioから取得できません: {exc}"},503)
   if path.startswith("/user-sounds/"):
    target=safe_asset(SOUNDS_DIR,path.split("/",2)[-1]); return self._file(target) if target else self.send_error(404)
   if path.startswith("/user-images/"):
@@ -218,12 +223,12 @@ class Handler(SimpleHTTPRequestHandler):
     gift=str(body.get("giftName") or body.get("giftId") or ""); sender_id=str(body.get("userId") or body.get("uniqueId") or "")
     sender=str(body.get("userName") or body.get("nickname") or sender_id); repeat=max(1,int(body.get("repeatCount",1))); fired=0
     for effect in STATE["effects"].values():
-     if not effect.get("enabled",True) or effect.get("gachaOnly") or effect.get("trigger","gift")!="gift" or str(effect.get("gift",""))!=gift: continue
+     if not effect.get("enabled",True) or effect.get("gachaOnly") or effect.get("trigger","gift")!="gift" or gift not in {str(effect.get("gift","")),str(effect.get("giftId","")),str(effect.get("giftName",""))}: continue
      allowed=str(effect.get("userId","")).strip()
      if allowed and allowed!=sender_id: continue
      for _ in range(repeat): run_effect(effect,sender,int(body.get("coins",0))); fired+=1
     for gid,g in STATE.get("gachas",{}).items():
-     if not g.get("enabled",True) or g.get("trigger","gift")!="gift" or str(g.get("gift",""))!=gift: continue
+     if not g.get("enabled",True) or g.get("trigger","gift")!="gift" or gift not in {str(g.get("gift","")),str(g.get("triggerGiftId","")),str(g.get("triggerGiftName",""))}: continue
      allowed=str(g.get("userId","")).strip()
      if allowed and allowed!=sender_id: continue
      enqueue_gacha(gid,sender,repeat); fired+=repeat
