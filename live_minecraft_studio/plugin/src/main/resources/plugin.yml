@@ -1,5 +1,5 @@
 name: LiveMinecraftArena
-version: 0.4.9
+version: 0.4.10
 main: studio.liveminecraft.ArenaPlugin
 api-version: '1.21'
 description: Protected open-top arena and authoritative player block tracking
