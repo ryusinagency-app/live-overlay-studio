@@ -70,6 +70,12 @@ class GameEngine:
         amount = max(1, int(float(action.get("amount", 1))))
         if action.get("multiply", True):
             amount *= max(1, factor)
+        if kind.startswith("gun_"):
+            damage = max(.1, float(action.get("gunDamage", 3)))
+            interval = max(0, int(action.get("gunIntervalMs", 300)))
+            magazine = max(1, int(action.get("gunMagazine", 12)))
+            reload_ms = max(0, int(action.get("gunReloadMs", 1500)))
+            return f"lmsmountain effect {kind} {amount} {damage:g} {interval} {magazine} {reload_ms}"
         return f"lmsmountain effect {kind} {amount}"
 
     def receive(self, effect: dict[str, Any], sender: str = "", coins: int = 0) -> dict[str, Any]:
