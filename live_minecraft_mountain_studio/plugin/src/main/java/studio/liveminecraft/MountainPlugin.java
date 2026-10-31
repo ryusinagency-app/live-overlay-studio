@@ -2,6 +2,7 @@ package studio.liveminecraft;
 
 import com.google.gson.Gson;
 import java.util.*;
+import java.nio.charset.StandardCharsets;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
@@ -69,7 +70,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     private void tick(){
         if(world==null)return;
         if(daylight)world.setTime(6000);
-        if(clearWeather){world.setStorm(false);world.setThundering(false);world.setWeatherDuration(0);}
+        if(clearWeather){world.setStorm(false);world.setThundering(false);world.setWeatherDuration(0);}world.setGameRule(GameRule.NATURAL_REGENERATION,!hungerDisabled);
         if(hungerDisabled)for(Player p:world.getPlayers()){p.setFoodLevel(20);p.setSaturation(20f);p.setExhaustion(0f);}
         if(!active)return;
         world.spawnParticle(Particle.HAPPY_VILLAGER,goal.clone().add(0,1,0),12,goalRadius/2,1,goalRadius/2,.02);
@@ -113,7 +114,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         ItemStack item=new ItemStack(material,Math.max(1,Math.min(64,amount)));var meta=item.getItemMeta();meta.setDisplayName(name);item.setItemMeta(meta);p.getInventory().addItem(item);
     }
     private String gunName(String type){return switch(type){case "handgun"->"§fハンドガン";case "smg"->"§bマシンガン";case "rifle"->"§aアサルトライフル";default->"§cRPG";};}
-    private Material gunMaterial(String type){return switch(type){case "handgun"->Material.IRON_HOE;case "smg"->Material.GOLDEN_HOE;case "rifle"->Material.DIAMOND_HOE;default->Material.NETHERITE_HOE;};}
+    private Material gunMaterial(String type){return Material.CROSSBOW;}
     private ItemStack findGun(Player p,String type){
         for(ItemStack item:p.getInventory().getContents())if(item!=null&&item.hasItemMeta()&&type.equals(item.getItemMeta().getPersistentDataContainer().get(gunTypeKey,PersistentDataType.STRING)))return item;
         return null;
@@ -124,10 +125,11 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         if(type==null)return;meta.setDisplayName(gunName(type));meta.setLore(List.of("§e残弾: §f"+Math.max(0,ammo==null?0:ammo),"§7マガジン: "+Math.max(0,(mag==null?1:mag)-(used==null?0:used))+"/"+(mag==null?1:mag),"§8右クリックで発射"));item.setItemMeta(meta);
     }
     private void giveGun(Player p,String type,int ammo,double damage,long intervalMs,int magazine,long reloadMs){
-        ItemStack item=findGun(p,type);if(item==null){item=new ItemStack(gunMaterial(type));ItemMeta m=item.getItemMeta();m.getPersistentDataContainer().set(gunTypeKey,PersistentDataType.STRING,type);m.getPersistentDataContainer().set(gunUsedKey,PersistentDataType.INTEGER,0);item.setItemMeta(m);p.getInventory().addItem(item);}
+        ItemStack item=findGun(p,type);boolean created=item==null;if(created)item=new ItemStack(gunMaterial(type));
         ItemMeta meta=item.getItemMeta();var data=meta.getPersistentDataContainer();Integer current=data.get(gunAmmoKey,PersistentDataType.INTEGER);
+        data.set(gunTypeKey,PersistentDataType.STRING,type);if(data.get(gunUsedKey,PersistentDataType.INTEGER)==null)data.set(gunUsedKey,PersistentDataType.INTEGER,0);
         data.set(gunAmmoKey,PersistentDataType.INTEGER,Math.max(0,current==null?0:current)+Math.max(1,ammo));data.set(gunDamageKey,PersistentDataType.DOUBLE,Math.max(.1,damage));data.set(gunIntervalKey,PersistentDataType.LONG,Math.max(0,intervalMs));data.set(gunMagazineKey,PersistentDataType.INTEGER,Math.max(1,magazine));data.set(gunReloadKey,PersistentDataType.LONG,Math.max(0,reloadMs));item.setItemMeta(meta);refreshGun(item);
-        p.sendMessage("§a"+gunName(type)+" §f弾薬 +"+Math.max(1,ammo));
+        if(created)p.getInventory().addItem(item);p.sendMessage("§a"+gunName(type)+" §f弾薬 +"+Math.max(1,ammo));
     }
     private void beginReload(Player p,ItemStack item,long reloadMs){
         UUID id=p.getUniqueId();long until=System.currentTimeMillis()+reloadMs;gunReloadUntil.put(id,until);p.sendMessage("§eリロード中…");
@@ -144,6 +146,15 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             if(e instanceof Mob mob)mob.setTarget(p);
         }
     }
+    private void spawnGunMob(Player target,String type,int count){
+        for(int i=0;i<Math.min(30,count);i++){
+            Location at=target.getLocation().add((Math.random()-.5)*12,2,(Math.random()-.5)*12);Pillager mob=(Pillager)world.spawnEntity(at,EntityType.PILLAGER);mob.setCustomName("§c武装村人・"+gunName(type));mob.setCustomNameVisible(true);mob.getEquipment().setItemInMainHand(new ItemStack(Material.CROSSBOW));mob.setTarget(target);gameMobs.add(mob.getUniqueId());
+            int period=type.equals("smg")?8:type.equals("rifle")?15:type.equals("rpg")?50:25;double damage=type.equals("rpg")?16:type.equals("handgun")?5:type.equals("rifle")?4:3;
+            new BukkitRunnable(){public void run(){if(!mob.isValid()||mob.isDead()||!target.isOnline()){cancel();return;}Vector dir=target.getEyeLocation().toVector().subtract(mob.getEyeLocation().toVector()).normalize();if(type.equals("rpg")){Fireball b=world.spawn(mob.getEyeLocation().add(dir),Fireball.class);b.setDirection(dir);b.setShooter(mob);b.setYield(3);b.setIsIncendiary(false);projectileDamage.put(b.getUniqueId(),damage);}else{Arrow a=world.spawnArrow(mob.getEyeLocation().add(dir),dir,type.equals("handgun")?2.5f:3.5f,type.equals("smg")?8f:3f);a.setShooter(mob);a.setDamage(damage);a.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);projectileDamage.put(a.getUniqueId(),damage);}}}.runTaskTimer(this,20L,period);
+        }
+    }
+    private String decode(String value){try{return new String(Base64.getDecoder().decode(value),StandardCharsets.UTF_8);}catch(Exception e){return value;}}
+    private void announce(String[] a){String title=a.length>1?decode(a[1]):"効果発動",sender=a.length>2?decode(a[2]):"";int seconds=a.length>3?Math.max(1,Integer.parseInt(a[3])):5;for(Player p:world.getPlayers())p.sendTitle("§c§l"+title,sender.isBlank()?"":"§f"+sender,5,seconds*20,10);}
     private void cage(Player p,int seconds){
         Location c=p.getLocation().getBlock().getLocation();List<Block> changed=new ArrayList<>();
         for(int x=-1;x<=1;x++)for(int y=0;y<=2;y++)for(int z=-1;z<=1;z++)if(Math.abs(x)==1||Math.abs(z)==1||y==2){Block b=c.getBlock().getRelative(x,y,z);if(b.isEmpty()){b.setType(Material.BARRIER,false);changed.add(b);}}
@@ -174,6 +185,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             case "lightning"->{world.strikeLightningEffect(p.getLocation());p.damage(Math.max(1,amount));}
             case "reset"->p.teleport(start);
             case "checkpoint"->p.teleport(checkpoints.getOrDefault(p.getUniqueId(),start));
+            case "goal_teleport"->p.teleport(goal.clone().add(0,1,0));
             case "shield"->shield(p,amount);
             case "speed"->p.addPotionEffect(new PotionEffect(PotionEffectType.SPEED,amount*20,2));
             case "jump"->p.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST,amount*20,2));
@@ -187,7 +199,11 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             case "clear_inventory"->{p.getInventory().clear();gunCooldown.remove(p.getUniqueId());gunReloadUntil.remove(p.getUniqueId());p.sendMessage("§c持ち物をすべて失いました");}
             case "guide"->give(p,Material.COMPASS,1,"§6山頂コンパス");
             case "boss"->spawnMob(p,EntityType.RAVAGER,amount);
-            case "armed_villager"->spawnMob(p,EntityType.PILLAGER,amount);
+            case "armed_villager"->spawnGunMob(p,"handgun",amount);
+            case "armed_handgun"->spawnGunMob(p,"handgun",amount);
+            case "armed_smg"->spawnGunMob(p,"smg",amount);
+            case "armed_rifle"->spawnGunMob(p,"rifle",amount);
+            case "armed_rpg"->spawnGunMob(p,"rpg",amount);
             case "gun_handgun","gun_smg","gun_rifle","gun_rpg"->{String type=kind.substring(4);double damage=a.length>3?Double.parseDouble(a[3]):(type.equals("handgun")?5:3);long interval=a.length>4?Long.parseLong(a[4]):300;int magazine=a.length>5?Integer.parseInt(a[5]):12;long reload=a.length>6?Long.parseLong(a[6]):1500;giveGun(p,type,amount,damage,interval,magazine,reload);}
             default->throw new IllegalArgumentException("Unknown effect");
         }
@@ -214,6 +230,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
                 start=new Location(world,Double.parseDouble(a[2]),Double.parseDouble(a[3]),Double.parseDouble(a[4]));goal=new Location(world,Double.parseDouble(a[5]),Double.parseDouble(a[6]),Double.parseDouble(a[7]));goalRadius=Double.parseDouble(a[8]);checkpointRise=Integer.parseInt(a[9]);win=Integer.parseInt(a[10]);goalHoldSeconds=a.length>11?Integer.parseInt(a[11]):5;checkpointsEnabled=a.length>12?Boolean.parseBoolean(a[12]):true;deathMinusWin=a.length>13&&Boolean.parseBoolean(a[13]);guideEnabled=a.length<=14||Boolean.parseBoolean(a[14]);hungerDisabled=a.length<=15||Boolean.parseBoolean(a[15]);
                 getConfig().set("world",world.getName());storeLocation("start",start);storeLocation("goal",goal);getConfig().set("goalRadius",goalRadius);getConfig().set("checkpointRise",checkpointRise);getConfig().set("win",win);getConfig().set("goalHoldSeconds",goalHoldSeconds);getConfig().set("checkpointsEnabled",checkpointsEnabled);getConfig().set("deathMinusWin",deathMinusWin);getConfig().set("guideEnabled",guideEnabled);getConfig().set("hungerDisabled",hungerDisabled);saveConfig();active=true;resetPlayers();
             } else if(a[0].equals("effect"))effect(a);
+            else if(a[0].equals("announce"))announce(a);
             else if(a[0].equals("reset")){resetPlayers();active=true;}
             else if(a[0].equals("environment")){daylight=Boolean.parseBoolean(a[1]);clearWeather=Boolean.parseBoolean(a[2]);}
             else throw new IllegalArgumentException("Unknown command");
@@ -233,7 +250,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     @EventHandler(priority=EventPriority.HIGHEST) public void pistonBack(BlockPistonRetractEvent e){e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void flow(BlockFromToEvent e){e.setCancelled(true);}
     @EventHandler public void playerDeath(PlayerDeathEvent e){e.setKeepInventory(true);e.setKeepLevel(true);e.getDrops().clear();if(deathMinusWin){wins.add(Map.of("eventId",UUID.randomUUID().toString(),"win",-1,"reason","プレイヤーデス","player",e.getEntity().getName()));Bukkit.broadcastMessage("§cデス：-1 WIN");}}
-    @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpointsEnabled?checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start):start));}
+    @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->{Player p=e.getPlayer();p.teleport(checkpointsEnabled?checkpoints.getOrDefault(p.getUniqueId(),start):start);p.setFallDistance(0);shield(p,2);});}
     @EventHandler public void useGun(PlayerInteractEvent e){
         if(e.getHand()!=EquipmentSlot.HAND||(e.getAction()!=Action.RIGHT_CLICK_AIR&&e.getAction()!=Action.RIGHT_CLICK_BLOCK))return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta())return;
         ItemMeta meta=item.getItemMeta();var data=meta.getPersistentDataContainer();String type=data.get(gunTypeKey,PersistentDataType.STRING);if(type==null)return;e.setCancelled(true);Player p=e.getPlayer();UUID id=p.getUniqueId();long now=System.currentTimeMillis();
