@@ -1,0 +1,9 @@
+name: LiveMinecraftMountain
+version: 0.1.0
+main: studio.liveminecraft.MountainPlugin
+api-version: '1.21'
+description: Protected mountain climb with gift obstacles, rescues and vehicles
+commands:
+  lmsmountain:
+    description: Live Minecraft Mountain Studio bridge (server console only)
+    usage: /lmsmountain status
