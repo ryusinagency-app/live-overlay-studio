@@ -106,7 +106,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     }
     private void vehicle(Player p,String type){
         Pig pig=(Pig)world.spawnEntity(p.getLocation(),EntityType.PIG);pig.setSaddle(true);pig.setInvisible(true);pig.setInvulnerable(true);
-        var attr=pig.getAttribute(Attribute.MOVEMENT_SPEED);if(attr!=null)attr.setBaseValue(type.equals("bike")?.42:.32);
+        var attr=pig.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED);if(attr!=null)attr.setBaseValue(type.equals("bike")?.42:.32);
         pig.setCustomName(type.equals("bike")?"バイク":"車");
         BlockDisplay body=(BlockDisplay)world.spawnEntity(p.getLocation(),EntityType.BLOCK_DISPLAY);body.setBlock((type.equals("bike")?Material.BLACK_CONCRETE:Material.RED_CONCRETE).createBlockData());pig.addPassenger(body);pig.addPassenger(p);
         vehicles.add(pig.getUniqueId());vehicles.add(body.getUniqueId());p.getInventory().addItem(new ItemStack(Material.CARROT_ON_A_STICK));
@@ -142,7 +142,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
                 if(world!=null)for(Player p:world.getPlayers()){
                     Location cp=checkpoints.getOrDefault(p.getUniqueId(),start);
                     double distance=goal==null?0:p.getLocation().distance(goal);
-                    players.add(Map.of("name",p.getName(),"x",p.getX(),"y",p.getY(),"z",p.getZ(),
+                    Location here=p.getLocation();players.add(Map.of("name",p.getName(),"x",here.getX(),"y",here.getY(),"z",here.getZ(),
                             "checkpointY",cp==null?p.getY():cp.getY(),"distanceToGoal",distance));
                 }
                 Map<String,Object> state=new LinkedHashMap<>();state.put("ok",true);state.put("active",active);
@@ -174,6 +174,6 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     @EventHandler(priority=EventPriority.HIGHEST) public void piston(BlockPistonExtendEvent e){e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void pistonBack(BlockPistonRetractEvent e){e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void flow(BlockFromToEvent e){e.setCancelled(true);}
-    @EventHandler public void death(PlayerRespawnEvent e){getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start)));}
+    @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start)));}
     @EventHandler public void join(PlayerJoinEvent e){if(active)getServer().getScheduler().runTaskLater(this,()->e.getPlayer().teleport(start),10);}
 }
