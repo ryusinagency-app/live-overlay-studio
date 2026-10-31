@@ -12,6 +12,9 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.*;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -31,8 +34,12 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     private final Map<UUID,Integer> checkpointLevels=new HashMap<>();
     private final Set<UUID> gameMobs=new HashSet<>(), vehicles=new HashSet<>();
     private final List<Map<String,Object>> wins=new ArrayList<>();
+    private final Map<UUID,Long> gunCooldown=new HashMap<>(), gunReloadUntil=new HashMap<>(), invulnerableUntil=new HashMap<>();
+    private final Map<UUID,Double> projectileDamage=new HashMap<>();
+    private NamespacedKey gunTypeKey,gunAmmoKey,gunDamageKey,gunIntervalKey,gunMagazineKey,gunUsedKey,gunReloadKey;
 
     @Override public void onEnable(){
+        gunTypeKey=new NamespacedKey(this,"gun_type");gunAmmoKey=new NamespacedKey(this,"gun_ammo");gunDamageKey=new NamespacedKey(this,"gun_damage");gunIntervalKey=new NamespacedKey(this,"gun_interval");gunMagazineKey=new NamespacedKey(this,"gun_magazine");gunUsedKey=new NamespacedKey(this,"gun_used");gunReloadKey=new NamespacedKey(this,"gun_reload");
         getServer().getPluginManager().registerEvents(this,this);
         Objects.requireNonNull(getCommand("lmsmountain")).setExecutor(this);
         restore();
@@ -95,7 +102,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     }
     private void resetPlayers(){
         checkpoints.clear();checkpointLevels.clear();goalHold.clear();clearMobs();
-        for(Player p:world.getPlayers()){p.leaveVehicle();p.teleport(start);p.setFallDistance(0);p.setInvulnerable(false);}
+        for(Player p:world.getPlayers()){p.leaveVehicle();p.teleport(start);p.setFallDistance(0);p.setInvulnerable(false);p.setGlowing(false);invulnerableUntil.remove(p.getUniqueId());}
     }
     private void clearMobs(){
         for(UUID id:new HashSet<>(gameMobs)){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}gameMobs.clear();
@@ -103,6 +110,31 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     }
     private void give(Player p,Material material,int amount,String name){
         ItemStack item=new ItemStack(material,Math.max(1,Math.min(64,amount)));var meta=item.getItemMeta();meta.setDisplayName(name);item.setItemMeta(meta);p.getInventory().addItem(item);
+    }
+    private String gunName(String type){return switch(type){case "handgun"->"§fハンドガン";case "smg"->"§bマシンガン";case "rifle"->"§aアサルトライフル";default->"§cRPG";};}
+    private Material gunMaterial(String type){return switch(type){case "handgun"->Material.IRON_HOE;case "smg"->Material.GOLDEN_HOE;case "rifle"->Material.DIAMOND_HOE;default->Material.NETHERITE_HOE;};}
+    private ItemStack findGun(Player p,String type){
+        for(ItemStack item:p.getInventory().getContents())if(item!=null&&item.hasItemMeta()&&type.equals(item.getItemMeta().getPersistentDataContainer().get(gunTypeKey,PersistentDataType.STRING)))return item;
+        return null;
+    }
+    private void refreshGun(ItemStack item){
+        if(item==null||!item.hasItemMeta())return;ItemMeta meta=item.getItemMeta();var data=meta.getPersistentDataContainer();
+        String type=data.get(gunTypeKey,PersistentDataType.STRING);Integer ammo=data.get(gunAmmoKey,PersistentDataType.INTEGER);Integer mag=data.get(gunMagazineKey,PersistentDataType.INTEGER);Integer used=data.get(gunUsedKey,PersistentDataType.INTEGER);
+        if(type==null)return;meta.setDisplayName(gunName(type));meta.setLore(List.of("§e残弾: §f"+Math.max(0,ammo==null?0:ammo),"§7マガジン: "+Math.max(0,(mag==null?1:mag)-(used==null?0:used))+"/"+(mag==null?1:mag),"§8右クリックで発射"));item.setItemMeta(meta);
+    }
+    private void giveGun(Player p,String type,int ammo,double damage,long intervalMs,int magazine,long reloadMs){
+        ItemStack item=findGun(p,type);if(item==null){item=new ItemStack(gunMaterial(type));ItemMeta m=item.getItemMeta();m.getPersistentDataContainer().set(gunTypeKey,PersistentDataType.STRING,type);m.getPersistentDataContainer().set(gunUsedKey,PersistentDataType.INTEGER,0);item.setItemMeta(m);p.getInventory().addItem(item);}
+        ItemMeta meta=item.getItemMeta();var data=meta.getPersistentDataContainer();Integer current=data.get(gunAmmoKey,PersistentDataType.INTEGER);
+        data.set(gunAmmoKey,PersistentDataType.INTEGER,Math.max(0,current==null?0:current)+Math.max(1,ammo));data.set(gunDamageKey,PersistentDataType.DOUBLE,Math.max(.1,damage));data.set(gunIntervalKey,PersistentDataType.LONG,Math.max(0,intervalMs));data.set(gunMagazineKey,PersistentDataType.INTEGER,Math.max(1,magazine));data.set(gunReloadKey,PersistentDataType.LONG,Math.max(0,reloadMs));item.setItemMeta(meta);refreshGun(item);
+        p.sendMessage("§a"+gunName(type)+" §f弾薬 +"+Math.max(1,ammo));
+    }
+    private void beginReload(Player p,ItemStack item,long reloadMs){
+        UUID id=p.getUniqueId();long until=System.currentTimeMillis()+reloadMs;gunReloadUntil.put(id,until);p.sendMessage("§eリロード中…");
+        getServer().getScheduler().runTaskLater(this,()->{if(gunReloadUntil.getOrDefault(id,0L)<=System.currentTimeMillis()){gunReloadUntil.remove(id);if(item.hasItemMeta()){ItemMeta m=item.getItemMeta();m.getPersistentDataContainer().set(gunUsedKey,PersistentDataType.INTEGER,0);item.setItemMeta(m);refreshGun(item);}p.playSound(p,Sound.BLOCK_IRON_TRAPDOOR_CLOSE,.8f,1.4f);p.sendMessage("§aリロード完了");}},Math.max(1,reloadMs/50));
+    }
+    private void shield(Player p,int seconds){
+        UUID id=p.getUniqueId();long until=Math.max(invulnerableUntil.getOrDefault(id,0L),System.currentTimeMillis()+Math.max(1,seconds)*1000L);invulnerableUntil.put(id,until);p.setInvulnerable(true);p.setGlowing(true);
+        getServer().getScheduler().runTaskLater(this,()->{if(invulnerableUntil.getOrDefault(id,0L)<=System.currentTimeMillis()){invulnerableUntil.remove(id);p.setInvulnerable(false);p.setGlowing(false);}},Math.max(1,seconds)*20L+1);
     }
     private void spawnMob(Player p,EntityType type,int count){
         for(int i=0;i<Math.min(100,count);i++){
@@ -130,7 +162,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     }
     private void effect(String[] a){
         if(a.length<2)throw new IllegalArgumentException("effect type [amount] [player]");
-        String kind=a[1];int amount=a.length>2?Integer.parseInt(a[2]):1;Player p=target(a.length>3?a[3]:null);if(p==null)throw new IllegalArgumentException("Player not found");
+        String kind=a[1];int amount=a.length>2?Integer.parseInt(a[2]):1;Player p=target(null);if(p==null)throw new IllegalArgumentException("Player not found");
         switch(kind){
             case "tnt"->{for(int i=0;i<Math.min(128,amount);i++){TNTPrimed t=world.spawn(p.getLocation().add((Math.random()-.5)*12,8+Math.random()*6,(Math.random()-.5)*12),TNTPrimed.class);t.setFuseTicks(50);}}
             case "zombie"->spawnMob(p,EntityType.ZOMBIE,amount);
@@ -141,13 +173,21 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             case "lightning"->{world.strikeLightningEffect(p.getLocation());p.damage(Math.max(1,amount));}
             case "reset"->p.teleport(start);
             case "checkpoint"->p.teleport(checkpoints.getOrDefault(p.getUniqueId(),start));
-            case "shield"->{p.setInvulnerable(true);getServer().getScheduler().runTaskLater(this,()->p.setInvulnerable(false),amount*20L);}
+            case "shield"->shield(p,amount);
             case "speed"->p.addPotionEffect(new PotionEffect(PotionEffectType.SPEED,amount*20,2));
             case "jump"->p.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST,amount*20,2));
             case "boost"->p.setVelocity(p.getLocation().getDirection().normalize().multiply(Math.max(1,amount)).setY(.5));
             case "clear_mobs"->clearMobs();
             case "obstacle"->obstacle(p,amount);
             case "car","bike"->vehicle(p,kind);
+            case "sword"->give(p,Material.DIAMOND_SWORD,1,"§b救済の剣");
+            case "bow"->{give(p,Material.BOW,1,"§a救済の弓");give(p,Material.ARROW,Math.max(1,amount),"§f矢");}
+            case "heal"->{p.setHealth(Math.min(p.getMaxHealth(),p.getHealth()+Math.max(1,amount)));p.playSound(p,Sound.ENTITY_PLAYER_LEVELUP,.8f,1.5f);}
+            case "clear_inventory"->{p.getInventory().clear();gunCooldown.remove(p.getUniqueId());gunReloadUntil.remove(p.getUniqueId());p.sendMessage("§c持ち物をすべて失いました");}
+            case "guide"->give(p,Material.COMPASS,1,"§6山頂コンパス");
+            case "boss"->spawnMob(p,EntityType.RAVAGER,amount);
+            case "armed_villager"->spawnMob(p,EntityType.PILLAGER,amount);
+            case "gun_handgun","gun_smg","gun_rifle","gun_rpg"->{String type=kind.substring(4);double damage=a.length>3?Double.parseDouble(a[3]):(type.equals("handgun")?5:3);long interval=a.length>4?Long.parseLong(a[4]):300;int magazine=a.length>5?Integer.parseInt(a[5]):12;long reload=a.length>6?Long.parseLong(a[6]):1500;giveGun(p,type,amount,damage,interval,magazine,reload);}
             default->throw new IllegalArgumentException("Unknown effect");
         }
     }
@@ -194,14 +234,16 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     @EventHandler public void playerDeath(PlayerDeathEvent e){e.setKeepInventory(true);e.setKeepLevel(true);e.getDrops().clear();if(deathMinusWin){wins.add(Map.of("eventId",UUID.randomUUID().toString(),"win",-1,"reason","プレイヤーデス","player",e.getEntity().getName()));Bukkit.broadcastMessage("§cデス：-1 WIN");}}
     @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpointsEnabled?checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start):start));}
     @EventHandler public void useGun(PlayerInteractEvent e){
-        if(e.getAction()!=Action.RIGHT_CLICK_AIR && e.getAction()!=Action.RIGHT_CLICK_BLOCK)return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta()||!item.getItemMeta().hasDisplayName())return;
-        String name=item.getItemMeta().getDisplayName();Player p=e.getPlayer();
-        if(name.contains("RPG")){Fireball b=p.launchProjectile(Fireball.class);b.setYield(3);b.setIsIncendiary(false);p.playSound(p,Sound.ENTITY_GENERIC_EXPLODE,.8f,1.5f);}
-        else if(name.contains("ハンドガン")||name.contains("マシンガン")||name.contains("アサルトライフル")){
-            int count=name.contains("マシンガン")?5:name.contains("アサルト")?3:1;double speed=name.contains("ハンドガン")?3.2:4.0;
-            for(int i=0;i<count;i++){Arrow arrow=p.launchProjectile(Arrow.class,p.getLocation().getDirection().add(new Vector((Math.random()-.5)*.05,(Math.random()-.5)*.05,(Math.random()-.5)*.05)).multiply(speed));arrow.setDamage(name.contains("ハンドガン")?5:3);arrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);}
-            p.playSound(p,Sound.ENTITY_FIREWORK_ROCKET_BLAST,.7f,name.contains("マシンガン")?1.8f:1.2f);
-        }else return;e.setCancelled(true);
+        if(e.getHand()!=EquipmentSlot.HAND||(e.getAction()!=Action.RIGHT_CLICK_AIR&&e.getAction()!=Action.RIGHT_CLICK_BLOCK))return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta())return;
+        ItemMeta meta=item.getItemMeta();var data=meta.getPersistentDataContainer();String type=data.get(gunTypeKey,PersistentDataType.STRING);if(type==null)return;e.setCancelled(true);Player p=e.getPlayer();UUID id=p.getUniqueId();long now=System.currentTimeMillis();
+        if(gunReloadUntil.getOrDefault(id,0L)>now){p.sendActionBar("§eリロード中…");return;}long interval=Optional.ofNullable(data.get(gunIntervalKey,PersistentDataType.LONG)).orElse(300L);if(gunCooldown.getOrDefault(id,0L)>now)return;gunCooldown.put(id,now+interval);
+        int ammo=Optional.ofNullable(data.get(gunAmmoKey,PersistentDataType.INTEGER)).orElse(0),magazine=Optional.ofNullable(data.get(gunMagazineKey,PersistentDataType.INTEGER)).orElse(1),used=Optional.ofNullable(data.get(gunUsedKey,PersistentDataType.INTEGER)).orElse(0);long reload=Optional.ofNullable(data.get(gunReloadKey,PersistentDataType.LONG)).orElse(1500L);double damage=Optional.ofNullable(data.get(gunDamageKey,PersistentDataType.DOUBLE)).orElse(3d);
+        if(ammo<=0){p.sendActionBar("§c弾切れ");p.playSound(p,Sound.BLOCK_DISPENSER_FAIL,.8f,1);return;}if(used>=magazine){beginReload(p,item,reload);return;}
+        int burst=type.equals("smg")?5:type.equals("rifle")?3:1,shots=Math.min(burst,Math.min(ammo,magazine-used));
+        for(int i=0;i<shots;i++)if(type.equals("rpg")){Fireball b=p.launchProjectile(Fireball.class);b.setYield(Math.max(1,Math.min(8,(float)(damage/4))));b.setIsIncendiary(false);projectileDamage.put(b.getUniqueId(),damage);}else{double spread=type.equals("handgun")?.02:.05;Arrow arrow=p.launchProjectile(Arrow.class,p.getLocation().getDirection().add(new Vector((Math.random()-.5)*spread,(Math.random()-.5)*spread,(Math.random()-.5)*spread)).multiply(type.equals("handgun")?3.2:4));arrow.setDamage(damage);arrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);projectileDamage.put(arrow.getUniqueId(),damage);}
+        data.set(gunAmmoKey,PersistentDataType.INTEGER,ammo-shots);data.set(gunUsedKey,PersistentDataType.INTEGER,used+shots);item.setItemMeta(meta);refreshGun(item);p.playSound(p,type.equals("rpg")?Sound.ENTITY_GENERIC_EXPLODE:Sound.ENTITY_FIREWORK_ROCKET_BLAST,.8f,type.equals("smg")?1.8f:1.2f);
+        if(used+shots>=magazine&&ammo-shots>0)beginReload(p,item,reload);
     }
+    @EventHandler public void projectileHit(EntityDamageByEntityEvent e){Double damage=projectileDamage.remove(e.getDamager().getUniqueId());if(damage!=null)e.setDamage(damage);}
     @EventHandler public void join(PlayerJoinEvent e){if(active)getServer().getScheduler().runTaskLater(this,()->e.getPlayer().teleport(start),10);}
 }
