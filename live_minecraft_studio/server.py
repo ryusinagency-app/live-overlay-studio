@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.8"
+APP_VERSION = "0.4.9"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -53,7 +53,7 @@ DEFAULT = {
                         "borderColor": "#ef334e", "textColor": "#ffffff", "accentColor": "#ffd34e"},
         "effectListStyle": {
         "columns": 5, "cardWidth": 180, "cardHeight": 180, "gap": 8, "borderRadius": 14,
-        "backgroundColor": "#61294f", "borderColor": "#ef334e", "textColor": "#ffffff",
+        "backgroundColor": "#61294f", "backgroundOpacity": 100, "borderColor": "#ef334e", "textColor": "#ffffff",
         "accentColor": "#a4f4bf", "feverGlowColor": "#ffd34e", "nameFontSize": 18, "effectFontSize": 20,
         "descriptionFontSize": 13, "imageSize": 74
     }},
@@ -81,6 +81,7 @@ WIN_QUEUE: Queue[dict] = Queue(maxsize=10000)
 STATUS = {"rcon": "未接続", "lastError": "", "worldBridge": "未確認", "queuedCommands": 0, "pendingWin": 0}
 GACHA_EVENTS: list[dict] = []
 GACHA_LOCK = Lock()
+GACHA_QUEUE: Queue[tuple[str, str, str]] = Queue(maxsize=10000)
 
 
 def deep_merge(base, incoming):
@@ -179,6 +180,8 @@ def status_snapshot():
 def effect_preview_label(effect, actions):
     combined = " ＋ ".join(action["effectiveLabel"] for action in actions)
     text = str(effect.get("displayText") or "").strip()
+    if not text and effect.get("autoDisplayText", True) is False:
+        return ""
     if not text or not actions:
         return combined
     first = actions[0]
@@ -262,7 +265,8 @@ def dispatch_effect(result, sender_name=""):
                    "reason": result.get("message", "Minecraft効果"), "senderName": str(sender_name)[:80]})
     for action in result.get("effects", []):
         if action.get("kind") == "gacha" and action.get("gachaId"):
-            start_gacha(str(action["gachaId"]), sender_name, result["eventId"])
+            start_gacha(str(action["gachaId"]), sender_name, result["eventId"],
+                        int(clamp(action.get("amount", 1), 1, 1000, 1)))
 
 
 def weighted_index(entries):
@@ -278,7 +282,7 @@ def weighted_index(entries):
     return len(entries) - 1
 
 
-def start_gacha(gacha_id, sender_name, parent_event=None):
+def start_gacha(gacha_id, sender_name, parent_event=None, count=1):
     with STATE_LOCK:
         config = json.loads(json.dumps(STATE.get("gachas", {}).get(gacha_id, {})))
     if not config or config.get("enabled", True) is False:
@@ -288,47 +292,71 @@ def start_gacha(gacha_id, sender_name, parent_event=None):
     if not entries:
         return False
     event_base = str(parent_event or ("gacha-" + secrets.token_hex(8)))
-
-    def run():
-        max_spins = int(clamp(config.get("maxSpins", 20), 1, 100, 20))
-        for spin in range(max_spins):
-            index = weighted_index(entries)
-            selected = entries[index]
-            effect_id = str(selected["effectId"])
-            effect = STATE.get("effects", {}).get(effect_id, {})
-            continued = (config.get("continueEnabled") is True and spin + 1 < max_spins and
-                         random.random() * 100 < float(clamp(config.get("continueRate", 70), 0, 100, 70)))
-            event_id = f"{event_base}-spin-{spin+1}"
-            event = {"eventId": event_id, "at": time.time(), "gachaId": gacha_id,
-                     "gachaName": str(config.get("name") or "スピナーガチャ")[:100],
-                     "sender": str(sender_name)[:80], "items": [str(item.get("label") or STATE["effects"].get(item.get("effectId"), {}).get("name") or "効果")[:80] for item in entries],
-                     "resultIndex": index, "resultLabel": str(selected.get("label") or effect.get("name") or "効果")[:100],
-                     "spinSeconds": float(clamp(config.get("spinSeconds", 5), 1, 30, 5)), "continued": continued,
-                     "continueEnabled": config.get("continueEnabled") is True,
-                     "giftSoundUrl": str(config.get("giftSoundUrl") or "") if spin == 0 else "",
-                     "spinSoundUrl": str(config.get("spinSoundUrl") or ""), "resultSoundUrl": str(config.get("resultSoundUrl") or ""),
-                     "giftSoundVolume": int(clamp(config.get("giftSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
-                     "giftSoundSeconds": float(clamp(config.get("giftSoundSeconds", 0), 0, 600, 0)),
-                     "spinSoundVolume": int(clamp(config.get("spinSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
-                     "spinSoundSeconds": float(clamp(config.get("spinSoundSeconds", 0), 0, 600, 0)),
-                     "resultSoundVolume": int(clamp(config.get("resultSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
-                     "resultSoundSeconds": float(clamp(config.get("resultSoundSeconds", 0), 0, 600, 0))}
-            with GACHA_LOCK:
-                GACHA_EVENTS.append(event); del GACHA_EVENTS[:-100]
-            queue_commands([minecraft_announcement(event["gachaName"], event["sender"], max(3, int(event["spinSeconds"])))])
-            time.sleep(event["spinSeconds"])
-            continuation_text = " ＋ 継続！" if continued else " ／ 継続終了" if config.get("continueEnabled") is True else ""
-            queue_commands([minecraft_announcement(event["resultLabel"] + continuation_text, event["sender"], 4)])
-            payload = {"eventId": event_id + "-effect", "giftId": effect_id, "giftName": effect.get("name", ""),
-                       "senderName": sender_name, "repeatCount": 1, "coins": 0, "source": "gacha"}
-            result = ENGINE.receive(payload, STATE["effects"])
-            dispatch_effect(result, sender_name)
-            save_state()
-            if not continued:
-                break
-            time.sleep(float(clamp(config.get("continueDelaySeconds", 2), .2, 10, 2)))
-    Thread(target=run, daemon=True).start()
+    for index in range(int(clamp(count, 1, 1000, 1))):
+        GACHA_QUEUE.put_nowait((gacha_id, str(sender_name)[:80], f"{event_base}-draw-{index+1}"))
     return True
+
+
+def gacha_worker():
+    """Run every gacha on one FIFO so overlay, result and effect never overlap."""
+    while True:
+        gacha_id, sender_name, event_base = GACHA_QUEUE.get()
+        try:
+            with STATE_LOCK:
+                config = json.loads(json.dumps(STATE.get("gachas", {}).get(gacha_id, {})))
+                all_effects = json.loads(json.dumps(STATE.get("effects", {})))
+            entries = [item for item in config.get("entries", []) if item.get("effectId") in all_effects
+                       and all_effects[item["effectId"]].get("enabled", True) is not False]
+            if not config or config.get("enabled", True) is False or not entries:
+                continue
+            max_spins = int(clamp(config.get("maxSpins", 20), 1, 100, 20))
+            for spin in range(max_spins):
+                index = weighted_index(entries)
+                selected = entries[index]
+                effect_id = str(selected["effectId"])
+                effect = all_effects.get(effect_id, {})
+                continued = (config.get("continueEnabled") is True and spin + 1 < max_spins and
+                             random.random() * 100 < float(clamp(config.get("continueRate", 70), 0, 100, 70)))
+                event_id = f"{event_base}-spin-{spin+1}"
+                event = {"eventId": event_id, "at": time.time(), "gachaId": gacha_id,
+                         "gachaName": str(config.get("name") or "スピナーガチャ")[:100],
+                         "sender": str(sender_name)[:80],
+                         "items": [str(item.get("label") or all_effects.get(item.get("effectId"), {}).get("name") or "効果")[:80] for item in entries],
+                         "resultIndex": index,
+                         "resultLabel": str(selected.get("label") or effect.get("name") or "効果")[:100],
+                         "spinSeconds": float(clamp(config.get("spinSeconds", 5), 1, 30, 5)),
+                         "continued": continued, "continueEnabled": config.get("continueEnabled") is True,
+                         "giftSoundUrl": str(config.get("giftSoundUrl") or "") if spin == 0 else "",
+                         "spinSoundUrl": str(config.get("spinSoundUrl") or ""),
+                         "resultSoundUrl": str(config.get("resultSoundUrl") or ""),
+                         "giftSoundVolume": int(clamp(config.get("giftSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
+                         "giftSoundSeconds": float(clamp(config.get("giftSoundSeconds", 0), 0, 600, 0)),
+                         "spinSoundVolume": int(clamp(config.get("spinSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
+                         "spinSoundSeconds": float(clamp(config.get("spinSoundSeconds", 0), 0, 600, 0)),
+                         "resultSoundVolume": int(clamp(config.get("resultSoundVolume", config.get("soundVolume", 100)), 0, 100, 100)),
+                         "resultSoundSeconds": float(clamp(config.get("resultSoundSeconds", 0), 0, 600, 0))}
+                with GACHA_LOCK:
+                    GACHA_EVENTS.append(event); del GACHA_EVENTS[:-100]
+                queue_commands([minecraft_announcement(event["gachaName"], event["sender"], max(3, int(event["spinSeconds"])))])
+                # Browser sources poll every 400ms. Allow one poll interval so
+                # the visible result appears before its Minecraft effect fires.
+                time.sleep(event["spinSeconds"] + .6)
+                continuation_text = " ＋ 継続！" if continued else " ／ 継続終了" if config.get("continueEnabled") is True else ""
+                queue_commands([minecraft_announcement(event["resultLabel"] + continuation_text, event["sender"], 4)])
+                payload = {"eventId": event_id + "-effect", "giftId": effect_id,
+                           "giftName": effect.get("name", ""), "senderName": sender_name,
+                           "repeatCount": 1, "coins": 0, "source": "gacha"}
+                result = ENGINE.receive(payload, all_effects)
+                dispatch_effect(result, sender_name)
+                save_state()
+                time.sleep(1.75 if continued else 3.25)
+                if not continued:
+                    break
+                time.sleep(float(clamp(config.get("continueDelaySeconds", 2), .2, 10, 2)))
+        except Exception as exc:
+            STATUS["lastError"] = ("ガチャ処理: " + str(exc))[:300]
+        finally:
+            GACHA_QUEUE.task_done()
 
 
 def trigger_target(target, sender_name, event_id):
@@ -348,16 +376,25 @@ def trigger_gachas_for_gift(body, event_id, already_triggered=None):
     gift_id = str(body.get("giftId") or "")
     gift_name = str(body.get("giftName") or "")
     sender = str(body.get("senderName") or "")[:80]
+    nested_user = body.get("user") if isinstance(body.get("user"), dict) else {}
+    nested_sender = body.get("sender") if isinstance(body.get("sender"), dict) else {}
+    sender_id = str(body.get("userId") or body.get("uniqueId") or body.get("senderId") or
+                    body.get("senderUniqueId") or nested_user.get("uniqueId") or nested_user.get("userId") or
+                    nested_user.get("id") or nested_sender.get("uniqueId") or nested_sender.get("userId") or
+                    nested_sender.get("id") or "").strip().lstrip("@").casefold()
+    repeat = int(clamp(body.get("repeatCount", 1), 1, 1000, 1))
     skipped = set(already_triggered or [])
     with STATE_LOCK:
         matches = [(gacha_id, dict(gacha)) for gacha_id, gacha in STATE.get("gachas", {}).items()
                    if gacha.get("enabled", True) is not False and gacha_id not in skipped and
+                   (not str(gacha.get("allowedGiftUserId") or "").strip() or
+                    str(gacha.get("allowedGiftUserId") or "").strip().lstrip("@").casefold() == sender_id) and
                    ((gift_id and str(gacha.get("triggerGiftId") or "") == gift_id) or
                     (gift_name and str(gacha.get("triggerGiftName") or "") == gift_name))]
     started = 0
     for gacha_id, _ in matches:
-        if start_gacha(gacha_id, sender, f"{event_id}-direct-{gacha_id}"):
-            started += 1
+        if start_gacha(gacha_id, sender, f"{event_id}-direct-{gacha_id}", repeat):
+            started += repeat
     return started
 
 
@@ -616,6 +653,8 @@ class Handler(SimpleHTTPRequestHandler):
                 for effect in STATE["effects"].values():
                     if effect.get("enabled", True) is False or effect.get("overlayVisible", True) is False:
                         continue
+                    if effect.get("gachaOnly") is True:
+                        continue
                     actions = resolve_effects(effect, 1, ENGINE.multiplier)
                     preview = dict(actions[0])
                     preview["effectiveLabel"] = effect_preview_label(effect, actions)
@@ -634,7 +673,9 @@ class Handler(SimpleHTTPRequestHandler):
                     effects.append({"name": "", "effectiveLabel": gacha_name,
                                     "description": "", "overlayVisible": True,
                                     "useCustomStyle": False, "kind": "gacha-card", "feverApplied": ENGINE.multiplier.active(),
-                                    "giftImageUrl": gacha.get("triggerGiftImageUrl", "")})
+                                    "giftImageUrl": (gacha.get("customImageUrl", "") if gacha.get("imageMode") == "custom"
+                                                     else "" if gacha.get("imageMode") == "none"
+                                                     else gacha.get("triggerGiftImageUrl", ""))})
                 overlay = dict(STATE.get("overlay", {}))
                 multiplier_config = {"waitingText": STATE.get("multiplier", {}).get("waitingText", "次のフィーバーまで")}
             with GACHA_LOCK:
@@ -818,7 +859,7 @@ class Handler(SimpleHTTPRequestHandler):
                     style = body["overlay"]["effectListStyle"]
                     current = STATE["overlay"].setdefault("effectListStyle", {})
                     numeric = {"columns": (1, 10), "cardWidth": (100, 600), "cardHeight": (100, 600),
-                               "gap": (0, 100), "borderRadius": (0, 100), "nameFontSize": (8, 80),
+                               "gap": (0, 100), "borderRadius": (0, 100), "backgroundOpacity": (0, 100), "nameFontSize": (8, 80),
                                "effectFontSize": (8, 100), "descriptionFontSize": (8, 60), "imageSize": (0, 300)}
                     for key, bounds in numeric.items():
                         if key in style:
@@ -915,6 +956,9 @@ class Handler(SimpleHTTPRequestHandler):
                     item["triggerGiftId"] = str(item.get("triggerGiftId") or "")[:160]
                     item["triggerGiftName"] = str(item.get("triggerGiftName") or "")[:160]
                     item["triggerGiftImageUrl"] = str(item.get("triggerGiftImageUrl") or "")[:1000]
+                    item["allowedGiftUserId"] = str(item.get("allowedGiftUserId") or "")[:160]
+                    item["imageMode"] = str(item.get("imageMode") or "gift") if str(item.get("imageMode") or "gift") in {"gift", "custom", "none"} else "gift"
+                    item["customImageUrl"] = str(item.get("customImageUrl") or "")[:1000]
                     for key in ("followTriggerEnabled", "individualLikeTriggerEnabled", "totalLikeTriggerEnabled"):
                         item[key] = item.get(key) is True
                     item["individualLikeEvery"] = int(clamp(item.get("individualLikeEvery", 100), 1, 100000000, 100))
@@ -945,6 +989,7 @@ def make_server():
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     Thread(target=command_worker, daemon=True).start()
     Thread(target=win_worker, daemon=True).start()
+    Thread(target=gacha_worker, daemon=True).start()
     Thread(target=game_timer_worker, daemon=True).start()
     return ThreadingHTTPServer((HOST, PORT), Handler)
 
