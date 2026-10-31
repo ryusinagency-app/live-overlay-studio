@@ -17,6 +17,10 @@ class Course:
     goal_radius: float = 4
     checkpoint_rise: int = 20
     goal_win: int = 1
+    goal_hold_seconds: int = 5
+    checkpoints_enabled: bool = True
+    death_minus_win: bool = False
+    guide_enabled: bool = True
 
 
 @dataclass
@@ -58,7 +62,8 @@ class GameEngine:
     def configure_command(self) -> str:
         c = self.course
         return (f"lmsmountain configure {c.world} {c.start_x:g} {c.start_y:g} {c.start_z:g} "
-                f"{c.goal_x:g} {c.goal_y:g} {c.goal_z:g} {c.goal_radius:g} {c.checkpoint_rise} {c.goal_win}")
+                f"{c.goal_x:g} {c.goal_y:g} {c.goal_z:g} {c.goal_radius:g} {c.checkpoint_rise} {c.goal_win} "
+                f"{c.goal_hold_seconds} {str(c.checkpoints_enabled).lower()} {str(c.death_minus_win).lower()} {str(c.guide_enabled).lower()}")
 
     def effect_command(self, action: dict[str, Any], factor: int = 1) -> str:
         kind = str(action.get("kind", "tnt"))
@@ -88,5 +93,6 @@ class GameEngine:
         return {"course": {"world": c.world, "startX": c.start_x, "startY": c.start_y, "startZ": c.start_z,
                            "goalX": c.goal_x, "goalY": c.goal_y, "goalZ": c.goal_z,
                            "goalRadius": c.goal_radius, "checkpointRise": c.checkpoint_rise,
-                           "goalWin": c.goal_win, **self.world_state},
+                           "goalWin": c.goal_win, "goalHoldSeconds": c.goal_hold_seconds, "checkpointsEnabled": c.checkpoints_enabled,
+                           "deathMinusWin": c.death_minus_win, "guideEnabled": c.guide_enabled, **self.world_state},
                 "multiplier": self.multiplier.snapshot(), "announcements": list(self.announcements)}
