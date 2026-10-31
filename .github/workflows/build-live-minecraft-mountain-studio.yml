@@ -1,0 +1,55 @@
+name: Build Live Minecraft Mountain Studio
+
+on:
+  pull_request:
+    paths: ['live_minecraft_mountain_studio/**', '.github/workflows/build-live-minecraft-mountain-studio.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing mountain-v release tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.event_name == 'pull_request' || startsWith(github.event.release.tag_name || inputs.tag, 'mountain-v')
+    runs-on: windows-latest
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: live_minecraft_mountain_studio/plugin/pom.xml
+      - name: Build mountain server plugin
+        run: mvn -B -f live_minecraft_mountain_studio/plugin/pom.xml package
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Run tests
+        working-directory: live_minecraft_mountain_studio
+        run: python -m unittest discover -s tests -v
+      - name: Build standalone EXE
+        working-directory: live_minecraft_mountain_studio
+        run: python build_windows_app.py
+      - name: Attach EXE to release
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$RELEASE_TAG" "live_minecraft_mountain_studio/dist/Live_Minecraft_Mountain_Studio_Windows_x64.exe" --clobber
