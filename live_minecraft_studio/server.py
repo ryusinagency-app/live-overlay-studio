@@ -21,7 +21,7 @@ from rcon import RconClient
 from local_server import LocalMinecraftServer
 
 
-APP_VERSION = "0.4.9"
+APP_VERSION = "0.4.10"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftStudio"
 SOUNDS_DIR = DATA_DIR / "sounds"
@@ -42,7 +42,10 @@ DEFAULT = {
     "overlay": {"successText": "WIN！",
         "arenaStyle": {"width": 620, "padding": 18, "borderRadius": 20, "backgroundOpacity": 88,
                        "titleFontSize": 26, "textFontSize": 16, "backgroundColor": "#080a0f",
-                       "borderColor": "#ef334e", "textColor": "#ffffff", "accentColor": "#35bc75"},
+                       "borderColor": "#ef334e", "textColor": "#ffffff", "accentColor": "#35bc75",
+                       "multiplierFontSize": 23, "multiplierColor": "#ffd348",
+                       "countdownFontSize": 20, "countdownColor": "#8ff4b5",
+                       "shieldFontSize": 16, "shieldColor": "#72c8ff"},
         "feverStyle": {"width": 600, "padding": 22, "borderRadius": 18, "backgroundOpacity": 91,
                         "titleFontSize": 40, "timerFontSize": 42, "textFontSize": 22,
                         "backgroundColor": "#111521", "borderColor": "#ffd34e",
@@ -864,10 +867,15 @@ class Handler(SimpleHTTPRequestHandler):
                     for key, bounds in numeric.items():
                         if key in style:
                             current[key] = int(clamp(style[key], bounds[0], bounds[1], current.get(key, bounds[0])))
-                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor", "feverGlowColor"):
+                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor", "feverGlowColor",
+                                "nameOutlineColor", "effectOutlineColor", "descriptionOutlineColor"):
                         value = str(style.get(key, current.get(key, ""))).strip()
                         if len(value) <= 40:
                             current[key] = value
+                    for key in ("nameOutlineWidth", "effectOutlineWidth", "descriptionOutlineWidth"):
+                        if key in style: current[key] = float(clamp(style[key], 0, 10, 2))
+                    for key in ("nameOutlineEnabled", "effectOutlineEnabled", "descriptionOutlineEnabled"):
+                        if key in style: current[key] = style[key] is True
                 for style_key in ("arenaStyle", "feverStyle", "gachaStyle"):
                     if not isinstance(body["overlay"].get(style_key), dict):
                         continue
@@ -877,14 +885,25 @@ class Handler(SimpleHTTPRequestHandler):
                                "backgroundOpacity": (0, 100), "titleFontSize": (10, 120),
                                "textFontSize": (8, 80), "timerFontSize": (10, 140),
                                "senderFontSize": (8, 100), "reelFontSize": (10, 120),
-                               "resultFontSize": (10, 120), "continueFontSize": (10, 120)}
+                               "resultFontSize": (10, 120), "continueFontSize": (10, 120),
+                               "multiplierFontSize": (8, 120), "countdownFontSize": (8, 120),
+                               "shieldFontSize": (8, 120)}
                     for key, bounds in numeric.items():
                         if key in style:
                             current[key] = int(clamp(style[key], bounds[0], bounds[1], current.get(key, bounds[0])))
-                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor"):
+                    outline_names = {"arenaStyle": ("title", "text", "multiplier", "countdown", "shield"),
+                                     "feverStyle": ("title", "timer", "text"),
+                                     "gachaStyle": ("title", "sender", "reel", "result", "continue")}[style_key]
+                    for key in ("backgroundColor", "borderColor", "textColor", "accentColor",
+                                "multiplierColor", "countdownColor", "shieldColor",
+                                *(name + "OutlineColor" for name in outline_names)):
                         value = str(style.get(key, current.get(key, ""))).strip()
                         if len(value) <= 40:
                             current[key] = value
+                    for name in outline_names:
+                        enabled_key, width_key = name + "OutlineEnabled", name + "OutlineWidth"
+                        if enabled_key in style: current[enabled_key] = style[enabled_key] is True
+                        if width_key in style: current[width_key] = float(clamp(style[width_key], 0, 10, 2))
             if isinstance(body.get("arena"), dict):
                 STATE["arena"].update(body["arena"])
                 config = STATE["arena"]
