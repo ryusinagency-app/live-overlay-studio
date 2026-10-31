@@ -25,7 +25,8 @@ CARD_STYLE = {"background":"#171b25","backgroundOpacity":88,"border":"#ef334e","
 DEFAULT = {
  "rcon":{"host":"127.0.0.1","port":25576,"password":""},
  "course":{"world":"world","startX":0,"startY":64,"startZ":0,"goalX":0,"goalY":160,"goalZ":0,
-           "goalRadius":4,"checkpointRise":20,"goalWin":1,"daylightFixed":True,"clearWeather":True},
+           "goalRadius":4,"checkpointRise":20,"goalWin":1,"goalHoldSeconds":5,"checkpointsEnabled":True,"deathMinusWin":False,"guideEnabled":True,"daylightFixed":True,"clearWeather":True},
+ "winBridge":{"enabled":True,"url":"http://127.0.0.1:8765/api/minecraft-studio/win","token":""},
  "multiplier":{"enabled":True,"threshold":5000,"durationSeconds":300,"multiplier":2,
                "nextLabel":"次の倍率まで","startSoundUrl":"","startSoundVolume":100,"startSoundSeconds":0,
                "endSoundUrl":"","endSoundVolume":100,"endSoundSeconds":0},
@@ -51,7 +52,7 @@ except Exception: STATE=deepcopy(DEFAULT)
 def make_engine():
  c,m=STATE["course"],STATE["multiplier"]
  return GameEngine(Course(c["world"],float(c["startX"]),float(c["startY"]),float(c["startZ"]),
-  float(c["goalX"]),float(c["goalY"]),float(c["goalZ"]),float(c["goalRadius"]),int(c["checkpointRise"]),int(c["goalWin"])),
+  float(c["goalX"]),float(c["goalY"]),float(c["goalZ"]),float(c["goalRadius"]),int(c["checkpointRise"]),int(c["goalWin"]),int(c.get("goalHoldSeconds",5)),bool(c.get("checkpointsEnabled",True)),bool(c.get("deathMinusWin",False)),bool(c.get("guideEnabled",True))),
   MultiplierState(bool(m["enabled"]),int(m["threshold"]),int(m["durationSeconds"]),int(m["multiplier"])))
 ENGINE=make_engine(); LOCAL=LocalMinecraftServer(DATA_DIR)
 STATUS={"rcon":"未接続","lastError":"","lastSync":0,"wins":[]}
@@ -71,7 +72,18 @@ def public_state():
   ["tnt","TNTを降らせる"],["zombie","ゾンビ"],["creeper","クリーパー"],["launch","上へ吹き飛ばす"],
   ["freeze","牢屋へ閉じ込める"],["darkness","暗闇"],["lightning","雷"],["reset","スタートへ戻す"],
   ["checkpoint","チェックポイントへ救済"],["shield","無敵"],["speed","スピード"],["jump","ジャンプ力"],
-  ["boost","前方ブースト"],["clear_mobs","敵を全消去"],["obstacle","障害物"],["car","車"],["bike","バイク"]]}
+  ["boost","前方ブースト"],["clear_mobs","敵を全消去"],["obstacle","障害物"],["car","車"],["bike","バイク"],
+  ["sword","剣を付与"],["bow","弓矢を付与"],["heal","体力回復"],["clear_inventory","持ち物全ロスト"],["guide","山頂コンパス"],
+  ["boss","ボス出現"],["gun_handgun","ハンドガン"],["gun_smg","マシンガン"],["gun_rifle","アサルトライフル"],["gun_rpg","RPG"],["armed_villager","武装村人"]]}
+
+def send_win(event):
+ cfg=STATE.get("winBridge",{})
+ if not cfg.get("enabled",True): return True
+ body=json.dumps({"amount":int(event.get("win",0)),"win":int(event.get("win",0)),"reason":event.get("reason","山登り"),"senderName":event.get("player",""),"source":"minecraft-mountain"},ensure_ascii=False).encode("utf-8")
+ headers={"Content-Type":"application/json"}
+ if cfg.get("token"): headers["X-Live-Minecraft-Token"]=str(cfg["token"])
+ request=urllib.request.Request(str(cfg.get("url") or "http://127.0.0.1:8765/api/minecraft-studio/win"),data=body,headers=headers,method="POST")
+ with urllib.request.urlopen(request,timeout=4) as response: return 200<=response.status<300
 
 def sync_loop():
  while True:
@@ -81,8 +93,9 @@ def sync_loop():
     ENGINE.update_world({"active":reply.get("active",False),"world":reply.get("world",""),"players":reply.get("players",[]),
      "start":reply.get("start",{}),"goal":reply.get("goal",{})})
     for event in reply.get("wins",[]):
-     if event.get("eventId") not in {x.get("eventId") for x in STATUS["wins"]}: STATUS["wins"]=(STATUS["wins"]+[event])[-30:]
-     rcon("lmsmountain ack "+str(event.get("eventId","")))
+     if event.get("eventId") not in {x.get("eventId") for x in STATUS["wins"]}:
+      if send_win(event):
+       STATUS["wins"]=(STATUS["wins"]+[event])[-30:]; rcon("lmsmountain ack "+str(event.get("eventId","")))
    STATUS.update({"rcon":"接続中","lastError":"","lastSync":time.time()})
   except Exception as exc: STATUS.update({"rcon":"未接続","lastError":str(exc)})
   time.sleep(2)
@@ -201,7 +214,7 @@ class Handler(SimpleHTTPRequestHandler):
     return self._json({"ok":True,"url":("/user-sounds/" if is_sound else "/user-images/")+name})
    if path=="/api/config":
     with LOCK:
-     for key in ("course","multiplier","overlay","rcon"):
+     for key in ("course","multiplier","overlay","rcon","winBridge"):
       if isinstance(body.get(key),dict): STATE[key]=merge(STATE.get(key,{}),body[key])
      if isinstance(body.get("effects"),dict): STATE["effects"]=body["effects"]
      if isinstance(body.get("gachas"),dict): STATE["gachas"]=body["gachas"]
