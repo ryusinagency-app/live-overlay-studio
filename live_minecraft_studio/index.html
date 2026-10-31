@@ -177,6 +177,7 @@
 <label>画像サイズ<input id="effectImageSize" type="number" min="0" max="300">
 </label>
 </div>
+<details><summary>各テキストの袋文字（縁取り）</summary><div id="effectOutlineControls" class="form overlayDesignForm"></div></details>
 <div class="buttons">
 <button id="saveEffectDesign">一括デザインを保存</button>
 <button id="resetCardStyles">全カードを一括デザインへ揃える</button>
@@ -298,7 +299,14 @@
 <label>枠線色<input id="arenaOverlayBorder" type="color"></label>
 <label>文字色<input id="arenaOverlayText" type="color"></label>
 <label>ゲージ色<input id="arenaOverlayAccent" type="color"></label>
+<label>次の倍率まで：文字サイズ<input id="arenaOverlayMultiplierSize" type="number" min="8" max="120"></label>
+<label>次の倍率まで：文字色<input id="arenaOverlayMultiplierColor" type="color"></label>
+<label>現在カウント：文字サイズ<input id="arenaOverlayCountdownSize" type="number" min="8" max="120"></label>
+<label>現在カウント：文字色<input id="arenaOverlayCountdownColor" type="color"></label>
+<label>シールド：文字サイズ<input id="arenaOverlayShieldSize" type="number" min="8" max="120"></label>
+<label>シールド：文字色<input id="arenaOverlayShieldColor" type="color"></label>
 </div>
+<details><summary>各テキストの袋文字（縁取り）</summary><div id="arenaOutlineControls" class="form overlayDesignForm"></div></details>
 </article>
 <article>
 <h2>フィーバー専用オーバーレイ</h2>
@@ -316,6 +324,7 @@
 <label>文字色<input id="feverOverlayText" type="color"></label>
 <label>発光・ゲージ色<input id="feverOverlayAccent" type="color"></label>
 </div>
+<details><summary>各テキストの袋文字（縁取り）</summary><div id="feverOutlineControls" class="form overlayDesignForm"></div></details>
 </article>
 <article>
 <h2>ガチャ専用オーバーレイ</h2>
@@ -335,6 +344,7 @@
 <label>文字色<input id="gachaOverlayText" type="color"></label>
 <label>発光・強調色<input id="gachaOverlayAccent" type="color"></label>
 </div>
+<details><summary>各テキストの袋文字（縁取り）</summary><div id="gachaOutlineControls" class="form overlayDesignForm"></div></details>
 </article>
 <button id="saveOverlayDesign" class="accent">オーバーレイのデザインを保存</button>
 </section>
