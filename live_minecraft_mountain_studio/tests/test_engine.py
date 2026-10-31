@@ -4,7 +4,7 @@ from game_engine import Course, GameEngine, MultiplierState
 class EngineTests(unittest.TestCase):
     def test_configure_command(self):
         e=GameEngine(Course(goal_y=200, goal_radius=5, checkpoint_rise=25, goal_win=2))
-        self.assertEqual("lmsmountain configure world 0 64 0 0 200 0 5 25 2 5 true false true", e.configure_command())
+        self.assertEqual("lmsmountain configure world 0 64 0 0 200 0 5 25 2 5 true false true true", e.configure_command())
     def test_multiple_actions_and_multiplier(self):
         m=MultiplierState(True,100,300,2); m.add_coins(100)
         e=GameEngine(multiplier=m)
