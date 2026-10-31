@@ -16,7 +16,7 @@ from game_engine import Course, GameEngine, MultiplierState
 from local_server import LocalMinecraftServer
 from rcon import RconClient
 
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.1.2"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftMountainStudio"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
