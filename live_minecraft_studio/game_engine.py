@@ -255,6 +255,8 @@ class GameEngine:
             self.history = self.history[-500:]
             resolved = result["resolved"]
             display_enabled = effect.get("displayEnabled", True) is not False and resolved.get("kind") != "none"
+            if not str(effect.get("displayText") or "").strip() and effect.get("autoDisplayText", True) is False:
+                display_enabled = False
             sound_url = str(effect.get("soundUrl") or "")[:500]
             sound_enabled = effect.get("soundEnabled", False) is True and sound_url.startswith("/user-sounds/")
             if display_enabled or sound_enabled:
