@@ -107,6 +107,13 @@ class EngineTests(unittest.TestCase):
         self.assertEqual([], normal["commands"])
         self.assertEqual("lmsarena tnt 10 normal 60", prize["commands"][0])
 
+    def test_blank_display_text_can_disable_automatic_effect_text(self):
+        e = self.engine()
+        effects = {"quiet": {"kind": "fill", "amount": 5, "displayText": "", "autoDisplayText": False}}
+        result = e.receive({"eventId": "quiet", "giftId": "quiet", "senderName": "視聴者"}, effects)
+        self.assertFalse(e.snapshot()["announcements"])
+        self.assertFalse(any(command.startswith("lmsarena announce ") for command in result["commands"]))
+
     def test_disabled_effect_never_fires(self):
         e = self.engine()
         result = e.receive({"eventId": "disabled", "giftId": "off", "source": "social"},
@@ -205,6 +212,24 @@ class EngineTests(unittest.TestCase):
             server.STATE["effects"] = old_effects
             server.STATE["gachas"] = old_gachas
             server.STATE["socialRuntime"] = old_runtime
+
+    def test_direct_gacha_uses_repeat_count_and_user_filter(self):
+        old_gachas = server.STATE.get("gachas")
+        try:
+            server.STATE["gachas"] = {
+                "vip": {"enabled": True, "triggerGiftId": "rose", "allowedGiftUserId": "@ryusin__ch"}
+            }
+            with patch.object(server, "start_gacha", return_value=True) as start:
+                blocked = server.trigger_gachas_for_gift(
+                    {"giftId": "rose", "uniqueId": "someone", "repeatCount": 5}, "blocked")
+                allowed = server.trigger_gachas_for_gift(
+                    {"giftId": "rose", "uniqueId": "RYUSIN__CH", "repeatCount": 5,
+                     "senderName": "りゅーしん"}, "allowed")
+            self.assertEqual(0, blocked)
+            self.assertEqual(5, allowed)
+            start.assert_called_once_with("vip", "りゅーしん", "allowed-direct-vip", 5)
+        finally:
+            server.STATE["gachas"] = old_gachas
 
     def test_frame_is_atomic_with_optional_floor(self):
         e = self.engine()
