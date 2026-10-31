@@ -3,6 +3,7 @@ const grid=document.getElementById('grid'),seen=new Set();
 function claimSound(id){try{const key='lms-sound-'+id;if(localStorage.getItem(key))return false;localStorage.setItem(key,String(Date.now()));return true}catch(e){return true}}
 function playSound(e){if(!e.soundUrl||!claimSound(e.eventId))return;const audio=new Audio(e.soundUrl);audio.volume=Math.max(0,Math.min(1,Number(e.soundVolume??100)/100));audio.play().catch(()=>{});const seconds=Number(e.soundSeconds||0);if(seconds>0)setTimeout(()=>{audio.pause();audio.currentTime=0},seconds*1000)}
 const number=(value,fallback,min,max)=>Math.max(min,Math.min(max,Number(value??fallback)||fallback));
+function colorAlpha(color,opacity){const c=/^#[0-9a-f]{6}$/i.test(color)?color:'#61294f';return c+Math.round(Math.max(0,Math.min(100,Number(opacity??100)))*2.55).toString(16).padStart(2,'0')}
 function card(e,g){
  if(e.overlayVisible===false)return null;
  const own=e.useCustomStyle===true;
@@ -11,7 +12,7 @@ function card(e,g){
  c.style.width=number(take('cardWidth','cardWidth',180),180,100,600)+'px';
  c.style.height=number(take('cardHeight','cardHeight',180),180,100,600)+'px';
  c.style.borderRadius=number(g.borderRadius,14,0,100)+'px';
- c.style.background=take('backgroundColor','cardBackgroundColor','#61294f');
+ c.style.background=colorAlpha(take('backgroundColor','cardBackgroundColor','#61294f'),g.backgroundOpacity??100);
  c.style.borderColor=take('borderColor','cardBorderColor','#ef334e');
  c.style.color=take('textColor','cardTextColor','#ffffff');
  c.style.setProperty('--glow',take('feverGlowColor','cardGlowColor','#ffd34e'));
