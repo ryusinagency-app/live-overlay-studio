@@ -27,7 +27,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     private Location start, goal;
     private double goalRadius=4;
     private int checkpointRise=20, win=1;
-    private boolean active=false, daylight=true, clearWeather=true, checkpointsEnabled=true, deathMinusWin=false, guideEnabled=true;
+    private boolean active=false, daylight=true, clearWeather=true, checkpointsEnabled=true, deathMinusWin=false, guideEnabled=true, hungerDisabled=true;
     private int goalHoldSeconds=5;
     private final Map<UUID,Integer> goalHold=new HashMap<>();
     private final Map<UUID,Location> checkpoints=new HashMap<>();
@@ -51,7 +51,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         world=Bukkit.getWorld(worldName);
         if(world==null)return;
         start=location("start");goal=location("goal");goalRadius=getConfig().getDouble("goalRadius",4);
-        checkpointRise=getConfig().getInt("checkpointRise",20);win=getConfig().getInt("win",1);goalHoldSeconds=getConfig().getInt("goalHoldSeconds",5);checkpointsEnabled=getConfig().getBoolean("checkpointsEnabled",true);deathMinusWin=getConfig().getBoolean("deathMinusWin",false);guideEnabled=getConfig().getBoolean("guideEnabled",true);
+        checkpointRise=getConfig().getInt("checkpointRise",20);win=getConfig().getInt("win",1);goalHoldSeconds=getConfig().getInt("goalHoldSeconds",5);checkpointsEnabled=getConfig().getBoolean("checkpointsEnabled",true);deathMinusWin=getConfig().getBoolean("deathMinusWin",false);guideEnabled=getConfig().getBoolean("guideEnabled",true);hungerDisabled=getConfig().getBoolean("hungerDisabled",true);
         active=start!=null&&goal!=null;
     }
     private Location location(String key){
@@ -70,6 +70,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         if(world==null)return;
         if(daylight)world.setTime(6000);
         if(clearWeather){world.setStorm(false);world.setThundering(false);world.setWeatherDuration(0);}
+        if(hungerDisabled)for(Player p:world.getPlayers()){p.setFoodLevel(20);p.setSaturation(20f);p.setExhaustion(0f);}
         if(!active)return;
         world.spawnParticle(Particle.HAPPY_VILLAGER,goal.clone().add(0,1,0),12,goalRadius/2,1,goalRadius/2,.02);
         for(Player p:world.getPlayers()){
@@ -208,10 +209,10 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             }
             if(a[0].equals("ack")){if(a.length>1)wins.removeIf(w->Objects.equals(w.get("eventId"),a[1]));}
             else if(a[0].equals("configure")){
-                if(a.length<11)throw new IllegalArgumentException("configure world sx sy sz gx gy gz radius checkpoint win [hold] [checkpoint] [deathMinus] [guide]");
+                if(a.length<11)throw new IllegalArgumentException("configure world sx sy sz gx gy gz radius checkpoint win [hold] [checkpoint] [deathMinus] [guide] [hungerDisabled]");
                 world=Bukkit.getWorld(a[1]);if(world==null)throw new IllegalArgumentException("World not found");
-                start=new Location(world,Double.parseDouble(a[2]),Double.parseDouble(a[3]),Double.parseDouble(a[4]));goal=new Location(world,Double.parseDouble(a[5]),Double.parseDouble(a[6]),Double.parseDouble(a[7]));goalRadius=Double.parseDouble(a[8]);checkpointRise=Integer.parseInt(a[9]);win=Integer.parseInt(a[10]);goalHoldSeconds=a.length>11?Integer.parseInt(a[11]):5;checkpointsEnabled=a.length>12?Boolean.parseBoolean(a[12]):true;deathMinusWin=a.length>13&&Boolean.parseBoolean(a[13]);guideEnabled=a.length<=14||Boolean.parseBoolean(a[14]);
-                getConfig().set("world",world.getName());storeLocation("start",start);storeLocation("goal",goal);getConfig().set("goalRadius",goalRadius);getConfig().set("checkpointRise",checkpointRise);getConfig().set("win",win);getConfig().set("goalHoldSeconds",goalHoldSeconds);getConfig().set("checkpointsEnabled",checkpointsEnabled);getConfig().set("deathMinusWin",deathMinusWin);getConfig().set("guideEnabled",guideEnabled);saveConfig();active=true;resetPlayers();
+                start=new Location(world,Double.parseDouble(a[2]),Double.parseDouble(a[3]),Double.parseDouble(a[4]));goal=new Location(world,Double.parseDouble(a[5]),Double.parseDouble(a[6]),Double.parseDouble(a[7]));goalRadius=Double.parseDouble(a[8]);checkpointRise=Integer.parseInt(a[9]);win=Integer.parseInt(a[10]);goalHoldSeconds=a.length>11?Integer.parseInt(a[11]):5;checkpointsEnabled=a.length>12?Boolean.parseBoolean(a[12]):true;deathMinusWin=a.length>13&&Boolean.parseBoolean(a[13]);guideEnabled=a.length<=14||Boolean.parseBoolean(a[14]);hungerDisabled=a.length<=15||Boolean.parseBoolean(a[15]);
+                getConfig().set("world",world.getName());storeLocation("start",start);storeLocation("goal",goal);getConfig().set("goalRadius",goalRadius);getConfig().set("checkpointRise",checkpointRise);getConfig().set("win",win);getConfig().set("goalHoldSeconds",goalHoldSeconds);getConfig().set("checkpointsEnabled",checkpointsEnabled);getConfig().set("deathMinusWin",deathMinusWin);getConfig().set("guideEnabled",guideEnabled);getConfig().set("hungerDisabled",hungerDisabled);saveConfig();active=true;resetPlayers();
             } else if(a[0].equals("effect"))effect(a);
             else if(a[0].equals("reset")){resetPlayers();active=true;}
             else if(a[0].equals("environment")){daylight=Boolean.parseBoolean(a[1]);clearWeather=Boolean.parseBoolean(a[2]);}
