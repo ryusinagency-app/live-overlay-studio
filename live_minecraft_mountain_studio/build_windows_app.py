@@ -16,6 +16,8 @@ PyInstaller.__main__.run([
     "--add-data", f"{root / 'index.html'};.",
     "--add-data", f"{root / 'overlay.html'};.",
     "--add-data", f"{root / 'gacha_overlay.html'};.",
+    "--add-data", f"{root / 'effects_overlay.html'};.",
+    "--add-data", f"{root / 'fever_overlay.html'};.",
     "--add-data", f"{root / 'app.js'};.",
     "--add-data", f"{root / 'style.css'};.",
     "--add-data", f"{bridge};.",
