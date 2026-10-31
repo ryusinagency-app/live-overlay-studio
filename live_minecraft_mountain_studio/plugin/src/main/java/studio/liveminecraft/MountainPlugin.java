@@ -194,7 +194,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     @EventHandler public void playerDeath(PlayerDeathEvent e){e.setKeepInventory(true);e.setKeepLevel(true);e.getDrops().clear();if(deathMinusWin){wins.add(Map.of("eventId",UUID.randomUUID().toString(),"win",-1,"reason","プレイヤーデス","player",e.getEntity().getName()));Bukkit.broadcastMessage("§cデス：-1 WIN");}}
     @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpointsEnabled?checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start):start));}
     @EventHandler public void useGun(PlayerInteractEvent e){
-        if(!e.getAction().isRightClick())return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta()||!item.getItemMeta().hasDisplayName())return;
+        if(e.getAction()!=Action.RIGHT_CLICK_AIR && e.getAction()!=Action.RIGHT_CLICK_BLOCK)return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta()||!item.getItemMeta().hasDisplayName())return;
         String name=item.getItemMeta().getDisplayName();Player p=e.getPlayer();
         if(name.contains("RPG")){Fireball b=p.launchProjectile(Fireball.class);b.setYield(3);b.setIsIncendiary(false);p.playSound(p,Sound.ENTITY_GENERIC_EXPLODE,.8f,1.5f);}
         else if(name.contains("ハンドガン")||name.contains("マシンガン")||name.contains("アサルトライフル")){
