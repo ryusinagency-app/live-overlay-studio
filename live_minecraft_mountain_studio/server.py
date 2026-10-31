@@ -77,10 +77,10 @@ def public_state():
   "gachaEvents":list(GACHA_EVENTS[-60:]),"gachaQueueSize":GACHA_QUEUE.qsize(),"effectKinds":[
   ["tnt","TNTを降らせる"],["zombie","ゾンビ"],["creeper","クリーパー"],["launch","上へ吹き飛ばす"],
   ["freeze","牢屋へ閉じ込める"],["darkness","暗闇"],["lightning","雷"],["reset","スタートへ戻す"],
-  ["checkpoint","チェックポイントへ救済"],["shield","無敵"],["speed","スピード"],["jump","ジャンプ力"],
+  ["checkpoint","チェックポイントへ救済"],["goal_teleport","ゴールへテレポート"],["shield","無敵"],["speed","スピード"],["jump","ジャンプ力"],
   ["boost","前方ブースト"],["clear_mobs","敵を全消去"],["obstacle","障害物"],["car","車"],["bike","バイク"],
   ["sword","剣を付与"],["bow","弓矢を付与"],["heal","体力回復"],["clear_inventory","持ち物全ロスト"],["guide","山頂コンパス"],
-  ["boss","ボス出現"],["gun_handgun","ハンドガン"],["gun_smg","マシンガン"],["gun_rifle","アサルトライフル"],["gun_rpg","RPG"],["armed_villager","武装村人"]]}
+  ["boss","ボス出現"],["gun_handgun","ハンドガン"],["gun_smg","マシンガン"],["gun_rifle","アサルトライフル"],["gun_rpg","RPG"],["armed_handgun","ハンドガンの武装村人"],["armed_smg","マシンガンの武装村人"],["armed_rifle","アサルトライフルの武装村人"],["armed_rpg","RPGの武装村人"]]}
 
 def send_win(event):
  cfg=STATE.get("winBridge",{})
@@ -106,9 +106,26 @@ def sync_loop():
   except Exception as exc: STATUS.update({"rcon":"未接続","lastError":str(exc)})
   time.sleep(2)
 
+def _b64(value):
+ return base64.b64encode(str(value or "").encode("utf-8")).decode("ascii")
 def run_effect(effect,sender,coins=0):
- result=ENGINE.receive(effect,sender,coins)
+ prepared=deepcopy(effect)
+ actions=prepared.get("actions") or [{"kind":prepared.get("kind","tnt"),"amount":prepared.get("amount",1),"multiply":True}]
+ for action in actions:
+  kind=str(action.get("kind",""))
+  if kind.startswith("gun_"):
+   settings=STATE.get("guns",{}).get(kind[4:],{})
+   base=max(1,int(float(action.get("amount",1))))
+   action["amount"]=base*max(1,int(settings.get("giftAmmo",1)))
+   action["gunDamage"]=float(settings.get("damage",3))
+   action["gunIntervalMs"]=int(settings.get("intervalMs",300))
+   action["gunMagazine"]=int(settings.get("magazine",12))
+   action["gunReloadMs"]=int(float(settings.get("reloadSeconds",2))*1000)
+ prepared["actions"]=actions
+ result=ENGINE.receive(prepared,sender,coins)
  for command in result["commands"]: rcon(command)
+ event=result.get("announcement",{})
+ rcon(f"lmsmountain announce {_b64(event.get('title','効果発動'))} {_b64(sender)} {max(1,int(event.get('displaySeconds',5)))}")
  return result
 def enqueue_gacha(gid,sender,count=1):
  for _ in range(max(1,min(1000,int(count)))): GACHA_QUEUE.put((gid,sender))
@@ -126,18 +143,26 @@ def gacha_loop():
    max_spins=max(1,min(100,int(g.get("maxSpins",20)))) if g.get("continueEnabled") else 1
    for spin_no in range(1,max_spins+1):
     entries=[e for e in g.get("entries",[]) if float(e.get("weight",0))>0]
-    if not entries: break
-    spin=max(.3,min(60,float(g.get("spinSeconds",4))))
-    event={"eventId":str(time.time_ns()),"gachaName":g.get("name","ガチャ"),"sender":sender,"state":"spinning",
-      "result":"","at":time.time(),"spinSeconds":spin,"spinNumber":spin_no,"imageUrl":(g.get("customImageUrl","") if g.get("imageMode")=="custom" else "" if g.get("imageMode")=="none" else g.get("triggerGiftImageUrl","") or g.get("imageUrl","")),**audio_fields(g,"spin")}
-    GACHA_EVENTS.append(event); time.sleep(spin)
+    if not entries: STATUS["lastError"]="ガチャの抽選内容が未設定です";break
+    image=(g.get("customImageUrl","") if g.get("imageMode")=="custom" else "" if g.get("imageMode")=="none" else g.get("triggerGiftImageUrl","") or g.get("imageUrl",""))
+    intro=audio_fields(g,"gift")
+    if intro.get("soundUrl"):
+     intro_event={"eventId":str(time.time_ns()),"phaseId":str(time.time_ns()),"gachaName":g.get("name","ガチャ"),"sender":sender,"state":"gift","result":"","at":time.time(),"imageUrl":image,**intro}
+     GACHA_EVENTS.append(intro_event);time.sleep(max(.2,min(10,float(intro.get("soundSeconds") or .5))))
+    spin=max(.5,min(60,float(g.get("spinSeconds",4))))
+    event={"eventId":str(time.time_ns()),"phaseId":str(time.time_ns()),"gachaName":g.get("name","ガチャ"),"sender":sender,"state":"spinning",
+      "result":"","at":time.time(),"spinSeconds":spin,"spinNumber":spin_no,"imageUrl":image,**audio_fields(g,"spin")}
+    GACHA_EVENTS.append(event);time.sleep(spin)
     chosen=random.choices(entries,weights=[float(e.get("weight",1)) for e in entries],k=1)[0]
     effect=STATE.get("effects",{}).get(str(chosen.get("effectId","")))
     continued=bool(g.get("continueEnabled")) and spin_no<max_spins and random.random()<max(0,min(100,float(g.get("continueRate",50))))/100
-    event.update({"state":"result","result":chosen.get("label") or (effect or {}).get("displayText") or (effect or {}).get("name","結果"),
-                  "continued":continued,**audio_fields(g,"result")})
-    if effect: run_effect(effect,sender)
-    time.sleep(max(.3,min(30,float(g.get("resultSeconds",2)))))
+    event.update({"phaseId":str(time.time_ns()),"state":"result","result":chosen.get("label") or (effect or {}).get("displayText") or (effect or {}).get("name","結果"),
+                  "resultSeconds":max(.5,min(30,float(g.get("resultSeconds",2)))),"continued":continued,**audio_fields(g,"result")})
+    if effect:
+     try: run_effect(effect,sender)
+     except Exception as exc: STATUS["lastError"]=str(exc)
+    time.sleep(event["resultSeconds"])
+    event.update({"phaseId":str(time.time_ns()),"state":"hidden","soundUrl":""})
     if not continued: break
     time.sleep(max(0,min(30,float(g.get("continueDelaySeconds",1)))))
   except Exception as exc: STATUS["lastError"]=str(exc)
