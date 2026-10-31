@@ -229,6 +229,9 @@ class Handler(SimpleHTTPRequestHandler):
                 result = run_effect(effect, body.get("sender", "テスト"), int(body.get("coins", 0)))
                 return self._json({"ok": True, "result": result, "state": public_state()})
             if path == "/api/gift":
+                event_type = str(body.get("eventType") or body.get("type") or "").lower()
+                if "follow" in event_type or "like" in event_type:
+                    return self._json({"ok": True, "triggered": receive_social(body)})
                 gift = str(body.get("giftName") or body.get("giftId") or "")
                 sender_id = str(body.get("userId", ""))
                 repeat = max(1, int(body.get("repeatCount", 1)))
