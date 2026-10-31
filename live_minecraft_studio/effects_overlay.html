@@ -4,6 +4,7 @@ function claimSound(id){try{const key='lms-sound-'+id;if(localStorage.getItem(ke
 function playSound(e){if(!e.soundUrl||!claimSound(e.eventId))return;const audio=new Audio(e.soundUrl);audio.volume=Math.max(0,Math.min(1,Number(e.soundVolume??100)/100));audio.play().catch(()=>{});const seconds=Number(e.soundSeconds||0);if(seconds>0)setTimeout(()=>{audio.pause();audio.currentTime=0},seconds*1000)}
 const number=(value,fallback,min,max)=>Math.max(min,Math.min(max,Number(value??fallback)||fallback));
 function colorAlpha(color,opacity){const c=/^#[0-9a-f]{6}$/i.test(color)?color:'#61294f';return c+Math.round(Math.max(0,Math.min(100,Number(opacity??100)))*2.55).toString(16).padStart(2,'0')}
+function outline(el,g,key){const on=g[key+'OutlineEnabled']===true;el.style.webkitTextStroke=on?`${Number(g[key+'OutlineWidth']??2)}px ${g[key+'OutlineColor']||'#000000'}`:'0 transparent';el.style.paintOrder='stroke fill'}
 function card(e,g){
  if(e.overlayVisible===false)return null;
  const own=e.useCustomStyle===true;
@@ -20,6 +21,7 @@ function card(e,g){
  const n=document.createElement('div');n.className='name';n.textContent=String(e.name??'').trim();n.style.fontSize=number(take('nameFontSize','nameFontSize',18),18,8,80)+'px';n.hidden=!n.textContent;
  const a=document.createElement('div');a.className='effective';a.textContent=e.effectiveLabel;a.style.fontSize=number(take('effectFontSize','effectFontSize',20),20,8,100)+'px';a.style.color=take('accentColor','cardAccentColor','#a4f4bf');
  const d=document.createElement('div');d.className='desc';d.textContent=e.description||'';d.style.fontSize=number(take('descriptionFontSize','descriptionFontSize',13),13,8,60)+'px';
+ outline(n,g,'name');outline(a,g,'effect');outline(d,g,'description');
  c.append(n,a,d);return c;
 }
 async function update(){try{const r=await fetch('/api/overlay',{cache:'no-store'}),s=await r.json(),g=s.overlay?.effectListStyle||{};grid.style.gridTemplateColumns=`repeat(${number(g.columns,5,1,10)}, max-content)`;grid.style.gap=number(g.gap,8,0,100)+'px';grid.replaceChildren(...s.effects.map(e=>card(e,g)).filter(Boolean));for(const e of s.game.announcements||[]){if(seen.has(e.eventId))continue;seen.add(e.eventId);if(Date.now()/1000-e.at<15)playSound(e)}if(seen.size>1000){const latest=[...seen].slice(-100);seen.clear();latest.forEach(id=>seen.add(id))}}catch(e){}}update();setInterval(update,500)
