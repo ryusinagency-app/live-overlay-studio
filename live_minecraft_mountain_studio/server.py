@@ -27,6 +27,12 @@ DEFAULT = {
  "course":{"world":"world","startX":0,"startY":64,"startZ":0,"goalX":0,"goalY":160,"goalZ":0,
            "goalRadius":4,"checkpointRise":20,"goalWin":1,"goalHoldSeconds":5,"checkpointsEnabled":True,"deathMinusWin":False,"guideEnabled":True,"daylightFixed":True,"clearWeather":True},
  "winBridge":{"enabled":True,"url":"http://127.0.0.1:8765/api/minecraft-studio/win","token":""},
+ "guns":{
+   "handgun":{"giftAmmo":12,"damage":5,"intervalMs":450,"magazine":6,"reloadSeconds":1.5},
+   "smg":{"giftAmmo":30,"damage":3,"intervalMs":180,"magazine":20,"reloadSeconds":2},
+   "rifle":{"giftAmmo":24,"damage":4,"intervalMs":300,"magazine":12,"reloadSeconds":2.2},
+   "rpg":{"giftAmmo":3,"damage":16,"intervalMs":1200,"magazine":1,"reloadSeconds":3}
+ },
  "multiplier":{"enabled":True,"threshold":5000,"durationSeconds":300,"multiplier":2,
                "nextLabel":"次の倍率まで","startSoundUrl":"","startSoundVolume":100,"startSoundSeconds":0,
                "endSoundUrl":"","endSoundVolume":100,"endSoundSeconds":0},
@@ -214,7 +220,7 @@ class Handler(SimpleHTTPRequestHandler):
     return self._json({"ok":True,"url":("/user-sounds/" if is_sound else "/user-images/")+name})
    if path=="/api/config":
     with LOCK:
-     for key in ("course","multiplier","overlay","rcon","winBridge"):
+     for key in ("course","multiplier","overlay","rcon","winBridge","guns"):
       if isinstance(body.get(key),dict): STATE[key]=merge(STATE.get(key,{}),body[key])
      if isinstance(body.get("effects"),dict): STATE["effects"]=body["effects"]
      if isinstance(body.get("gachas"),dict): STATE["gachas"]=body["gachas"]
