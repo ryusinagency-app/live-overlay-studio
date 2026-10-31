@@ -24,7 +24,9 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     private Location start, goal;
     private double goalRadius=4;
     private int checkpointRise=20, win=1;
-    private boolean active=false, daylight=true, clearWeather=true;
+    private boolean active=false, daylight=true, clearWeather=true, checkpointsEnabled=true, deathMinusWin=false, guideEnabled=true;
+    private int goalHoldSeconds=5;
+    private final Map<UUID,Integer> goalHold=new HashMap<>();
     private final Map<UUID,Location> checkpoints=new HashMap<>();
     private final Map<UUID,Integer> checkpointLevels=new HashMap<>();
     private final Set<UUID> gameMobs=new HashSet<>(), vehicles=new HashSet<>();
@@ -42,7 +44,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         world=Bukkit.getWorld(worldName);
         if(world==null)return;
         start=location("start");goal=location("goal");goalRadius=getConfig().getDouble("goalRadius",4);
-        checkpointRise=getConfig().getInt("checkpointRise",20);win=getConfig().getInt("win",1);
+        checkpointRise=getConfig().getInt("checkpointRise",20);win=getConfig().getInt("win",1);goalHoldSeconds=getConfig().getInt("goalHoldSeconds",5);checkpointsEnabled=getConfig().getBoolean("checkpointsEnabled",true);deathMinusWin=getConfig().getBoolean("deathMinusWin",false);guideEnabled=getConfig().getBoolean("guideEnabled",true);
         active=start!=null&&goal!=null;
     }
     private Location location(String key){
@@ -64,12 +66,24 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         if(!active)return;
         world.spawnParticle(Particle.HAPPY_VILLAGER,goal.clone().add(0,1,0),12,goalRadius/2,1,goalRadius/2,.02);
         for(Player p:world.getPlayers()){
-            int level=(int)Math.floor((p.getLocation().getY()-start.getY())/Math.max(1,checkpointRise));
-            if(level>checkpointLevels.getOrDefault(p.getUniqueId(),-1)){
-                checkpoints.put(p.getUniqueId(),p.getLocation());checkpointLevels.put(p.getUniqueId(),level);
-                p.sendMessage("§aチェックポイント更新：高度 "+p.getLocation().getBlockY());
+            if(checkpointsEnabled){
+                int level=(int)Math.floor((p.getLocation().getY()-start.getY())/Math.max(1,checkpointRise));
+                if(level>checkpointLevels.getOrDefault(p.getUniqueId(),-1)){
+                    checkpoints.put(p.getUniqueId(),p.getLocation());checkpointLevels.put(p.getUniqueId(),level);
+                    p.sendMessage("§aチェックポイント更新：高度 "+p.getLocation().getBlockY());
+                }
             }
-            if(p.getLocation().distanceSquared(goal)<=goalRadius*goalRadius)finish(p);
+            if(guideEnabled){
+                p.setCompassTarget(goal);
+                Vector toward=goal.toVector().subtract(p.getLocation().toVector()).normalize();
+                for(int i=2;i<=10;i+=2)world.spawnParticle(Particle.END_ROD,p.getEyeLocation().add(toward.clone().multiply(i)),1,0,0,0,0);
+            }
+            if(p.getLocation().distanceSquared(goal)<=goalRadius*goalRadius){
+                int held=goalHold.getOrDefault(p.getUniqueId(),0)+1;goalHold.put(p.getUniqueId(),held);
+                int left=Math.max(0,goalHoldSeconds-held);
+                if(left>0){p.sendTitle("§e§l"+left,"§fゴール地点に滞在",0,25,0);p.playSound(p,Sound.BLOCK_NOTE_BLOCK_HAT,.8f,1.4f);}
+                else finish(p);
+            }else goalHold.remove(p.getUniqueId());
         }
     }
     private void finish(Player p){
@@ -80,12 +94,15 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         getServer().getScheduler().runTaskLater(this,()->{resetPlayers();active=true;},100);
     }
     private void resetPlayers(){
-        checkpoints.clear();checkpointLevels.clear();clearMobs();
+        checkpoints.clear();checkpointLevels.clear();goalHold.clear();clearMobs();
         for(Player p:world.getPlayers()){p.leaveVehicle();p.teleport(start);p.setFallDistance(0);p.setInvulnerable(false);}
     }
     private void clearMobs(){
         for(UUID id:new HashSet<>(gameMobs)){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}gameMobs.clear();
         for(UUID id:new HashSet<>(vehicles)){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}vehicles.clear();
+    }
+    private void give(Player p,Material material,int amount,String name){
+        ItemStack item=new ItemStack(material,Math.max(1,Math.min(64,amount)));var meta=item.getItemMeta();meta.setDisplayName(name);item.setItemMeta(meta);p.getInventory().addItem(item);
     }
     private void spawnMob(Player p,EntityType type,int count){
         for(int i=0;i<Math.min(100,count);i++){
@@ -151,10 +168,10 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
             }
             if(a[0].equals("ack")){if(a.length>1)wins.removeIf(w->Objects.equals(w.get("eventId"),a[1]));}
             else if(a[0].equals("configure")){
-                if(a.length<11)throw new IllegalArgumentException("configure world sx sy sz gx gy gz radius checkpoint win");
+                if(a.length<11)throw new IllegalArgumentException("configure world sx sy sz gx gy gz radius checkpoint win [hold] [checkpoint] [deathMinus] [guide]");
                 world=Bukkit.getWorld(a[1]);if(world==null)throw new IllegalArgumentException("World not found");
-                start=new Location(world,Double.parseDouble(a[2]),Double.parseDouble(a[3]),Double.parseDouble(a[4]));goal=new Location(world,Double.parseDouble(a[5]),Double.parseDouble(a[6]),Double.parseDouble(a[7]));goalRadius=Double.parseDouble(a[8]);checkpointRise=Integer.parseInt(a[9]);win=Integer.parseInt(a[10]);
-                getConfig().set("world",world.getName());storeLocation("start",start);storeLocation("goal",goal);getConfig().set("goalRadius",goalRadius);getConfig().set("checkpointRise",checkpointRise);getConfig().set("win",win);saveConfig();active=true;resetPlayers();
+                start=new Location(world,Double.parseDouble(a[2]),Double.parseDouble(a[3]),Double.parseDouble(a[4]));goal=new Location(world,Double.parseDouble(a[5]),Double.parseDouble(a[6]),Double.parseDouble(a[7]));goalRadius=Double.parseDouble(a[8]);checkpointRise=Integer.parseInt(a[9]);win=Integer.parseInt(a[10]);goalHoldSeconds=a.length>11?Integer.parseInt(a[11]):5;checkpointsEnabled=a.length>12?Boolean.parseBoolean(a[12]):true;deathMinusWin=a.length>13&&Boolean.parseBoolean(a[13]);guideEnabled=a.length<=14||Boolean.parseBoolean(a[14]);
+                getConfig().set("world",world.getName());storeLocation("start",start);storeLocation("goal",goal);getConfig().set("goalRadius",goalRadius);getConfig().set("checkpointRise",checkpointRise);getConfig().set("win",win);getConfig().set("goalHoldSeconds",goalHoldSeconds);getConfig().set("checkpointsEnabled",checkpointsEnabled);getConfig().set("deathMinusWin",deathMinusWin);getConfig().set("guideEnabled",guideEnabled);saveConfig();active=true;resetPlayers();
             } else if(a[0].equals("effect"))effect(a);
             else if(a[0].equals("reset")){resetPlayers();active=true;}
             else if(a[0].equals("environment")){daylight=Boolean.parseBoolean(a[1]);clearWeather=Boolean.parseBoolean(a[2]);}
@@ -174,6 +191,17 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
     @EventHandler(priority=EventPriority.HIGHEST) public void piston(BlockPistonExtendEvent e){e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void pistonBack(BlockPistonRetractEvent e){e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void flow(BlockFromToEvent e){e.setCancelled(true);}
-    @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start)));}
+    @EventHandler public void playerDeath(PlayerDeathEvent e){e.setKeepInventory(true);e.setKeepLevel(true);e.getDrops().clear();if(deathMinusWin){wins.add(Map.of("eventId",UUID.randomUUID().toString(),"win",-1,"reason","プレイヤーデス","player",e.getEntity().getName()));Bukkit.broadcastMessage("§cデス：-1 WIN");}}
+    @EventHandler public void death(PlayerRespawnEvent e){if(start!=null)getServer().getScheduler().runTask(this,()->e.getPlayer().teleport(checkpointsEnabled?checkpoints.getOrDefault(e.getPlayer().getUniqueId(),start):start));}
+    @EventHandler public void useGun(PlayerInteractEvent e){
+        if(!e.getAction().isRightClick())return;ItemStack item=e.getItem();if(item==null||!item.hasItemMeta()||!item.getItemMeta().hasDisplayName())return;
+        String name=item.getItemMeta().getDisplayName();Player p=e.getPlayer();
+        if(name.contains("RPG")){Fireball b=p.launchProjectile(Fireball.class);b.setYield(3);b.setIsIncendiary(false);p.playSound(p,Sound.ENTITY_GENERIC_EXPLODE,.8f,1.5f);}
+        else if(name.contains("ハンドガン")||name.contains("マシンガン")||name.contains("アサルトライフル")){
+            int count=name.contains("マシンガン")?5:name.contains("アサルト")?3:1;double speed=name.contains("ハンドガン")?3.2:4.0;
+            for(int i=0;i<count;i++){Arrow arrow=p.launchProjectile(Arrow.class,p.getLocation().getDirection().add(new Vector((Math.random()-.5)*.05,(Math.random()-.5)*.05,(Math.random()-.5)*.05)).multiply(speed));arrow.setDamage(name.contains("ハンドガン")?5:3);arrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);}
+            p.playSound(p,Sound.ENTITY_FIREWORK_ROCKET_BLAST,.7f,name.contains("マシンガン")?1.8f:1.2f);
+        }else return;e.setCancelled(true);
+    }
     @EventHandler public void join(PlayerJoinEvent e){if(active)getServer().getScheduler().runTaskLater(this,()->e.getPlayer().teleport(start),10);}
 }
