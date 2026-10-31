@@ -10,7 +10,7 @@ from game_engine import Course, GameEngine, MultiplierState
 from local_server import LocalMinecraftServer
 from rcon import RconClient
 
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.3.0"
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", ROOT)) / "LiveMinecraftMountainStudio"
 SOUNDS_DIR, IMAGES_DIR = DATA_DIR / "sounds", DATA_DIR / "images"
