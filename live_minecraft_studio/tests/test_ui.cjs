@@ -33,6 +33,10 @@ setImmediate(async()=>{
   d.getElementById('addGacha').click();
   if(![...d.querySelectorAll('button')].some(b=>b.textContent.includes('ギフト一覧から発動ギフトを選択')))throw Error('gacha trigger gift picker missing');
   if(!d.querySelector('.gachaReactionSettings [data-gacha-key="followTriggerEnabled"]'))throw Error('per-gacha follow trigger missing');
+  if(!d.getElementById('effectBackgroundOpacity'))throw Error('effect overlay background opacity missing');
+  if(!d.querySelector('.gachaCard [data-gacha-key="allowedGiftUserId"]'))throw Error('per-gacha gift user filter missing');
+  if(!d.querySelector('.gachaCard [data-gacha-key="imageMode"]'))throw Error('per-gacha image mode missing');
+  if(!d.querySelector('.effectCard [data-effect-key="autoDisplayText"]'))throw Error('automatic display text toggle missing');
   if(!d.querySelector('.effectCard [data-effect-key="individualLikeTriggerEnabled"]'))throw Error('per-effect like trigger missing');
   if(!d.querySelector('.effectCard [data-effect-key="allowedGiftUserId"]'))throw Error('per-effect gift user filter missing');
   if(fs.readFileSync(path.join(root,'app.js'),'utf8').includes("add('オーバーレイでの表示名'"))throw Error('obsolete additional display name remains');
