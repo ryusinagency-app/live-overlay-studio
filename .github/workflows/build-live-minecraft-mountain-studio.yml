@@ -1,6 +1,9 @@
 name: Build Live Minecraft Mountain Studio
 
 on:
+  push:
+    branches: [main]
+    paths: ['live_minecraft_mountain_studio/**', '.github/workflows/build-live-minecraft-mountain-studio.yml']
   pull_request:
     paths: ['live_minecraft_mountain_studio/**', '.github/workflows/build-live-minecraft-mountain-studio.yml']
   release:
@@ -17,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request' || startsWith(github.event.release.tag_name || inputs.tag, 'mountain-v')
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || startsWith(github.event.release.tag_name || inputs.tag, 'mountain-v')
     runs-on: windows-latest
     steps:
       - name: Check out release source
@@ -47,7 +50,7 @@ jobs:
         working-directory: live_minecraft_mountain_studio
         run: python build_windows_app.py
       - name: Attach EXE to release
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
