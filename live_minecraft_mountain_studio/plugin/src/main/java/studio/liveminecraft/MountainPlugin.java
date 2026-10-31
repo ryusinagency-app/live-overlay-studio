@@ -64,10 +64,10 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
         if(!active)return;
         world.spawnParticle(Particle.HAPPY_VILLAGER,goal.clone().add(0,1,0),12,goalRadius/2,1,goalRadius/2,.02);
         for(Player p:world.getPlayers()){
-            int level=(int)Math.floor((p.getY()-start.getY())/Math.max(1,checkpointRise));
+            int level=(int)Math.floor((p.getLocation().getY()-start.getY())/Math.max(1,checkpointRise));
             if(level>checkpointLevels.getOrDefault(p.getUniqueId(),-1)){
                 checkpoints.put(p.getUniqueId(),p.getLocation());checkpointLevels.put(p.getUniqueId(),level);
-                p.sendActionBar("§aチェックポイント更新：高度 "+p.getLocation().getBlockY());
+                p.sendMessage("§aチェックポイント更新：高度 "+p.getLocation().getBlockY());
             }
             if(p.getLocation().distanceSquared(goal)<=goalRadius*goalRadius)finish(p);
         }
@@ -143,7 +143,7 @@ public final class MountainPlugin extends JavaPlugin implements Listener, Comman
                     Location cp=checkpoints.getOrDefault(p.getUniqueId(),start);
                     double distance=goal==null?0:p.getLocation().distance(goal);
                     Location here=p.getLocation();players.add(Map.of("name",p.getName(),"x",here.getX(),"y",here.getY(),"z",here.getZ(),
-                            "checkpointY",cp==null?p.getY():cp.getY(),"distanceToGoal",distance));
+                            "checkpointY",cp==null?here.getY():cp.getY(),"distanceToGoal",distance));
                 }
                 Map<String,Object> state=new LinkedHashMap<>();state.put("ok",true);state.put("active",active);
                 state.put("world",world==null?"":world.getName());state.put("players",players);state.put("wins",wins);
