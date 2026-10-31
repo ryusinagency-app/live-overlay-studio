@@ -87,8 +87,9 @@ class GameEngine:
         commands = [self.effect_command(a, factor) for a in actions]
         title = str(effect.get("displayText") or effect.get("name") or "効果発動")
         event = {"eventId": str(time.time_ns()), "at": time.time(), "title": title, "sender": sender,
-                 "imageUrl": effect.get("imageUrl", ""), "soundUrl": effect.get("soundUrl", ""),
-                 "soundVolume": effect.get("soundVolume", 100), "soundSeconds": effect.get("soundSeconds", 0)}
+                 "imageUrl": effect.get("imageUrl", ""), "soundUrl": effect.get("soundUrl", "") if effect.get("soundEnabled", False) else "",
+                 "soundVolume": effect.get("soundVolume", 100), "soundSeconds": effect.get("soundSeconds", 0),
+                 "displaySeconds": max(1, int(float(effect.get("displaySeconds", 5))))}
         self.announcements = (self.announcements + [event])[-100:]
         return {"commands": commands, "announcement": event}
 
